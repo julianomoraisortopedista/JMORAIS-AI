@@ -1,0 +1,1 @@
+"""SciELO client package."""
