@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from jmoraIs.verification import ArticleRecord
+from jmoraIs.scientific_domain import ArticleRecord
 
 
 def format_author_list(authors: list[str], limit: int = 6) -> str:
@@ -12,12 +12,15 @@ def format_author_list(authors: list[str], limit: int = 6) -> str:
 
 
 def render_vancouver(article: ArticleRecord) -> str:
+    if article.verification_status != "VERIFIED":
+        return (
+            "Vancouver citation withheld: metadata is not verified. "
+            f"Current status: {article.verification_status}."
+        )
     if not article.title:
-        return "Unverified source. Vancouver citation cannot be generated."
+        return "Vancouver citation withheld: missing article title."
 
-    author_text = format_author_list(article.authors)
+    author_text = format_author_list(article.authors or ["Author"])
     journal = article.journal or "Journal"
     year = article.year or "n.d."
-    if article.verification_status == "NOT_VERIFIED":
-        return f"{author_text}. {article.title}. {journal}. {year}."
     return f"{author_text}. {article.title}. {journal}. {year}."

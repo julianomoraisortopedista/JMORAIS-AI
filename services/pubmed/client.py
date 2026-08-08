@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from urllib.parse import quote
 
 import requests
+
+from jmoraIs.verification import normalize_doi
 
 PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
@@ -40,6 +41,8 @@ def search_pubmed(query: str, max_results: int = 5) -> list[dict[str, Any]]:
     for item in results:
         if not isinstance(item, dict) or item.get("uid") is None:
             continue
+        elocation = item.get("elocationid")
+        doi = normalize_doi(elocation) if isinstance(elocation, str) else None
         cleaned.append(
             {
                 "pmid": str(item.get("uid", "")),
@@ -47,8 +50,10 @@ def search_pubmed(query: str, max_results: int = 5) -> list[dict[str, Any]]:
                 "journal": item.get("fulljournalname") or item.get("source") or "",
                 "year": item.get("pubdate", "")[:4] if isinstance(item.get("pubdate"), str) else None,
                 "authors": [author.get("name", "") for author in item.get("authors", []) if isinstance(author, dict)],
-                "doi": item.get("elocationid") if isinstance(item.get("elocationid"), str) and item.get("elocationid", "").startswith("10.") else None,
+                "doi": doi,
                 "abstract": item.get("abstract") or "",
+                "source": "pubmed",
+                "source_locator": f"https://pubmed.ncbi.nlm.nih.gov/{item.get('uid', '')}/",
             }
         )
     return cleaned
