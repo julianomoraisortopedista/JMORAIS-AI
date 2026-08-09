@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict
+from datetime import datetime, timezone
 from typing import Any, Optional
 
 from jmoraIs.scientific_domain import (
     ArticleRecord,
     EvidenceLedgerEntry as LedgerEntry,
+    PublicationStatus,
     ScientificArticle,
     SourceProvenance,
     SupportDirection,
@@ -16,6 +18,52 @@ from jmoraIs.scientific_domain import (
 DOI_PATTERN = re.compile(r"^10\.\d{4,9}/\S+$")
 PMID_PATTERN = re.compile(r"^\d{1,8}$")
 PMCID_PATTERN = re.compile(r"^PMC\d+$", re.IGNORECASE)
+
+
+class CitationVerificationGate:
+    @staticmethod
+    def evaluate(article: ArticleRecord) -> VerificationStatus:
+        raw_status = getattr(article, "verification_status", VerificationStatus.NOT_VERIFIED.value)
+        if raw_status is None:
+            return VerificationStatus.NOT_VERIFIED
+        status = str(raw_status)
+        if hasattr(raw_status, "value"):
+            status = str(raw_status.value)
+        status = status.upper()
+
+        if status == VerificationStatus.VERIFIED.value:
+            return VerificationStatus.VERIFIED
+        if status == VerificationStatus.PARTIALLY_VERIFIED.value:
+            return VerificationStatus.PARTIALLY_VERIFIED
+        if status == VerificationStatus.CONFLICTING_METADATA.value:
+            return VerificationStatus.CONFLICTING_METADATA
+        if status == VerificationStatus.NOT_VERIFIED.value:
+            return VerificationStatus.NOT_VERIFIED
+        return VerificationStatus.NOT_VERIFIED
+
+    @staticmethod
+    def can_render_trusted(article: ArticleRecord) -> bool:
+        return CitationVerificationGate.evaluate(article) == VerificationStatus.VERIFIED
+
+    @staticmethod
+    def warning_for(article: ArticleRecord) -> Optional[str]:
+        status = CitationVerificationGate.evaluate(article)
+        if status == VerificationStatus.PARTIALLY_VERIFIED:
+            return "Visible warning: article metadata is only partially verified."
+        if status == VerificationStatus.CONFLICTING_METADATA:
+            return "Visible warning: metadata conflict detected; citation is not trusted."
+        if status == VerificationStatus.NOT_VERIFIED:
+            return "Visible warning: citation is not verified and cannot be trusted."
+        return None
+
+    @staticmethod
+    def is_blocked(article: ArticleRecord) -> bool:
+        status = CitationVerificationGate.evaluate(article)
+        return status in {VerificationStatus.CONFLICTING_METADATA, VerificationStatus.NOT_VERIFIED}
+
+
+def verify_citation(article: ArticleRecord) -> VerificationStatus:
+    return CitationVerificationGate.evaluate(article)
 
 
 def _normalize_identifier(value: Any) -> Optional[str]:
@@ -249,6 +297,8 @@ def build_ledger_entry(
     support_direction: str = SupportDirection.SUPPORTING.value,
     confidence: float = 0.9,
     limitations: Optional[str] = None,
+    search_run_id: Optional[str] = None,
+    verified_at: Optional[Any] = None,
 ) -> LedgerEntry:
     return LedgerEntry(
         claim_id=claim_id,
@@ -264,6 +314,8 @@ def build_ledger_entry(
         verification_status=article.verification_status,
         confidence=confidence,
         limitations=limitations,
+        search_run_id=search_run_id,
+        verified_at=verified_at or datetime.now(timezone.utc),
     )
 
 

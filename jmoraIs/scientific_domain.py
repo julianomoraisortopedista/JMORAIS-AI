@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 from uuid import uuid4
@@ -21,6 +21,14 @@ class SupportDirection(str, Enum):
     INCONCLUSIVE = "INCONCLUSIVE"
 
 
+class PublicationStatus(str, Enum):
+    RELIABLE = "RELIABLE"
+    CORRECTED = "CORRECTED"
+    RETRACTED = "RETRACTED"
+    EXPRESSION_OF_CONCERN = "EXPRESSION_OF_CONCERN"
+    UNKNOWN = "UNKNOWN"
+
+
 class HumanReviewStage(str, Enum):
     DRAFT = "DRAFT"
     AI_REVIEWED = "AI_REVIEWED"
@@ -30,6 +38,15 @@ class HumanReviewStage(str, Enum):
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+@dataclass
+class Journal:
+    journal_id: str = field(default_factory=lambda: uuid4().hex)
+    title: str = ""
+    abbreviation: Optional[str] = None
+    issn: Optional[str] = None
+    country: Optional[str] = None
 
 
 @dataclass
@@ -52,6 +69,7 @@ class ArticleAuthor:
 class SourceProvenance:
     source_id: str = field(default_factory=lambda: uuid4().hex)
     source_type: str = "pubmed"
+    source_database: str = "pubmed"
     source_name: str = ""
     source_locator: Optional[str] = None
     retrieved_at: datetime = field(default_factory=utc_now)
@@ -61,23 +79,48 @@ class SourceProvenance:
 
 @dataclass
 class ScientificArticle:
+    internal_id: str = field(default_factory=lambda: uuid4().hex)
     article_id: str = field(default_factory=lambda: uuid4().hex)
     title: str = ""
-    journal: Optional[str] = None
-    year: Optional[int] = None
-    pmid: Optional[str] = None
-    doi: Optional[str] = None
-    pmcid: Optional[str] = None
+    normalized_title: Optional[str] = None
     abstract: Optional[str] = None
-    authors: list[str] = field(default_factory=list)
+    journal: Optional[str] = None
+    journal_abbreviation: Optional[str] = None
+    publication_year: Optional[int] = None
+    year: Optional[int] = None
+    publication_date: Optional[date] = None
+    volume: Optional[str] = None
+    issue: Optional[str] = None
+    pages: Optional[str] = None
+    doi: Optional[str] = None
+    pmid: Optional[str] = None
+    pmcid: Optional[str] = None
+    issn: Optional[str] = None
+    source_database: str = "pubmed"
     source_type: str = "pubmed"
+    publication_type: Optional[str] = None
+    study_design: Optional[str] = None
+    language: Optional[str] = None
+    keywords: list[str] = field(default_factory=list)
+    authors: list[str] = field(default_factory=list)
     source_locator: Optional[str] = None
     verification_status: str = VerificationStatus.NOT_VERIFIED.value
+    publication_status: str = PublicationStatus.UNKNOWN.value
     support_direction: str = SupportDirection.SUPPORTING.value
     provenance: Optional[SourceProvenance] = None
     human_review_status: str = HumanReviewStage.DRAFT.value
-    normalized_title: Optional[str] = None
     raw_metadata: Optional[dict[str, Any]] = None
+    created_at: datetime = field(default_factory=utc_now)
+    updated_at: datetime = field(default_factory=utc_now)
+    last_verified_at: Optional[datetime] = None
+
+    def __post_init__(self) -> None:
+        if self.publication_year is None and self.year is not None:
+            self.publication_year = self.year
+        elif self.year is None and self.publication_year is not None:
+            self.year = self.publication_year
+        elif self.publication_year is not None and self.year is not None and self.publication_year != self.year:
+            self.year = self.publication_year
 
 
 @dataclass
@@ -88,6 +131,7 @@ class Citation:
     rendered_vancouver: Optional[str] = None
     verification_status: str = VerificationStatus.NOT_VERIFIED.value
     source_locator: Optional[str] = None
+    citation_warning: Optional[str] = None
 
 
 @dataclass
@@ -108,7 +152,6 @@ class EvidenceLedgerEntry:
     source_id: str | int = ""
     source_type: str = "scientific_article"
     source_locator: Optional[str] = None
-    supporting_passage: Optional[str] = None
     pmid: Optional[str] = None
     doi: Optional[str] = None
     pmcid: Optional[str] = None
@@ -117,6 +160,8 @@ class EvidenceLedgerEntry:
     confidence: float = 0.0
     limitations: Optional[str] = None
     verified_at: datetime = field(default_factory=utc_now)
+    search_run_id: Optional[str] = None
+    supporting_passage: Optional[str] = None
 
 
 @dataclass
