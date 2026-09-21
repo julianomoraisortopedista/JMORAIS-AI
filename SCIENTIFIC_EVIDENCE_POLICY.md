@@ -1,5 +1,9 @@
 # Scientific Evidence Policy
 
+## Operational enforcement
+
+Evidence is trusted only after authoritative confirmation, reconciliation, append-only provenance and integrity-valid EvidencePackage issuance. Current validity is computed from ledger history. Scheduled live benchmarking measures accuracy, error rates, coverage and source failures against documented beta thresholds. Any threshold failure, `TAMPERED` replay or missing provenance blocks promotion; synthetic bibliography cannot satisfy the authoritative benchmark.
+
 ## Purpose
 
 JMORAIS AI shall treat scientific evidence as a governed asset, not a convenience feature. The Scientific Core is the trust boundary for retrieval, normalization, verification, enrichment, citation rendering, and evidence-led synthesis.
@@ -47,3 +51,6 @@ No medical document may advance to FINAL without physician review and provenance
 ## Deferred or Frozen Modules
 
 Clinical, Audit, Document, Executive, OPME, Business, and Finance modules may be developed later, but they remain deferred/frozen relative to the Scientific Core until the evidence layer is validated. These modules may consume the Scientific Core, but must not bypass or override its verification rules.
+# Canonical citation persistence
+
+The exact Vancouver output and reconciled structured metadata accepted by the Scientific Core must be retained in append-only canonical citation history. Citation query must revalidate current EvidencePackage and ledger state, fail closed on missing linkage or revocation, and must never reformat, complete metadata, or call external sources after restart. The legacy `citations` table is non-authoritative.

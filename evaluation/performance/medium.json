@@ -1,0 +1,24 @@
+{
+  "append_ms": {
+    "p50": 0.2032045000000835,
+    "p95": 1.8578306260001227,
+    "p99": 1.8578306260001227
+  },
+  "append_throughput_events_s": 1618.648338737387,
+  "database_size_bytes": 44465175,
+  "domain_prepare_ms": {
+    "p50": 0.03562499978215783,
+    "p95": 0.05224999995334656,
+    "p99": 0.09112500038099824
+  },
+  "event_count": 10000,
+  "full_replay_events": 10114,
+  "full_replay_integrity": "VALID",
+  "full_replay_seconds": 0.24212641600024654,
+  "integrity": "VALID",
+  "max_rss_kb": 111540,
+  "profile": "MEDIUM",
+  "single_stream_replay_seconds": 0.27051458300002196,
+  "single_stream_replay_throughput_events_s": 36966.58379411356,
+  "stream": "perf-medium-0d74945bf8724eb9bc197016a290edfa"
+}

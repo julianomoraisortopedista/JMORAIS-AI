@@ -1,0 +1,19 @@
+{
+  "backup": "VALID",
+  "replay": "VALID",
+  "restore": "VALID",
+  "state_equivalent": true,
+  "state_hash": "6d0f452857dc3c0db3855c3b42b4e2f5a04253820f8e2c637970309590de0812",
+  "streams": 8,
+  "table_counts": {
+    "canonical_ledger_events": 104,
+    "clinical_conflict_adjudication_events": 2,
+    "evidence_package_catalog": 2,
+    "evidence_package_versions": 2,
+    "governed_clinical_audit_events": 2,
+    "governed_evidence_lifecycle_events": 2,
+    "governed_evidence_versions": 2,
+    "reviewer_identities": 1
+  },
+  "verified_events": 114
+}

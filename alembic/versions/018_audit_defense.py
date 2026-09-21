@@ -1,0 +1,10 @@
+"""Append-only audit defense. Revision ID: 018_audit_defense; Revises: 017_medical_docs"""
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+revision="018_audit_defense";down_revision="017_medical_docs";branch_labels=None;depends_on=None
+def upgrade():
+    op.create_table("audit_defense_versions",sa.Column("package_id",sa.String(68),primary_key=True),sa.Column("stream_id",sa.String(68),nullable=False),sa.Column("version",sa.Integer,nullable=False),sa.Column("previous_package_id",sa.String(68),sa.ForeignKey("audit_defense_versions.package_id",ondelete="RESTRICT")),sa.Column("defense_id",sa.String(68),nullable=False),sa.Column("status",sa.String(32),nullable=False),sa.Column("review_status",sa.String(32),nullable=False),sa.Column("created_at",sa.DateTime(timezone=True),nullable=False),sa.Column("payload",postgresql.JSONB,nullable=False),sa.Column("schema_version",sa.Integer,nullable=False),sa.UniqueConstraint("stream_id","version",name="uq_audit_defense_stream_version"),sa.CheckConstraint("version > 0","ck_audit_defense_version_positive"))
+    op.create_table("audit_defense_events",sa.Column("sequence_id",sa.BigInteger,sa.Identity(),primary_key=True),sa.Column("event_id",sa.String(68),nullable=False,unique=True),sa.Column("stream_id",sa.String(68),nullable=False),sa.Column("package_id",sa.String(68),nullable=False),sa.Column("event_type",sa.String(40),nullable=False),sa.Column("occurred_at",sa.DateTime(timezone=True),nullable=False),sa.Column("actor_id",sa.String(128),nullable=False),sa.Column("decision_code",sa.String(64),nullable=False),sa.Column("reference_ids",postgresql.JSONB,nullable=False),sa.Column("policy_version",sa.String(64),nullable=False))
+    for table in ("audit_defense_versions","audit_defense_events"):op.execute(f"CREATE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE ON {table} FOR EACH ROW EXECUTE FUNCTION reject_immutable_history_mutation()")
+def downgrade():raise RuntimeError("audit defense history cannot be destructively downgraded")

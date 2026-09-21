@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "rationale": "Generous local regression ceilings detect order-of-magnitude regressions without claiming production SLOs.",
+  "authenticated_api_p95_ms": 250,
+  "postgresql_round_trip_p95_ms": 50,
+  "minimum_success_rate": 1.0,
+  "maximum_retained_growth_bytes": 8388608,
+  "medium_full_replay_seconds": 15,
+  "large_full_replay_seconds": 30,
+  "replay_integrity": "VALID"
+}

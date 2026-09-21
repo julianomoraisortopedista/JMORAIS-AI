@@ -1,0 +1,210 @@
+{
+  "coverage": {
+    "Crossref": 0.9688,
+    "OpenAlex": 0.9688,
+    "PubMed": 1.0
+  },
+  "dataset_size": 128,
+  "dataset_version": "authoritative-biomedical-v2.0.0",
+  "false_negative_rate": 0.0,
+  "false_positive_rate": 0.0,
+  "identifier_resolution_success": 0.9413092550790068,
+  "metadata_reconciliation_agreement": 0.9413092550790068,
+  "precision": 1.0,
+  "recall": 1.0,
+  "sources": {
+    "crossref": {
+      "attempted": 128,
+      "failure_rate": 0.03125,
+      "failures": [
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42483476"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42064275"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42397987"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42397986"
+        }
+      ],
+      "resolved": 124
+    },
+    "openalex": {
+      "attempted": 128,
+      "failure_rate": 0.171875,
+      "failures": [
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42000234"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-39435502"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42240382"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42483476"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42064275"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41837698"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42438056"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42343233"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42445966"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42337391"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42324205"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42457454"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42457453"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41990456"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42446531"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42321631"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42240026"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42045794"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42570759"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42570758"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42562197"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42561477"
+        }
+      ],
+      "resolved": 106
+    },
+    "pmc": {
+      "attempted": 59,
+      "failure_rate": 0.0,
+      "failures": [],
+      "resolved": 59
+    },
+    "pubmed": {
+      "attempted": 128,
+      "failure_rate": 0.0,
+      "failures": [],
+      "resolved": 128
+    },
+    "semantic_scholar": {
+      "attempted": 128,
+      "failure_rate": 0.109375,
+      "failures": [
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42061029"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-40889894"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41845977"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42055784"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910353"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910352"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910351"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910350"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910349"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41990456"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42570775"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42570760"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42570759"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42570758"
+        }
+      ],
+      "resolved": 114
+    }
+  }
+}

@@ -33,7 +33,7 @@ def test_malformed_doi() -> None:
     assert validate_doi("https://example.com/abc") is False
 
 
-def test_pubmed_crossref_metadata_agreement() -> None:
+def test_metadata_agreement_without_authoritative_lookup_is_not_verified() -> None:
     article = normalize_article({
         "title": "Randomized trial of postoperative rehabilitation",
         "journal": "Journal of Orthopedic Research",
@@ -51,7 +51,7 @@ def test_pubmed_crossref_metadata_agreement() -> None:
     }
 
     verified = verify_article_metadata(article, crossref)
-    assert verified.verification_status == "VERIFIED"
+    assert verified.verification_status == "PARTIALLY_VERIFIED"
 
 
 def test_pubmed_crossref_metadata_conflict() -> None:
@@ -104,7 +104,7 @@ def test_deduplicated_article_keeps_priority_and_provenance() -> None:
     assert deduped[0].source_locator in {"https://pubmed.ncbi.nlm.nih.gov/12345678/", "https://doi.org/10.1000/rehab"}
 
 
-def test_vancouver_from_verified_metadata() -> None:
+def test_vancouver_from_format_checked_metadata_is_blocked() -> None:
     article = normalize_article({
         "title": "Evidence for early rehabilitation after knee surgery",
         "journal": "Orthopedic Review",
@@ -117,9 +117,8 @@ def test_vancouver_from_verified_metadata() -> None:
     article = verify_article_metadata(article)
 
     citation = render_vancouver(article)
-    assert "Orthopedic Review" in citation
-    assert "2024" in citation
-    assert "Doe, Jane" in citation
+    assert "withheld" in citation.lower()
+    assert "PARTIALLY_VERIFIED" in citation
 
 
 def test_not_verified_citation_is_blocked() -> None:
@@ -186,7 +185,7 @@ def test_evidence_ledger_completeness() -> None:
         assert stored_entry.claim_id == "claim-001"
         assert stored_entry.pmid == "55555"
         assert stored_entry.doi == "10.1000/earlymob"
-        assert stored_entry.verification_status == "VERIFIED"
+        assert stored_entry.verification_status == "PARTIALLY_VERIFIED"
         assert session.query(EvidenceLedger).count() == 1
         assert session.query(ScientificArticle).count() == 1
 

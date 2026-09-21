@@ -4,12 +4,19 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 from jmoraIs.db import Base, EvidenceLedger, ScientificArticle, store_ledger_entry, upsert_article
+from jmoraIs.scientific_domain import (
+    ExistenceVerificationStatus,
+    IdentifierType,
+    IdentifierVerificationResult,
+    MetadataReconciliationStatus,
+    PublicationVerificationRecord,
+)
 from jmoraIs.verification import ArticleRecord, build_ledger_entry, normalize_article, verify_article_metadata
 from jmoraIs.vancouver import render_vancouver
 from services.pubmed import client
 
 
-def test_normalize_and_verify_article_metadata() -> None:
+def test_normalize_and_format_check_article_metadata() -> None:
     raw = {
         "title": "Evidence for early rehabilitation after knee surgery",
         "journal": "Orthopedic Review",
@@ -25,7 +32,7 @@ def test_normalize_and_verify_article_metadata() -> None:
 
     assert article.title == raw["title"]
     assert article.pmid == "12345678"
-    assert article.verification_status == "VERIFIED"
+    assert article.verification_status == "PARTIALLY_VERIFIED"
 
 
 def test_render_vancouver_citation() -> None:
@@ -37,13 +44,28 @@ def test_render_vancouver_citation() -> None:
         pmid="98765432",
         doi="10.1000/demo",
         verification_status="VERIFIED",
+        verification_record=PublicationVerificationRecord(
+            identifier_results=[
+                IdentifierVerificationResult(
+                    identifier_type=IdentifierType.PMID.value,
+                    identifier_value="98765432",
+                    format_valid=True,
+                    existence_status=ExistenceVerificationStatus.CONFIRMED.value,
+                    source_name="NCBI PubMed",
+                    raw_outcome={"uid": "98765432"},
+                )
+            ],
+            reconciliation_status=MetadataReconciliationStatus.MATCHED.value,
+            final_status="VERIFIED",
+            policy_version="ST-02",
+            search_run_id="search-001",
+        ),
     )
 
     citation = render_vancouver(article)
 
-    assert "Doe, Jane, Smith, John" in citation
-    assert "British Medical Journal" in citation
-    assert "2024" in citation
+    assert "withheld" in citation.lower()
+    assert "EvidencePackage" in citation
 
 
 def test_search_pubmed_uses_mock_response(monkeypatch) -> None:

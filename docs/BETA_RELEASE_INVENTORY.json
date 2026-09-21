@@ -1,0 +1,788 @@
+{
+  "branch": "feature/scientific-core-v0.2",
+  "candidate_version": "0.2.0-beta.1",
+  "counts": {
+    "EXCLUDE": 0,
+    "GENERATED": 17,
+    "INCLUDE": 138,
+    "LOCAL_ONLY": 0
+  },
+  "generated_at": "2026-08-10T03:08:47.958209+00:00",
+  "items": [
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "ARCHITECTURE.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "README.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "ROADMAP.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "SCIENTIFIC_EVIDENCE_POLICY.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "SECURITY.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/audit_engine.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/clinical_engine.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/connect/__init__.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/connect/base.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/connect/pubmed.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/db.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/document_generator.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/executive_ai.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/scientific_domain.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/scientific_engine.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/vancouver.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "jmoraIs/verification.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "pyproject.toml"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "requirements.txt"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "tests/test_citation_verification_gate.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "tests/test_clinical_decision_engine.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "tests/test_evidence_pipeline.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "tests/test_pubmed_connector.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "M",
+      "path": "tests/test_scientific_core_v3.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": ".github/workflows/ci.yml"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": ".github/workflows/live-scientific-benchmark.yml"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": ".github/workflows/postgresql-performance.yml"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "Dockerfile.test"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "UNKNOWN.egg-info/PKG-INFO"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "UNKNOWN.egg-info/SOURCES.txt"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "UNKNOWN.egg-info/dependency_links.txt"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "UNKNOWN.egg-info/top_level.txt"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic.ini"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic/env.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic/versions/004_persistent_evidence_package_catalog.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic/versions/005_governed_clinical_persistence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic/versions/006_postgresql_tamper_concurrency.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic/versions/007_cryptographic_stream_checkpoints.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "alembic/versions/008_reviewer_identity_persistence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "database/migrations/003_append_only_evidence_ledger.sql"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "database/roles/postgresql_roles.sql"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docker-compose.postgres-test.yml"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/BACKUP_RESTORE_REPLAY.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/BETA_READINESS_REPORT.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/BETA_RELEASE_COMPOSITION.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/BETA_RELEASE_INVENTORY.json"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/BETA_RELEASE_INVENTORY.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/CLINICAL_PATH_DEPRECATIONS.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/CLINICAL_RISK_REGISTER.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/CRYPTOGRAPHIC_REPLAY.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/DOMAIN_CONSOLIDATION.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/INTENDED_USE.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/PERFORMANCE_BUDGETS.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/PLATFORM_RELEASE_AUDIT.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/PLATFORM_RELEASE_AUDIT_V2.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/POSTGRESQL_HARDENING.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/SCIENTIFIC_BENCHMARK_ACCEPTANCE.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "docs/ST24_BETA_ACCEPTANCE_EVIDENCE.md"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/__init__.py"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/performance/large.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/performance/lookups.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/performance/medium.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/performance/profiles.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/performance/small.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/release_evidence/representative-restore-replay.json"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/__init__.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/data/authoritative_v1.json"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/dataset.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/metrics.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/models.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/report.py"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/acceptance-balanced-run1.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/acceptance-balanced-run2.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/live-authoritative-v2-20260809-run2.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/live-authoritative-v2-20260809.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/live-authoritative-v2-balanced-run1.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/live-authoritative-v2-balanced-run2.json"
+    },
+    {
+      "classification": "GENERATED",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/reports/st24-final-live.json"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/runner.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/sources.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "evaluation/scientific_benchmark/validation.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/application/__init__.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/application/evidence_packages.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/application/integrity_alerts.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/application/ports.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/application/scientific_verification.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/appraisal/__init__.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/appraisal/application.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/appraisal/domain.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/appraisal/governed.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/appraisal/infrastructure.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/appraisal/persistence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/__init__.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/application.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/deprecated.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/governance_infrastructure.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/governance_persistence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/governed.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/governed_infrastructure.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/clinical/review_governance.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/connect/crossref.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/evidence_ledger.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/infrastructure/__init__.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/infrastructure/cryptographic_replay.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/infrastructure/database_invariants.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/infrastructure/integrity_alerts.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/infrastructure/package_catalog.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/infrastructure/postgresql_package_catalog.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "jmoraIs/structured_logging.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/assess_benchmark_report.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/build_authoritative_benchmark.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/build_release_inventory.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/check_source_hygiene.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/enrich_authoritative_benchmark.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/measure_lookup_performance.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/run_live_benchmark.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/run_postgresql_performance.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/scan_release_sensitive_data.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/seed_representative_release_db.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "scripts/validate_backup_restore_replay.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_append_only_evidence_ledger.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_append_only_evidence_ledger_persistence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_authoritative_publication_verification.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_authoritative_reconciliation_pipeline.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_authoritative_scientific_benchmark.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_authoritative_scientific_benchmark_integration.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_automatic_package_revocation.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_clinical_appraisal_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_clinical_appraisal_domain.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_clinical_appraisal_integration.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_clinical_intelligence_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_clinical_intelligence_foundation.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_clinical_intelligence_integration.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_crossref_connector.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_cryptographic_ledger_replay.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_domain_consolidation_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_evidence_package_boundary.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_governance_persistence_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_governed_clinical_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_governed_clinical_integration.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_governed_persistence_and_review_governance.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_package_catalog_repository.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_platform_trust_boundary_consolidation.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_postgresql_package_catalog_adapter.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_postgresql_package_catalog_integration.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_postgresql_tamper_concurrency.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_scientific_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_scientific_engine_trust_boundary.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_st18_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_st20_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_st21_architecture.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_st22_operational_hardening.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_st23_release_evidence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_st24_acceptance_evidence.py"
+    },
+    {
+      "classification": "INCLUDE",
+      "git_status": "??",
+      "path": "tests/test_strict_vancouver_gate.py"
+    }
+  ]
+}

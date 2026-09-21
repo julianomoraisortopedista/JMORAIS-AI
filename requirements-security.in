@@ -1,0 +1,6 @@
+# RC security-tool entry points. Compile with the command documented in
+# docs/SOFTWARE_SUPPLY_CHAIN_SECURITY.md; never install into the runtime image.
+bandit==1.8.6
+cyclonedx-bom==7.1.0
+detect-secrets==1.5.0
+pip-audit==2.9.0

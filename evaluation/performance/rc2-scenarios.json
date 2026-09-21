@@ -1,0 +1,239 @@
+{
+  "schema_version": 1,
+  "workloads": {
+    "B_authentication_session_jti": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_session_security.py::test_active_session_and_reusable_jti_are_accepted",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 550.2764590200968,
+        "p50": 503.5910829901695,
+        "p90": 550.2764590200968,
+        "p95": 550.2764590200968,
+        "p99": 550.2764590200968
+      },
+      "success_rate": 1.0
+    },
+    "C_patient_context_ingestion": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_patient_context_application.py::test_retrieve_and_version_history_are_append_only",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 241.59825005335733,
+        "p50": 239.9895420530811,
+        "p90": 241.59825005335733,
+        "p95": 241.59825005335733,
+        "p99": 241.59825005335733
+      },
+      "success_rate": 1.0
+    },
+    "D_clinical_state": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_clinical_state.py::test_current_state_is_immutable_reference_based_and_preserves_epistemic_status",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 247.98370903590694,
+        "p50": 246.55429203994572,
+        "p90": 247.98370903590694,
+        "p95": 247.98370903590694,
+        "p99": 247.98370903590694
+      },
+      "success_rate": 1.0
+    },
+    "E_terminology": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_terminology.py::test_canonical_and_synonym_mapping_are_deterministic_and_immutable",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 246.63650000002235,
+        "p50": 222.24745899438858,
+        "p90": 246.63650000002235,
+        "p95": 246.63650000002235,
+        "p99": 246.63650000002235
+      },
+      "success_rate": 1.0
+    },
+    "F_evidence_package": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_evidence_package_boundary.py::test_nonexistent_package_is_rejected",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 357.480582955759,
+        "p50": 337.30604202719405,
+        "p90": 357.480582955759,
+        "p95": 357.480582955759,
+        "p99": 357.480582955759
+      },
+      "success_rate": 1.0
+    },
+    "G_clinical_appraisal": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_clinical_appraisal_persistence.py::test_canonical_appraisal_is_immutable_versioned_and_traceable",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 319.69466601731256,
+        "p50": 315.86200004676357,
+        "p90": 319.69466601731256,
+        "p95": 319.69466601731256,
+        "p99": 319.69466601731256
+      },
+      "success_rate": 1.0
+    },
+    "H_governed_evidence": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_governed_clinical_integration.py::test_valid_governed_evidence_is_accepted_and_ranked",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 336.8214999791235,
+        "p50": 334.4637079862878,
+        "p90": 336.8214999791235,
+        "p95": 336.8214999791235,
+        "p99": 336.8214999791235
+      },
+      "success_rate": 1.0
+    },
+    "I_reasoning_input": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_reasoning_input.py::test_contract_is_immutable_reference_only_and_contains_versions",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 247.95929196989164,
+        "p50": 239.51091698836535,
+        "p90": 247.95929196989164,
+        "p95": 247.95929196989164,
+        "p99": 247.95929196989164
+      },
+      "success_rate": 1.0
+    },
+    "J_guideline_engine": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_guideline_engine.py::test_valid_guideline_is_applicable_explainable_and_not_actionable",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 401.17575001204386,
+        "p50": 394.7902499930933,
+        "p90": 401.17575001204386,
+        "p95": 401.17575001204386,
+        "p99": 401.17575001204386
+      },
+      "success_rate": 1.0
+    },
+    "K_orthopedic_intelligence": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_orthopedic_intelligence.py::test_mechanical_stability_alignment_function_and_history_are_structured_references",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 418.1834170012735,
+        "p50": 392.29625003645197,
+        "p90": 418.1834170012735,
+        "p95": 418.1834170012735,
+        "p99": 418.1834170012735
+      },
+      "success_rate": 1.0
+    },
+    "L_medical_document": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_medical_document_engine.py::test_only_canonical_reasoning_input_is_accepted",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 438.5214580106549,
+        "p50": 421.0767920012586,
+        "p90": 438.5214580106549,
+        "p95": 438.5214580106549,
+        "p99": 438.5214580106549
+      },
+      "success_rate": 1.0
+    },
+    "M_audit_defense": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_audit_defense.py::test_source_bound_defense_is_immutable_traceable_and_non_actionable",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 437.1558749699034,
+        "p50": 428.501041023992,
+        "p90": 437.1558749699034,
+        "p95": 437.1558749699034,
+        "p99": 437.1558749699034
+      },
+      "success_rate": 1.0
+    },
+    "N_persisted_gateway_input": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_persisted_gateway_input.py::test_owner_issued_input_is_atomic_immutable_and_persisted_on_invocation",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 434.81574999168515,
+        "p50": 406.57612500945106,
+        "p90": 434.81574999168515,
+        "p95": 434.81574999168515,
+        "p99": 434.81574999168515
+      },
+      "success_rate": 1.0
+    },
+    "O_llm_gateway_mock": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_llm_gateway.py::test_mock_provider_gateway_cost_tokens_audit_and_no_external_actionability",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 394.8526249732822,
+        "p50": 389.5932500017807,
+        "p90": 394.8526249732822,
+        "p95": 394.8526249732822,
+        "p99": 394.8526249732822
+      },
+      "success_rate": 1.0
+    },
+    "P_governed_llm_draft": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_governed_llm_draft.py::test_eligible_gateway_output_issues_immutable_reviewable_draft",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 461.1468340153806,
+        "p50": 432.83112498465925,
+        "p90": 461.1468340153806,
+        "p95": 461.1468340153806,
+        "p99": 461.1468340153806
+      },
+      "success_rate": 1.0
+    },
+    "Q_human_review": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_llm_human_review.py::test_authorized_human_approval_is_immutable_append_only_and_not_actionable",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 465.9472079947591,
+        "p50": 462.2750409762375,
+        "p90": 465.9472079947591,
+        "p95": 465.9472079947591,
+        "p99": 465.9472079947591
+      },
+      "success_rate": 1.0
+    },
+    "R_complete_case_1_14": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_complete_case_stage1_7_postgresql.py::test_complete_case_1_to_14_persists_restarts_and_traces_exactly",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 2499.68995800009,
+        "p50": 2286.3498750375584,
+        "p90": 2499.68995800009,
+        "p95": 2499.68995800009,
+        "p99": 2499.68995800009
+      },
+      "success_rate": 1.0
+    },
+    "S_cryptographic_replay": {
+      "measurement_scope": "pytest process + fixture + canonical operation + assertions",
+      "node_id": "tests/test_cryptographic_ledger_replay.py::test_full_replay_from_genesis_is_valid_and_structured",
+      "samples": 3,
+      "scenario_wall_ms": {
+        "max": 1202.543167048134,
+        "p50": 1182.0052500115708,
+        "p90": 1202.543167048134,
+        "p95": 1202.543167048134,
+        "p99": 1202.543167048134
+      },
+      "success_rate": 1.0
+    }
+  }
+}

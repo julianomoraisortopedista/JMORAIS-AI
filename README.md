@@ -1,5 +1,11 @@
 # JMORAIS AI
 
+> Status: pre-production hardening. The validated scope is the provenance-first Scientific Trust Platform and governed human review; see `docs/INTENDED_USE.md`.
+
+## Operational validation
+
+Python 3.12 and PostgreSQL 16 are the release baseline. CI runs migrations, the full suite, PostgreSQL integration tests, source hygiene, packaging checks and a 90% coverage gate. The live authoritative benchmark is scheduled separately because it depends on biomedical services. Production remains prohibited until benchmark scale, IAM, tenant isolation, deployment and prospective clinical validation gates pass.
+
 JMORAIS AI is an evidence-grounded intelligence platform for medical research, audit defense, and executive intelligence. This repository now contains the Phase 0 foundation and the first vertical slice of Phase 1: retrieval of PubMed records, metadata normalization, identifier verification, PostgreSQL-ready storage, Vancouver rendering, and an evidence ledger.
 
 ## Architecture review summary
@@ -26,13 +32,27 @@ The implemented patch focuses on the minimal evidence pipeline required before b
 ## Quick start
 
 ```bash
-cd /Users/julianomorais/Projetos/JMORAIS-AI/JMORAIS-AI
-python3 -m venv .venv
+cd JMORAIS-AI
+make setup
 source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-pytest -q
+python --version
+python -m pytest -q
 ```
+
+`make setup` is the canonical developer setup. It creates the project-local
+`.venv` with Python 3.12 and installs `.[dev]` from `pyproject.toml`, the
+canonical dependency source. It fails closed when Python 3.12 is unavailable;
+it never falls back to the macOS system Python. If `python3.12` is not on
+`PATH`, provide it explicitly:
+
+```bash
+make setup PYTHON312=/absolute/path/to/python3.12
+```
+
+After activation, use `python -m ...` so every command resolves through the
+project environment. The reproducible shortcuts `make test`, `make coverage`
+and `make hygiene` also invoke `.venv/bin/python` directly and reject a virtual
+environment created with any Python version other than 3.12.
 
 ## Environment
 

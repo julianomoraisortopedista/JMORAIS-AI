@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "profiles": {
+    "SMALL": {"events": 100, "ci": true},
+    "MEDIUM": {"events": 10000, "ci": false},
+    "LARGE": {"events": 100000, "ci": false}
+  },
+  "payload_policy": "Synthetic infrastructure payloads only; no medical claims or patient data."
+}

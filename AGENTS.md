@@ -19,6 +19,8 @@ PLAN -> IMPACT/RISK REVIEW -> IMPLEMENT -> TEST -> VERIFY -> DOCUMENT -> COMMIT
 
 Do not build broad features without tests and documentation.
 Prefer small, modular, reversible changes.
+Use the short task format in `docs/JMORAIS_AI_DEVELOPMENT_PLAYBOOK.md` for normal development.
+Stop before implementation and request explicit architectural review for any architecture change.
 
 ## Architecture
 Primary domains:
@@ -126,8 +128,9 @@ A feature is done only when:
 ## Codex startup behavior
 When entering this repository:
 1. Read AGENTS.md.
-2. Read ARCHITECTURE.md.
-3. Read ROADMAP.md.
-4. Read MASTER_PROMPT.md for product intent.
-5. Work only on the current roadmap phase unless explicitly instructed otherwise.
-6. Do not implement the full platform at once.
+2. Read `docs/JMORAIS_AI_DEVELOPMENT_PLAYBOOK.md` first as the canonical operational manual.
+3. Identify and respect the canonical bounded context, ports and mandatory trust path.
+4. Follow the Playbook Definition of Done and current roadmap scope.
+5. Use the Playbook short task format for normal work.
+6. Stop and request architectural review before changing a trust boundary, canonical owner/port, dependency direction, persistence invariant or public contract.
+7. Do not implement the full platform at once.

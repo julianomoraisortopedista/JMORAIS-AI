@@ -9,3 +9,10 @@ __pycache__/
 htmlcov/
 .idea/
 .vscode/
+
+.env.*
+!.env.example
+coverage.json
+dist/
+*.egg-info/
+*.log

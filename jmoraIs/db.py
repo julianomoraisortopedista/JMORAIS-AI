@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, Integer, String, Text, create_engine, select
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, create_engine, event, select
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
 from jmoraIs.config import get_database_url
@@ -147,6 +147,80 @@ class EvidenceLedger(Base):
     verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
 
+class LedgerClaimRecord(Base):
+    __tablename__ = "ledger_claims"
+    claim_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    claim_text: Mapped[str] = mapped_column(Text, nullable=False)
+    claim_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class EvidenceFragmentRecord(Base):
+    __tablename__ = "evidence_fragments"
+    fragment_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    source_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_locator: Mapped[Optional[str]] = mapped_column(String(1024))
+    exact_location: Mapped[Optional[str]] = mapped_column(String(512))
+    passage: Mapped[str] = mapped_column(Text, nullable=False)
+    pmid: Mapped[Optional[str]] = mapped_column(String(20))
+    doi: Mapped[Optional[str]] = mapped_column(String(255))
+    pmcid: Mapped[Optional[str]] = mapped_column(String(64))
+    payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    fragment_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    retrieved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    verification_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    pipeline_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    policy_version: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_version: Mapped[Optional[str]] = mapped_column(String(128))
+    prompt_version: Mapped[Optional[str]] = mapped_column(String(128))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class ClaimSupportRecord(Base):
+    __tablename__ = "claim_supports"
+    __table_args__ = (
+        CheckConstraint("support_direction IN ('SUPPORTING','OPPOSING','NEUTRAL','INCONCLUSIVE')"),
+        UniqueConstraint("claim_id", "fragment_id", "support_direction"),
+    )
+    support_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    claim_id: Mapped[str] = mapped_column(ForeignKey("ledger_claims.claim_id", ondelete="RESTRICT"), nullable=False)
+    fragment_id: Mapped[str] = mapped_column(ForeignKey("evidence_fragments.fragment_id", ondelete="RESTRICT"), nullable=False)
+    support_direction: Mapped[str] = mapped_column(String(24), nullable=False)
+    support_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class LedgerEventRecord(Base):
+    __tablename__ = "ledger_events"
+    __table_args__ = (CheckConstraint("event_type IN ('EVIDENCE_ADDED','CORRECTION','SUPERSESSION','INVALIDATION','RETRACTION','REPROCESSING')"),)
+    event_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    claim_id: Mapped[str] = mapped_column(ForeignKey("ledger_claims.claim_id", ondelete="RESTRICT"), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    support_id: Mapped[Optional[str]] = mapped_column(ForeignKey("claim_supports.support_id", ondelete="RESTRICT"))
+    target_support_id: Mapped[Optional[str]] = mapped_column(ForeignKey("claim_supports.support_id", ondelete="RESTRICT"))
+    replacement_support_id: Mapped[Optional[str]] = mapped_column(ForeignKey("claim_supports.support_id", ondelete="RESTRICT"))
+    reason: Mapped[Optional[str]] = mapped_column(Text)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    previous_event_hash: Mapped[Optional[str]] = mapped_column(String(64))
+    event_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+
+
+class AppendOnlyMutationError(RuntimeError):
+    pass
+
+
+_APPEND_ONLY_RECORDS = (LedgerClaimRecord, EvidenceFragmentRecord, ClaimSupportRecord, LedgerEventRecord)
+
+
+@event.listens_for(Session, "before_flush")
+def reject_ledger_mutation(session: Session, _flush_context: Any, _instances: Any) -> None:
+    if any(isinstance(record, _APPEND_ONLY_RECORDS) for record in session.dirty):
+        raise AppendOnlyMutationError("UPDATE is prohibited for append-only evidence ledger records")
+    if any(isinstance(record, _APPEND_ONLY_RECORDS) for record in session.deleted):
+        raise AppendOnlyMutationError("DELETE is prohibited for append-only evidence ledger records")
+
+
 class SearchRun(Base):
     __tablename__ = "search_runs"
 
@@ -193,7 +267,7 @@ def get_engine():
 
 
 def create_tables() -> None:
-    Base.metadata.create_all(bind=get_engine())
+    raise RuntimeError("production schema creation requires Alembic migrations")
 
 
 def _article_query(article: ArticleRecord):
@@ -284,6 +358,11 @@ __all__ = [
     "Citation",
     "EvidenceClaim",
     "EvidenceLedger",
+    "LedgerClaimRecord",
+    "EvidenceFragmentRecord",
+    "ClaimSupportRecord",
+    "LedgerEventRecord",
+    "AppendOnlyMutationError",
     "SearchRun",
     "VerificationRun",
     "ClinicalDecision",

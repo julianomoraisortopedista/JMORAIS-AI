@@ -4,34 +4,34 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class AuditClaim:
     claim_id: str
     raw_claim: str
     category: str = "general"
-    evidence_needed: list[str] = field(default_factory=list)
-    source_refs: list[str] = field(default_factory=list)
+    evidence_needed: tuple[str, ...] = ()
+    source_refs: tuple[str, ...] = ()
     risk: str = "medium"
 
 
-@dataclass
+@dataclass(frozen=True)
 class AuditEvidenceMatrix:
     claim_id: str
     claim_text: str
-    supporting: list[str] = field(default_factory=list)
-    opposing: list[str] = field(default_factory=list)
-    neutral: list[str] = field(default_factory=list)
+    supporting: tuple[str, ...] = ()
+    opposing: tuple[str, ...] = ()
+    neutral: tuple[str, ...] = ()
     assessed_status: str = "needs_review"
     notes: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class AuditDefenseResponse:
     claim_id: str
     response: str
     confidence: float
     evidence_strength: str
-    cited_sources: list[str]
+    cited_sources: tuple[str, ...]
 
 
 class AuditDefenseEngine:
@@ -50,8 +50,7 @@ class AuditDefenseEngine:
                     claim_id=f"claim-{index}",
                     raw_claim=claim,
                     category=category,
-                    evidence_needed=["source verification", "clinical applicability"],
-                    source_refs=[],
+                    evidence_needed=("source verification", "clinical applicability"),
                     risk="medium" if category == "general" else "high",
                 )
             )
@@ -79,9 +78,9 @@ class AuditDefenseEngine:
                 AuditEvidenceMatrix(
                     claim_id=claim.claim_id,
                     claim_text=claim.raw_claim,
-                    supporting=supporting,
-                    opposing=opposing,
-                    neutral=neutral,
+                    supporting=tuple(supporting),
+                    opposing=tuple(opposing),
+                    neutral=tuple(neutral),
                     assessed_status=status,
                     notes=notes,
                 )
@@ -121,5 +120,5 @@ class AuditDefenseEngine:
             response=response,
             confidence=confidence,
             evidence_strength=strength,
-            cited_sources=list(dict.fromkeys(sources)),
+            cited_sources=tuple(dict.fromkeys(sources)),
         )

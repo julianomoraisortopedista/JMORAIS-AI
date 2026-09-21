@@ -1,0 +1,8 @@
+"""Governed, reference-only contract for future clinical engines."""
+from .application import ClinicalReasoningInputDraft,ClinicalReasoningInputQueryService,ClinicalReasoningInputService
+from .domain import *
+from .infrastructure import InMemoryClinicalReasoningInputRepository,InMemoryReasoningInputAuditAdapter
+from .ports import ClinicalReasoningInputAuditPort,ClinicalReasoningInputQueryPort,ClinicalReasoningInputRepository
+from .persistence import PostgreSQLClinicalReasoningInputRepository,PostgreSQLReasoningInputAuditAdapter,ReasoningInputJsonCodec
+from .exact_reference import *
+from .exact_reference_persistence import PostgreSQLClinicalReasoningInputExactReferenceRepository

@@ -1,0 +1,123 @@
+name: rc-supply-chain-security
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.12"
+  IMAGE_NAME: jmorais-ai:rc-verification
+
+jobs:
+  supply-chain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: jmorais_test
+          POSTGRES_USER: jmorais_test
+          POSTGRES_PASSWORD: ci_test_only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U jmorais_test -d jmorais_test"
+          --health-interval 2s --health-timeout 3s --health-retries 20
+    env:
+      PYTHON_VERSION: "3.12"
+      IMAGE_NAME: jmorais-ai:rc-verification
+      JMORAIS_TEST_POSTGRES_URL: postgresql+psycopg://jmorais_test:ci_test_only@127.0.0.1:5432/jmorais_test
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12.13"
+          cache: pip
+      - name: Prepare evidence directory
+        run: mkdir -p artifacts
+      - name: Install hash-locked security toolchain
+        run: python -m pip install --require-hashes -r requirements-security.lock
+      - name: Enforce production dependency hashes
+        run: python -m pip download --require-hashes --only-binary=:all: -r requirements-production.lock -d /tmp/locked-wheels
+      - name: Install project validation environment
+        run: python -m pip install -e '.[dev]'
+      - name: PostgreSQL migration and full release regression
+        run: |
+          alembic upgrade head
+          alembic current
+          python -m pytest -q --cov=jmoraIs --cov-report=json --cov-fail-under=90 | tee artifacts/pytest-summary.txt
+      - name: Dependency and source hygiene
+        run: python -m pip check && python scripts/check_source_hygiene.py && git diff --check
+      - name: Python SCA
+        run: pip-audit --require-hashes -r requirements-production.lock --strict -f json -o artifacts/pip-audit.json
+      - name: Python SAST
+        run: bandit -r jmoraIs scripts --severity-level medium --confidence-level medium -f json -o artifacts/bandit.json
+      - name: Secret scan
+        run: python scripts/scan_release_sensitive_data.py | tee artifacts/secret-scan.txt
+      - name: CycloneDX Python SBOM
+        run: cyclonedx-py requirements requirements-production.lock --output-format JSON --output-file artifacts/python-sbom.cdx.json --validate
+      - name: Build deterministic metadata image
+        run: >-
+          docker build --pull --no-cache
+          --build-arg JMORAIS_VERSION=0.2.0-beta.1
+          --build-arg JMORAIS_SOURCE_REVISION=${GITHUB_SHA}
+          --build-arg JMORAIS_BUILD_ID=${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          --build-arg JMORAIS_BUILD_TIMESTAMP=1970-01-01T00:00:00Z
+          --tag ${IMAGE_NAME} .
+      - name: Verify hardened image configuration
+        run: |
+          docker inspect ${IMAGE_NAME} > artifacts/image-inspect.json
+          python - <<'PY'
+          import json
+          image=json.load(open("artifacts/image-inspect.json"))[0]
+          config=image["Config"]
+          assert config["User"] == "10001:10001"
+          assert config["Labels"]["org.opencontainers.image.revision"]
+          assert config["Labels"]["org.opencontainers.image.version"] == "0.2.0-beta.1"
+          PY
+          docker save ${IMAGE_NAME} -o artifacts/jmorais-ai.oci.tar
+      - name: Container SBOM
+        uses: anchore/sbom-action@f8bdd1d8ac5e901a77a92f111440fdb1b593736b # v0.20.6
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          format: cyclonedx-json
+          output-file: artifacts/container-sbom.cdx.json
+          upload-artifact: false
+      - name: Container and OS vulnerability scan
+        uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}
+          format: json
+          output: artifacts/trivy.json
+          severity: CRITICAL,HIGH
+          ignore-unfixed: false
+          exit-code: "1"
+      - name: Index SBOM and vulnerability evidence
+        run: |
+          python scripts/build_report_index.py --timestamp 1970-01-01T00:00:00Z --output artifacts/sbom-index.json artifacts/python-sbom.cdx.json artifacts/container-sbom.cdx.json
+          python scripts/build_report_index.py --timestamp 1970-01-01T00:00:00Z --output artifacts/vulnerability-index.json artifacts/pip-audit.json artifacts/trivy.json
+      - name: Build provenance
+        run: >-
+          python scripts/generate_build_provenance.py
+          --artifact artifacts/jmorais-ai.oci.tar
+          --lock requirements-production.lock
+          --sbom artifacts/sbom-index.json
+          --output artifacts/provenance.intoto.json
+          --build-id ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}
+          --builder-id https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          --timestamp 1970-01-01T00:00:00Z
+      - name: Generate and verify software-boundary manifest
+        run: |
+          python scripts/release_manifest.py generate --output artifacts/release-manifest.json --build-id ${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT} --timestamp 1970-01-01T00:00:00Z --container artifacts/jmorais-ai.oci.tar --sbom artifacts/sbom-index.json --vulnerability artifacts/vulnerability-index.json --sast artifacts/bandit.json --secret-scan artifacts/secret-scan.txt --provenance artifacts/provenance.intoto.json --test-summary-file artifacts/pytest-summary.txt --coverage-json coverage.json --complete-case READY_FOR_CONTROLLED_INTERNAL_PILOT --replay VALID
+          python scripts/release_manifest.py verify --manifest artifacts/release-manifest.json --allow-pending
+      - name: Upload independently verifiable evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rc-supply-chain-evidence
+          path: artifacts/
+          if-no-files-found: error

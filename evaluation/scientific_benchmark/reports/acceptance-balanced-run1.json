@@ -1,0 +1,16 @@
+{
+  "authoritative_resolution": 0.9413092550790068,
+  "checks": {
+    "authoritative_source_availability": true,
+    "dataset_size": true,
+    "false_negative_rate": true,
+    "false_positive_rate": true,
+    "identifier_resolution": true,
+    "precision": true,
+    "recall": true,
+    "reconciliation": true
+  },
+  "decision": "PASS",
+  "semantic_scholar_supplementary_failure_rate": 0.109375,
+  "source_report": "evaluation/scientific_benchmark/reports/live-authoritative-v2-balanced-run1.json"
+}

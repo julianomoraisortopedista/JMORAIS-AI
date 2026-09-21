@@ -1,15 +1,24 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any, Mapping
 
 
-@dataclass
+@dataclass(frozen=True)
 class MedicalDocument:
     title: str
-    sections: list[dict[str, Any]] = field(default_factory=list)
-    references: list[str] = field(default_factory=list)
+    sections: tuple[Mapping[str, Any], ...] = ()
+    references: tuple[str, ...] = ()
     summary: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "sections",
+            tuple(MappingProxyType(dict(section)) for section in self.sections),
+        )
+        object.__setattr__(self, "references", tuple(self.references))
 
 
 class MedicalDocumentGenerator:
@@ -37,7 +46,7 @@ class MedicalDocumentGenerator:
                 references.append(f"PMID: {item['pmid']}")
             elif item.get("doi"):
                 references.append(f"DOI: {item['doi']}")
-        return MedicalDocument(title=title, sections=sections, references=references, summary=summary)
+        return MedicalDocument(title=title, sections=tuple(sections), references=tuple(references), summary=summary)
 
     @staticmethod
     def build_clinical_report(title: str, patient_context: str, decision: dict[str, Any]) -> MedicalDocument:
@@ -54,4 +63,4 @@ class MedicalDocumentGenerator:
         references = []
         for source in decision.get("source_ids") or []:
             references.append(str(source))
-        return MedicalDocument(title=title, sections=sections, references=references, summary=summary)
+        return MedicalDocument(title=title, sections=tuple(sections), references=tuple(references), summary=summary)

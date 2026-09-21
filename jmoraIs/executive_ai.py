@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass
+@dataclass(frozen=True)
 class ExecutiveBrief:
     title: str
     executive_summary: str
-    key_findings: list[str] = field(default_factory=list)
-    risks: list[str] = field(default_factory=list)
-    recommendations: list[str] = field(default_factory=list)
-    evidence_sources: list[str] = field(default_factory=list)
+    key_findings: tuple[str, ...] = ()
+    risks: tuple[str, ...] = ()
+    recommendations: tuple[str, ...] = ()
+    evidence_sources: tuple[str, ...] = ()
 
 
 class ExecutiveAI:
@@ -59,8 +59,8 @@ class ExecutiveAI:
                 f"This executive brief consolidates the clinical, evidentiary, and audit context for {title}. "
                 "The current recommendation is to keep decisions evidence-first, minimize unsupported conclusions, and document uncertainty explicitly."
             ),
-            key_findings=findings[:5],
-            risks=risks,
-            recommendations=recommendations,
-            evidence_sources=list(dict.fromkeys(source_ids)),
+            key_findings=tuple(findings[:5]),
+            risks=tuple(risks),
+            recommendations=tuple(recommendations),
+            evidence_sources=tuple(dict.fromkeys(source_ids)),
         )

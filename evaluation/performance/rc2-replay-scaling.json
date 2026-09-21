@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "environment_reference": "rc2-baseline.json",
+  "measurement_order": "clean PostgreSQL 16.14; SMALL then MEDIUM then LARGE",
+  "profiles": {
+    "SMALL": {
+      "events": 100,
+      "append_p50_ms": 0.14645082992501557,
+      "append_p95_ms": 0.14645082992501557,
+      "append_p99_ms": 0.14645082992501557,
+      "append_events_per_second": 6823.183229136085,
+      "full_replay_seconds": 0.01665479101939127,
+      "single_stream_replay_seconds": 0.006016667000949383,
+      "single_stream_events_per_second": 16620.49769153267,
+      "max_rss_bytes": 63881216,
+      "integrity": "VALID"
+    },
+    "MEDIUM": {
+      "events": 10000,
+      "append_p50_ms": 0.12346562498714773,
+      "append_p95_ms": 0.25887954101199284,
+      "append_p99_ms": 0.25887954101199284,
+      "append_events_per_second": 6899.229538713939,
+      "full_replay_seconds": 0.19116762501653284,
+      "single_stream_replay_seconds": 0.26107441703788936,
+      "single_stream_events_per_second": 38303.25511575772,
+      "max_rss_bytes": 117669888,
+      "integrity": "VALID"
+    },
+    "LARGE": {
+      "events": 100000,
+      "append_p50_ms": 0.12802479200763628,
+      "append_p95_ms": 4.124464124965016,
+      "append_p99_ms": 4.969060082978103,
+      "append_events_per_second": 1568.0131341794033,
+      "full_replay_seconds": 2.325826665968634,
+      "single_stream_replay_seconds": 2.7140886249835603,
+      "single_stream_events_per_second": 36844.78063077462,
+      "max_rss_bytes": 581091328,
+      "integrity": "VALID"
+    }
+  },
+  "combined_stress_observation": "After scoped package-ledger projection, COMPLETE_CASE 1→14 passed against a PostgreSQL database containing 100000 synthetic replay events in 12.90 seconds pytest time (13.35 seconds wall time), with replay integrity VALID.",
+  "limitations": [
+    "Maximum RSS is process high-water memory, not retained heap.",
+    "The LARGE profile is a local scalability measurement, not a production capacity commitment.",
+    "Combined COMPLETE_CASE plus LARGE replay passed locally; institutional sizing still requires target-environment evidence."
+  ]
+}

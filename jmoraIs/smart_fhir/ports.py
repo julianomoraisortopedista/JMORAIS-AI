@@ -1,0 +1,9 @@
+from typing import Protocol
+from .domain import SmartAuthenticationAuditEvent,SmartJwk
+
+
+class SmartSigningKeyPort(Protocol):
+    def resolve(self,key_id:str,algorithm:str)->SmartJwk:...
+class SmartAuthenticationAuditPort(Protocol):
+    def append(self,event:SmartAuthenticationAuditEvent)->None:...
+    def history(self,correlation_id:str)->tuple[SmartAuthenticationAuditEvent,...]:...

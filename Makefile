@@ -1,0 +1,40 @@
+PYTHON312 ?= python3.12
+VENV := .venv
+VENV_PYTHON := $(VENV)/bin/python
+
+.PHONY: setup verify-python test coverage hygiene security-tools supply-chain-local
+
+setup:
+	@command -v "$(PYTHON312)" >/dev/null 2>&1 || { \
+		echo "Python 3.12 is required. Install it or run make setup PYTHON312=/path/to/python3.12" >&2; \
+		exit 1; \
+	}
+	@"$(PYTHON312)" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else "Python 3.12.x is required")'
+	@"$(PYTHON312)" -m venv "$(VENV)"
+	@"$(VENV_PYTHON)" -m pip install -e '.[dev]'
+	@$(MAKE) verify-python
+
+verify-python:
+	@test -x "$(VENV_PYTHON)" || { echo "Missing .venv; run make setup" >&2; exit 1; }
+	@"$(VENV_PYTHON)" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else "The project virtual environment must use Python 3.12.x")'
+	@"$(VENV_PYTHON)" --version
+
+test: verify-python
+	@"$(VENV_PYTHON)" -m pytest -q
+
+coverage: verify-python
+	@"$(VENV_PYTHON)" -m pytest -q --cov=jmoraIs --cov-report=term --cov-fail-under=90
+
+hygiene: verify-python
+	@"$(VENV_PYTHON)" scripts/check_source_hygiene.py
+	@git diff --check
+
+security-tools: verify-python
+	@"$(VENV_PYTHON)" -m pip install --require-hashes -r requirements-security.lock
+
+supply-chain-local: security-tools
+	@mkdir -p artifacts
+	@"$(VENV_PYTHON)" -m pip_audit --require-hashes -r requirements-production.lock --strict -f json -o artifacts/pip-audit.json
+	@"$(VENV)/bin/bandit" -r jmoraIs scripts --severity-level medium --confidence-level medium -f json -o artifacts/bandit.json
+	@"$(VENV_PYTHON)" scripts/scan_release_sensitive_data.py
+	@"$(VENV)/bin/cyclonedx-py" requirements requirements-production.lock --output-format JSON --output-file artifacts/python-sbom.cdx.json --validate

@@ -1,0 +1,210 @@
+{
+  "cpu": {
+    "process_seconds": 2.255156
+  },
+  "environment": {
+    "alembic_revision": "050_offline_replay_verifier",
+    "application_version": "0.2.0-beta.1",
+    "build_id": "rc2-local-validation",
+    "container_limits": "host process; no cgroup limit applied",
+    "cpu_count": 8,
+    "dataset_bytes": 12000279,
+    "machine": "arm64",
+    "measured_at": "2026-08-16T18:15:10.839275+00:00",
+    "memory_bytes": 8589934592,
+    "operating_system": "macOS-26.3-arm64-arm-64bit",
+    "pool_configuration": "reader/writer pool_size=10 max_overflow=5; verifier=1/0",
+    "postgresql_version": "16.14",
+    "python_version": "3.12.13",
+    "source_revision": "UNCOMMITTED_WORKTREE",
+    "tenant_count": 1,
+    "worker_configuration": "benchmark in-process; production image default=2 workers/100 concurrency"
+  },
+  "limits": {
+    "clinical_workload_latency_source": "canonical regression scenario wall times, reported separately",
+    "external_provider_latency_included": false,
+    "samples_per_api_concurrency": 300,
+    "synthetic_data_only": true
+  },
+  "memory": {
+    "cycles": [
+      {
+        "current_bytes": 221447,
+        "peak_bytes": 1343774
+      },
+      {
+        "current_bytes": 269371,
+        "peak_bytes": 1558551
+      },
+      {
+        "current_bytes": 281131,
+        "peak_bytes": 1576258
+      },
+      {
+        "current_bytes": 291725,
+        "peak_bytes": 1630752
+      },
+      {
+        "current_bytes": 304348,
+        "peak_bytes": 1558404
+      }
+    ],
+    "max_rss_bytes": 99598336,
+    "retained_growth_bytes": 82901
+  },
+  "query_plans": {
+    "audit_defense_versions": {
+      "Alias": "audit_defense_versions",
+      "Async Capable": false,
+      "Index Cond": "((package_id)::text = 'rc2-absent'::text)",
+      "Index Name": "audit_defense_versions_pkey",
+      "Node Type": "Index Scan",
+      "Parallel Aware": false,
+      "Plan Rows": 1,
+      "Plan Width": 1560,
+      "Relation Name": "audit_defense_versions",
+      "Scan Direction": "Forward",
+      "Startup Cost": 0.14,
+      "Total Cost": 8.16
+    },
+    "clinical_reasoning_input_versions": {
+      "Alias": "clinical_reasoning_input_versions",
+      "Async Capable": false,
+      "Index Cond": "((input_id)::text = 'rc2-absent'::text)",
+      "Index Name": "clinical_reasoning_input_versions_pkey",
+      "Node Type": "Index Scan",
+      "Parallel Aware": false,
+      "Plan Rows": 1,
+      "Plan Width": 974,
+      "Relation Name": "clinical_reasoning_input_versions",
+      "Scan Direction": "Forward",
+      "Startup Cost": 0.14,
+      "Total Cost": 8.16
+    },
+    "llm_invocations": {
+      "Alias": "llm_invocations",
+      "Async Capable": false,
+      "Index Cond": "((invocation_id)::text = 'rc2-absent'::text)",
+      "Index Name": "llm_invocations_invocation_id_key",
+      "Node Type": "Index Scan",
+      "Parallel Aware": false,
+      "Plan Rows": 1,
+      "Plan Width": 2658,
+      "Relation Name": "llm_invocations",
+      "Scan Direction": "Forward",
+      "Startup Cost": 0.14,
+      "Total Cost": 8.15
+    },
+    "medical_document_versions": {
+      "Alias": "medical_document_versions",
+      "Async Capable": false,
+      "Index Cond": "((version_id)::text = 'rc2-absent'::text)",
+      "Index Name": "medical_document_versions_pkey",
+      "Node Type": "Index Scan",
+      "Parallel Aware": false,
+      "Plan Rows": 1,
+      "Plan Width": 1926,
+      "Relation Name": "medical_document_versions",
+      "Scan Direction": "Forward",
+      "Startup Cost": 0.14,
+      "Total Cost": 8.16
+    }
+  },
+  "schema_version": 1,
+  "workloads": {
+    "lightweight_authenticated_api": {
+      "1": {
+        "latency_ms": {
+          "max": 1.360291,
+          "p50": 0.517834,
+          "p90": 0.543042,
+          "p95": 0.584708,
+          "p99": 0.654916
+        },
+        "requests": 300,
+        "requests_per_second": 1877.7222045293547,
+        "success_rate": 1.0
+      },
+      "16": {
+        "latency_ms": {
+          "max": 22.793292,
+          "p50": 5.486833,
+          "p90": 6.140334,
+          "p95": 20.291417,
+          "p99": 21.067083
+        },
+        "requests": 300,
+        "requests_per_second": 2415.81310038598,
+        "success_rate": 1.0
+      },
+      "2": {
+        "latency_ms": {
+          "max": 1.227958,
+          "p50": 0.772708,
+          "p90": 0.888458,
+          "p95": 0.911,
+          "p99": 0.99825
+        },
+        "requests": 300,
+        "requests_per_second": 2402.5923973576405,
+        "success_rate": 1.0
+      },
+      "32": {
+        "latency_ms": {
+          "max": 15.074333,
+          "p50": 9.993625,
+          "p90": 11.1945,
+          "p95": 11.722042,
+          "p99": 13.576917
+        },
+        "requests": 300,
+        "requests_per_second": 2944.4806110491195,
+        "success_rate": 1.0
+      },
+      "4": {
+        "latency_ms": {
+          "max": 2.243166,
+          "p50": 1.473959,
+          "p90": 1.632291,
+          "p95": 1.733667,
+          "p99": 1.930541
+        },
+        "requests": 300,
+        "requests_per_second": 2541.035974085537,
+        "success_rate": 1.0
+      },
+      "8": {
+        "latency_ms": {
+          "max": 4.079583,
+          "p50": 2.813,
+          "p90": 3.010542,
+          "p95": 3.1295,
+          "p99": 3.34325
+        },
+        "requests": 300,
+        "requests_per_second": 2699.864998964575,
+        "success_rate": 1.0
+      }
+    },
+    "postgresql_round_trip": {
+      "latency_ms": {
+        "max": 4.457458,
+        "p50": 0.932375,
+        "p90": 1.063166,
+        "p95": 1.116792,
+        "p99": 2.053625
+      },
+      "transactions_per_second": 1017.730131045476
+    },
+    "sha256_hmac": {
+      "latency_ms": {
+        "max": 0.024375,
+        "p50": 0.002084,
+        "p90": 0.00225,
+        "p95": 0.00225,
+        "p99": 0.002333
+      },
+      "operations_per_second": 491909.03913193796
+    }
+  }
+}

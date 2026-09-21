@@ -1,0 +1,476 @@
+{
+  "coverage": {
+    "PubMed": 1.0
+  },
+  "dataset_size": 100,
+  "dataset_version": "authoritative-biomedical-v2.0.0",
+  "false_negative_rate": 0.0,
+  "false_positive_rate": 0.0,
+  "identifier_resolution_success": 0.7637969094922737,
+  "metadata_reconciliation_agreement": 0.7637969094922737,
+  "precision": 1.0,
+  "recall": 1.0,
+  "sources": {
+    "crossref": {
+      "attempted": 100,
+      "failure_rate": 0.030000000000000027,
+      "failures": [
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42483476"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42064275"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41550408"
+        }
+      ],
+      "resolved": 97
+    },
+    "openalex": {
+      "attempted": 100,
+      "failure_rate": 0.17000000000000004,
+      "failures": [
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42000234"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-39435502"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42371203"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42277084"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41951179"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41895682"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41775206"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41421947"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42240382"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42483476"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42064275"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41837698"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-40152335"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41816957"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42438056"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42343233"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42234539"
+        }
+      ],
+      "resolved": 83
+    },
+    "pmc": {
+      "attempted": 53,
+      "failure_rate": 0.0,
+      "failures": [],
+      "resolved": 53
+    },
+    "pubmed": {
+      "attempted": 100,
+      "failure_rate": 0.0,
+      "failures": [],
+      "resolved": 100
+    },
+    "semantic_scholar": {
+      "attempted": 100,
+      "failure_rate": 0.87,
+      "failures": [
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42061029"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-40889894"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41845977"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42371203"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42277084"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-42235148"
+        },
+        {
+          "reason": "metadata_mismatch",
+          "record_id": "pmid-41421947"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40660723"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-39692310"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40930712"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42338815"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42240382"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42483476"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42055784"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42064275"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41837698"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910353"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910352"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910351"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910350"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41910349"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41834172"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41834171"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41814623"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41543255"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41550408"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41469220"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41449152"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41067242"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41054384"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40660700"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41481015"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40347959"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40275569"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40275568"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-40152335"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42530025"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42421366"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42400399"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42384726"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42323844"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42228407"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42141930"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42028821"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42012144"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41964104"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41922934"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41922931"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41846300"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41830418"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41826267"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41816957"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41774525"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41723573"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41640014"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41532745"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41486688"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41433039"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42331197"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42566449"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42549566"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42563439"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42424379"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42387820"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42267785"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42192510"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42184272"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42105255"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42068011"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41944491"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-41896164"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42520140"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42520094"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42483940"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42480043"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42464813"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42460838"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42441818"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42438056"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42374842"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42343233"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42316869"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42308284"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42281243"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42262170"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42247558"
+        },
+        {
+          "reason": "AuthoritativeSourceError",
+          "record_id": "pmid-42234539"
+        }
+      ],
+      "resolved": 13
+    }
+  }
+}
