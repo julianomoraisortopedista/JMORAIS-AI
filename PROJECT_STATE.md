@@ -10,11 +10,14 @@ ULTRA LOW TOKEN EXECUTION MODE
 
 ## Current Sprint
 
-S003 — Clinical Workspace Read-Only
+S004 — API / Presentation Boundary
 
 ## Sprint Status
 
-DONE
+S004 IMPLEMENTATION = COMPLETE
+S004 FINAL VALIDATION = PASS
+S004 = DONE
+S003 remains DONE
 
 ## Approved Prerequisites
 
@@ -41,6 +44,67 @@ DONE
 
 ## Current Checkpoint
 
+S004 final milestone — PASS (2026-09-23). S004 DONE.
+
+- Final isolated PostgreSQL 16 run: 958 passed, 8 skipped, 1 existing deprecation warning (40.55s); coverage 94.00417476426978% (required >=90%).
+- Evidence: `/tmp/s004-final2-coverage.log`, `/tmp/s004-final2-coverage.json`.
+- PostgreSQL 16.14; Alembic current == head `065_defense_reference_state`. No S004 migration.
+- COMPLETE_CASE 1→14 and global cryptographic replay PASS within the final suite; no separate duplicate replay run. Production/homologation startup, authenticated caller/tenant boundary, exact-reference API architecture, RLS/read-only and restart proofs PASS in that suite.
+- Replay diagnosis: shared test database contained an unrelated previously tampered Governed Evidence stream; clean isolated COMPLETE_CASE replay VALID (16 streams). Classification B-ISO; COMPLETE_CASE now creates and removes only its own isolated test database. No production cryptographic behavior changed.
+- Original 20 failures resolved through obsolete test composition/detector corrections and test isolation. Shared explicit signing-key binding retained for issuance/read; exact domain class matching excludes transport names; only the seven approved read-only POST routes are allowed by the architecture test. Batch regression: 39 passed before the final suite.
+- pip check, project compileall and git diff --check PASS. Existing Starlette/httpx deprecation warning deferred to POST_RELEASE.
+- All S004 MUST_HAVE items complete. No UI implementation; no commit/push/merge/reset/clean.
+
+### S004 Increment 3 approved checkpoint
+
+S004 Increment 3 — Authenticated context + real runtime composition — PASS.
+GOVERNED DRAFT SIGNING-KEY BLOCKER = RESOLVED (accepted prior evidence; not rerun).
+
+- GET `/internal/api/v1/workspace/context` exposes only authenticated caller identity, authorized tenant/organization, role, operation purpose and effective WORKSPACE_READ permission. No session/token material.
+- Workspace purpose is fixed to CLINICAL_REVIEW by the operation and authorized against existing IAM identity-link permissions; caller context overrides are rejected. Existing OIDC/session/tenant authentication is reused.
+- compose_homologation now constructs both approved Workspaces with exact owner repositories over PostgreSQL read-only transactions; compose_production passes those same Workspaces into create_app. No repositories/SQL in routes, new persistence, migration, inferred references or mutation endpoints.
+- Focused evidence: 4 real OIDC/runtime HTTP cases PASS across homologation/production and all seven viewers (including both Defense states), plus 11 directly affected API/architecture regressions PASS. RLS/NOBYPASSRLS/read-only owner queries, typed-reference round-trip, cross-tenant denial, secure context/errors/logs and startup composition verified. Existing signing-key tests were not repeated.
+- Production's previously approved global startup replay gate was isolated in the focused test; no global replay or milestone gate was executed. Test client uses the existing allowed HTTPS host; duplicate no-store headers preserve the same cache policy.
+- git diff --check: PASS.
+- Documented S004 implementation MUST_HAVE checklist complete: seven viewers, authenticated context, runtime handoff, reuse of health/readiness, safe errors and focused boundary proofs. S004 final milestone validation remains PENDING. UI/S005 not started.
+
+### Signing-key blocker resolved checkpoint
+
+Governed Draft authoritative signing-key binding = RESOLVED.
+Historical unbound drafts = FAIL-CLOSED / NO BACKFILL.
+
+- Required explicit `InternalApiConfig.governed_draft_signing_key: KeyReference`; SIGNING_KEY only, distinct from pseudonymization identity, no default or generic-secret selection.
+- Existing ManagedAttestationFactory binds the configured key to prospective issuance. Frozen draft JSON stores only provider/key_id/version/purpose; the draft integrity hash and HMAC cover that binding. Existing persisted exact reference binds it through draft_integrity_hash. No migration or historical mutation.
+- Homologation exposes the managed issuance attestor and read-only exact repository; production reuses that canonical composition. Restart verifier resolves the persisted key only when equal to the explicitly authorized configuration and verifies managed-key metadata/state. Missing, wrong, unavailable or tampered bindings fail closed.
+- Focused evidence: 28 distinct tests PASS across scoped runs (binding/restart/composition, managed attestation, issuance, exact-reference unit/PostgreSQL/architecture, production configuration and homologation). Production startup global replay was isolated in the composition test; no replay executed or newly claimed.
+- PostgreSQL read-only/NOBYPASSRLS, cross-tenant/missing-context rejection, append-only UPDATE/DELETE rejection, signed historical unbound rejection and absence of secret material in payload/logs verified.
+- Scope stops at signing-key handoff. Remaining S004 Increment 3 context/viewer runtime composition is not implemented here.
+
+### S004 Increment 2 approved checkpoint
+
+S004 Increment 2 — Remaining Workspace API viewers — PASS.
+
+- Six read-only POST routes under `/internal/api/v1/workspace/`: timeline, evidence, explainability, medical-document, human-review and audit-defense, each ending `/resolve`.
+- Full nested typed reference transport, with required fields and forbidden extra fields; no issuance, inferred versions or scalar trust. Existing owner exact reads remain authoritative; Timeline uses get_timeline_exact(reference).
+- Shared tenant/error boundary, existing authenticated authorization with WORKSPACE_READ capability, no-store responses and sanitized validation/owner/internal errors. Workspace instances are explicitly injected into the API factory.
+- Focused validation: 18 passed (S004 remaining API, S004 summary API and directly affected internal API tests), 1 existing FastAPI deprecation warning; PostgreSQL 16 backed. Cross-tenant/missing auth/context, malformed/forged references, altered Timeline order and mismatched Defense states rejected. No fallback or DML; read-only/NOBYPASSRLS and safe logs/errors checked.
+- Audit Defense PRE_LINK / STAGE11_LINKED and linked document projection preserved; replay remains NOT_EVALUATED and completeness unknown. No migration or approved domain changes.
+- Remaining S004 MUST_HAVE: authenticated user/active-tenant/permission context contract (or verified existing equivalent), runtime bootstrap composition of the injected viewers with approved read-only owners and demonstrated caller reference handoff, then final S004 milestone validation. Existing health/readiness infrastructure is reused, not duplicated.
+- Decision: Increment 2 complete; S004 implementation remains IN PROGRESS. No UI/S005.
+
+### S004 Increment 1 approved checkpoint
+
+S004 Increment 1 — Clinical Summary API / exact-reference handoff — PASS.
+
+- POST `/internal/api/v1/workspace/summary/resolve`: authenticated/authorized tenant → complete typed PersistedClinicalStateReference → injected approved ClinicalWorkspace → owner get_exact(reference).
+- Existing API authentication, authorization and TenantContextBinder reused; missing context and cross-tenant requests fail closed. No reference issuance or scalar fallback.
+- Secure ApiError mapping and no-store responses; malformed/forged references rejected without sensitive internals in errors/logs.
+- Focused evidence: original run 9 passed / 1 failed (UTC JSON spelling Z versus +00:00 in test expectation); only that expectation corrected, typed reference round-trip preserved; affected test rerun 1 passed. Total 10 focused tests passed across these runs, including internal API regression and trust-path architecture.
+- PostgreSQL-backed HTTP test uses existing owner-issued persisted reference and reader composition; SELECT/SET/SHOW only, read-only transactions, NOSUPERUSER/NOBYPASSRLS. Other viewer endpoints not implemented.
+- API factory accepts an explicitly composed Workspace; production bootstrap wiring is not claimed by this increment. No migrations or frozen-domain changes.
+
+### S003 completed checkpoint
+
 S003 final validation gate — PASS (2026-09-21).
 
 Most recent migration (unchanged):
@@ -51,7 +115,7 @@ Timeline, Medical Document, Human Review and Audit Defense viewers compose immut
 
 Focused validation: 15 tests passed (1 architecture/source-hygiene, 14 PostgreSQL integration cases). PostgreSQL 16: Alembic current == head (`065_defense_reference_state`). Same-tenant reads pass; cross-tenant/missing TenantContext, invalid references/hashes, reordered timeline references and deleted persisted references fail closed. Missing timeline member, Stage-11 document and governed draft dependencies also fail closed; all deletion probes rolled back. Reader transactions are read-only, NOSUPERUSER and NOBYPASSRLS, with no DML in monitored viewer queries. CLINICAL_WORKSPACE_REMAINING_VIEWERS_EXACT_REREAD = PASS after disposal and fresh reader/owner/workspace composition; results are deterministically equivalent. Focused source hygiene, compileall and `git diff --check`: PASS. This focused checkpoint preceded the final gate recorded below.
 
-## Final Gate Evidence
+## S003 Final Gate Evidence (historical)
 
 - Full pytest: 942 passed, 8 skipped, 1 deprecation warning; final run 36.85s.
 - Coverage: 93.85670618057108% (12,589 / 13,413 statements), above 90%.
@@ -65,11 +129,11 @@ Focused validation: 15 tests passed (1 architecture/source-hygiene, 14 PostgreSQ
 
 ## Current Blocker
 
-None for S003 closure.
+None. S004 implementation and final validation complete.
 
 ## Next Action
 
-S004 — API / Presentation Boundary planning.
+MINIMAL CLINICAL WORKSPACE UI — plan the next milestone; no implementation started.
 
 ## Frozen / Approved
 

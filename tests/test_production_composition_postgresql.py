@@ -45,6 +45,7 @@ class SecretClient:
         if reference == "postgresql/production": return self.url.encode()
         if reference == "postgresql/offline-replay": return self.url.encode()
         if reference == "pseudonymization/production": return b"k" * 32
+        if reference == "draft-signing/production" and version == "1": return b"draft-signing-test-key-material-32-bytes"
         raise KeyError(reference)
 
 KEY = rsa.generate_private_key(public_exponent=65537, key_size=2048)
@@ -73,10 +74,13 @@ def test_production_composition_uses_offline_replay_before_api_startup():
     verifier_database = SecretReference("vault", "postgresql/offline-replay", SecretPurpose.OFFLINE_REPLAY_DATABASE_CREDENTIAL, "1")
     key = KeyReference("vault", "pseudonymization/production", "1", SecretPurpose.PSEUDONYMIZATION_HMAC)
     PostgreSQLKeyMetadataRepository(owner).save(ManagedKeyMetadata(key, KeyState.ACTIVE, NOW, NOW, None, None, "secrets-policy-v1"))
+    signing_key = KeyReference("vault", "draft-signing/production", "1", SecretPurpose.SIGNING_KEY)
+    PostgreSQLKeyMetadataRepository(owner).save(ManagedKeyMetadata(signing_key, KeyState.ACTIVE, NOW, NOW, None, None, "secrets-policy-v1"))
     oidc = OIDCProviderConfig("prod-oidc", "https://issuer", "aud", "https://issuer/discovery", "https://issuer/jwks",
         ("RS256",), 30, ("sub", "iat", "exp", "auth_time", "roles", "organization_id"), "roles", "organization_id", (("svc", "INTERNAL_SERVICE"),))
     config = production_config(database, oidc, key, BuildMetadata("release", "build", "revision", NOW.isoformat()),
         offline_replay_database_credential=verifier_database,
+        governed_draft_signing_key=signing_key,
         runtime_security=RuntimeSecurityPolicy(database_tls_required=False))
     provider = ProviderReadySecretAdapter("vault", SecretClient(url), InMemorySecretSecurityAudit())
     composition = compose_production(config, metrics=ProductionMetrics(InMemoryOpenTelemetryExporter()),

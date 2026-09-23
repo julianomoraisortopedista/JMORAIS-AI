@@ -214,6 +214,8 @@ class PostgreSQLGovernedLLMDraftExactReferenceRepository:
 
     def _decode_draft(self, row):
         draft = self._codec.decode(row["payload"])
+        if draft.signing_key_reference is None:
+            raise GovernedLLMDraftReferenceRejected("LEGACY_MISSING_GOVERNED_DRAFT_SIGNING_KEY")
         if not validate_draft_integrity(draft, self._draft_attestor):
             raise GovernedLLMDraftReferenceRejected("persisted governed draft integrity is invalid")
         expected = (

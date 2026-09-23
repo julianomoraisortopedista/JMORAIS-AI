@@ -51,6 +51,8 @@ class JwksResponse:
 
 def identity_http_get(_url, timeout): return JwksResponse()
 
+SIGNING_KEY = KeyReference("test-vault", "governed-draft/signing", "1", SecretPurpose.SIGNING_KEY)
+
 def secret_refs():
     database=SecretReference("test-vault","postgresql/homologation",SecretPurpose.POSTGRESQL_CREDENTIALS,"1")
     key=KeyReference("test-vault","pseudonymization/hmac","1",SecretPurpose.PSEUDONYMIZATION_HMAC)
@@ -62,6 +64,7 @@ class SecretClient:
     def resolve(self,reference,version,purpose):
         if reference=="postgresql/homologation": return self.database_url.encode()
         if reference=="pseudonymization/hmac": return b"p"*32
+        if reference==SIGNING_KEY.key_id and version==SIGNING_KEY.version: return b"draft-signing-test-key-material-32-bytes"
         raise KeyError(reference)
 
 def secrets(database_url):
@@ -80,7 +83,8 @@ def test_homologation_composition_and_startup_self_check_succeed():
     url, engine = migrated_engine(); metrics = OpenTelemetryCompatibleMetricsAdapter(InMemoryOpenTelemetryExporter())
     database,key=secret_refs(); PostgreSQLKeyMetadataRepository(engine).save(
         ManagedKeyMetadata(key,KeyState.ACTIVE,NOW,NOW,None,None,"secrets-policy-v1"))
-    composition = compose_homologation(homologation_config(database, oidc(), key), identity_http_get=identity_http_get,
+    PostgreSQLKeyMetadataRepository(engine).save(ManagedKeyMetadata(SIGNING_KEY,KeyState.ACTIVE,NOW,NOW,None,None,"secrets-policy-v1"))
+    composition = compose_homologation(homologation_config(database, oidc(), key, governed_draft_signing_key=SIGNING_KEY), identity_http_get=identity_http_get,
         metrics=metrics, structured_log=InMemoryStructuredLog(),secrets_provider=secrets(url))
     assert composition.app and composition.reviewer_governance and not composition.api_services.missing()
     assert composition.operational_services.readiness.check().ready
@@ -90,14 +94,14 @@ def test_homologation_composition_fails_when_postgresql_is_unavailable():
     url = "postgresql+psycopg://invalid:invalid@127.0.0.1:1/invalid?connect_timeout=1"
     database,key=secret_refs()
     with pytest.raises(HomologationStartupError):
-        compose_homologation(homologation_config(database, oidc(), key), identity_http_get=identity_http_get,
+        compose_homologation(homologation_config(database, oidc(), key, governed_draft_signing_key=SIGNING_KEY), identity_http_get=identity_http_get,
             metrics=OpenTelemetryCompatibleMetricsAdapter(InMemoryOpenTelemetryExporter()),
             structured_log=InMemoryStructuredLog(),secrets_provider=secrets(url))
 
 def test_homologation_rejects_development_secret_provider_before_resolution():
     database,key=secret_refs(); ephemeral=EphemeralSecretProvider({})
     with pytest.raises(HomologationStartupError,match="development secret providers"):
-        compose_homologation(homologation_config(database,oidc(),key),identity_http_get=identity_http_get,
+        compose_homologation(homologation_config(database,oidc(),key,governed_draft_signing_key=SIGNING_KEY),identity_http_get=identity_http_get,
             metrics=OpenTelemetryCompatibleMetricsAdapter(InMemoryOpenTelemetryExporter()),
             structured_log=InMemoryStructuredLog(),secrets_provider=ephemeral)
 

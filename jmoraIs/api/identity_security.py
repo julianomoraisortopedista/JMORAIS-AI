@@ -43,6 +43,8 @@ class ExternalIdentityApiAuthenticator:
 
 class CanonicalApiAuthorizationPolicy:
     _ROLES = {
+        "WORKSPACE_READ": {CallerRole.CLINICAL_REVIEWER, CallerRole.ADMINISTRATOR},
+        "CLINICAL_SUMMARY": {CallerRole.CLINICAL_REVIEWER, CallerRole.ADMINISTRATOR},
         "READINESS": {CallerRole.INTERNAL_SERVICE, CallerRole.ADMINISTRATOR},
         "VERSION": set(CallerRole),
         "REASONING_INPUT": set(CallerRole),
@@ -53,6 +55,8 @@ class CanonicalApiAuthorizationPolicy:
         "AUDIT_DEFENSE": {CallerRole.CLINICAL_REVIEWER, CallerRole.ADMINISTRATOR},
     }
     _PURPOSES = {
+        "WORKSPACE_READ": {PurposeOfUse.CLINICAL_REVIEW, PurposeOfUse.ADMINISTRATION},
+        "CLINICAL_SUMMARY": {PurposeOfUse.CLINICAL_REVIEW, PurposeOfUse.ADMINISTRATION},
         "READINESS": {PurposeOfUse.INTERNAL_OPERATIONS, PurposeOfUse.ADMINISTRATION},
         "VERSION": set(PurposeOfUse),
         "REASONING_INPUT": set(PurposeOfUse),

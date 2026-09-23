@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
 from time import monotonic
@@ -10,6 +10,28 @@ from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Query, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+
+from jmoraIs.clinical_workspace.viewers import ClinicalWorkspace, WorkspaceReadRejected
+from jmoraIs.clinical_state.exact_reference import ClinicalStateExactReferenceError
+from jmoraIs.tenancy.context import current_tenant_context
+from jmoraIs.tenancy.domain import TenantError
+from .workspace_schemas import (
+    ClinicalSummaryRequest, ClinicalSummaryResponse, TimelineRequest, TimelineResponse, WorkspaceContextResponse,
+    EvidenceRequest, EvidenceResponse, ExplainabilityRequest, ExplainabilityResponse,
+    MedicalDocumentRequest, MedicalDocumentResponse as WorkspaceDocumentResponse,
+    HumanReviewRequest, HumanReviewResponse, AuditDefenseRequest,
+    AuditDefenseResponse as WorkspaceDefenseResponse,
+)
+from jmoraIs.clinical_workspace.remaining import RemainingClinicalWorkspace
+from jmoraIs.appraisal.exact_reference import GovernedEvidenceExactReferenceError
+from jmoraIs.reasoning_input.exact_reference import ClinicalReasoningInputExactReferenceError
+from jmoraIs.medical_documents.exact_reference import MedicalDocumentExactReferenceError
+from jmoraIs.llm_human_review.exact_reference import HumanReviewExactReferenceError
+from jmoraIs.governed_llm_draft.exact_reference import GovernedLLMDraftExactReferenceError
+from jmoraIs.llm_gateway.exact_reference import LLMInvocationExactReferenceError
+from jmoraIs.audit_defense.domain import AuditDefenseError
 
 from jmoraIs import __version__
 from jmoraIs.appraisal.governed import GovernedEvidence
@@ -33,7 +55,7 @@ from .schemas import (
     BuildResponse, HealthResponse, MedicalDocumentResponse, OrthopedicAssessmentSetResponse, PageMetadata,
     ReadinessCheckResponse, ReadinessResponse, RecommendationReference, VersionResponse,
 )
-from .security import ApiAccessAuditEvent, ApiLogRecord, ApiMetric, CallerContext, CallerCredentials, CallerRole
+from .security import ApiAccessAuditEvent, ApiLogRecord, ApiMetric, CallerContext, CallerCredentials, CallerRole, PurposeOfUse
 from .security_infrastructure import AuthenticationRejected
 from .security_ports import (
     ApiAccessAuditPort, ApiAuthenticationPort, ApiAuthorizationPort, ApiMetricsPort, ApiReadinessPort,
@@ -95,11 +117,18 @@ def _approved(status: Any, name: str) -> None:
 
 
 def create_app(services: ApiServices, operations: ApiOperationalServices, *, runtime_security=None,
-               lifespan=None) -> FastAPI:
+               lifespan=None, workspace: ClinicalWorkspace | None = None,
+               remaining_workspace: RemainingClinicalWorkspace | None = None) -> FastAPI:
     app = FastAPI(title="JMORAIS-AI Internal API", version=API_VERSION,
                   description="Internal development adapter only. External, patient-care and production use are prohibited.",
                   openapi_url=f"{PREFIX}/openapi.json", docs_url=f"{PREFIX}/docs", redoc_url=None,
                   lifespan=lifespan)
+
+    workspace_paths = {f"{PREFIX}/workspace/{name}/resolve" for name in
+                       ("summary", "timeline", "evidence", "explainability",
+                        "medical-document", "human-review", "audit-defense")}
+
+    workspace_paths.add(f"{PREFIX}/workspace/context")
 
     @app.middleware("http")
     async def correlation_id(request: Request, call_next):
@@ -149,7 +178,17 @@ def create_app(services: ApiServices, operations: ApiOperationalServices, *, run
             status=response.status_code, duration_ms=duration,
             policy_version=caller.policy_version if caller else "api-access-v1", occurred_at=now,
         ))
+        if request.url.path in workspace_paths:
+            response.headers["Cache-Control"] = "no-store"
         return response
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, exc: RequestValidationError):
+        if request.url.path not in workspace_paths:
+            return await request_validation_exception_handler(request, exc)
+        body = ApiError(code="INVALID_REQUEST", message="invalid exact-reference request",
+                        correlation_id=request.state.correlation_id)
+        return JSONResponse(status_code=422, content=body.model_dump(mode="json"))
 
     @app.exception_handler(ApiBoundaryError)
     async def boundary_error(request: Request, exc: ApiBoundaryError):
@@ -165,6 +204,14 @@ def create_app(services: ApiServices, operations: ApiOperationalServices, *, run
         async def authorize(request: Request) -> CallerContext:
             authorization = request.headers.get("authorization", "")
             purpose = request.headers.get("x-purpose", "")
+            if resource_class in {"WORKSPACE_READ", "CLINICAL_SUMMARY"}:
+                # The operation fixes purpose; IAM must authorize it for the principal.
+                if purpose and purpose != PurposeOfUse.CLINICAL_REVIEW.value:
+                    raise ApiBoundaryError("AUTHORIZATION_DENIED", "workspace purpose rejected", 403)
+                purpose = PurposeOfUse.CLINICAL_REVIEW.value
+                if any(name in request.headers for name in
+                       ("x-organization-id", "x-role", "x-roles", "x-authorization-state")):
+                    raise ApiBoundaryError("AUTHORIZATION_DENIED", "caller context override prohibited", 403)
             if not authorization.startswith("Bearer "):
                 raise ApiBoundaryError("AUTHENTICATION_REQUIRED", "authenticated internal caller is required", 401)
             if request.headers.get("x-tenant-id"):
@@ -173,7 +220,7 @@ def create_app(services: ApiServices, operations: ApiOperationalServices, *, run
                 caller = operations.authentication.authenticate(
                     CallerCredentials(authorization[7:].strip(), purpose), request.state.correlation_id)
             except (AuthenticationRejected, IdentityAuthenticationRejected) as exc:
-                raise ApiBoundaryError("AUTHENTICATION_REJECTED", str(exc), 401) from exc
+                raise ApiBoundaryError("AUTHENTICATION_REJECTED", "caller authentication rejected", 401) from exc
             if not isinstance(caller, CallerContext):
                 raise ApiBoundaryError("AUTHENTICATION_REJECTED", "caller context is malformed", 401)
             if caller.correlation_id != request.state.correlation_id or not caller.caller_id or not caller.policy_version:
@@ -185,8 +232,11 @@ def create_app(services: ApiServices, operations: ApiOperationalServices, *, run
             if operations.tenant_context is None:
                 yield caller
                 return
-            with operations.tenant_context.bind(caller):
-                yield caller
+            try:
+                with operations.tenant_context.bind(caller):
+                    yield caller
+            except TenantError as exc:
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403) from exc
         return authorize
 
     readiness_access = require("READINESS")
@@ -198,6 +248,95 @@ def create_app(services: ApiServices, operations: ApiOperationalServices, *, run
     orthopedic_access = require("ORTHOPEDIC")
     document_access = require("MEDICAL_DOCUMENT")
     defense_access = require("AUDIT_DEFENSE")
+
+    summary_access = require("CLINICAL_SUMMARY")
+
+    @app.post(f"{PREFIX}/workspace/summary/resolve", response_model=ClinicalSummaryResponse)
+    def clinical_summary(body: ClinicalSummaryRequest,
+                         _caller: CallerContext = Depends(summary_access)) -> ClinicalSummaryResponse:
+        try:
+            if operations.tenant_context is None:
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context required", 403)
+            tenant = current_tenant_context()
+            if (tenant.tenant_id != _caller.tenant_id or
+                    body.reference.tenant_id != tenant.tenant_id):
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403)
+            if workspace is None:
+                raise ApiBoundaryError("WORKSPACE_UNAVAILABLE", "workspace unavailable", 503)
+            view = workspace.clinical_summary(body.reference.to_reference())
+            return ClinicalSummaryResponse(**asdict(view))
+        except ApiBoundaryError:
+            raise
+        except TenantError as exc:
+            raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403) from exc
+        except (ClinicalStateExactReferenceError, WorkspaceReadRejected) as exc:
+            raise ApiBoundaryError("EXACT_REFERENCE_REJECTED", "exact reference rejected", 409) from exc
+        except Exception as exc:
+            raise ApiBoundaryError("INTERNAL_ERROR", "workspace request failed", 500) from exc
+
+    workspace_access = require("WORKSPACE_READ")
+
+    @app.get(f"{PREFIX}/workspace/context", response_model=WorkspaceContextResponse)
+    def workspace_context(caller: CallerContext = Depends(workspace_access)):
+        try:
+            if operations.tenant_context is None:
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context required", 403)
+            tenant = current_tenant_context()
+            if (tenant.tenant_id, tenant.organization_id, tenant.principal_id) != (
+                    caller.tenant_id, caller.organization_id, caller.caller_id):
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403)
+            return WorkspaceContextResponse(caller_id=caller.caller_id, tenant_id=tenant.tenant_id,
+                organization_id=tenant.organization_id, role=caller.role.value,
+                purpose=caller.purpose.value, permissions=("WORKSPACE_READ",))
+        except TenantError as exc:
+            raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403) from exc
+
+    def resolve_workspace(body, caller, target, method, response_type):
+        try:
+            if operations.tenant_context is None:
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context required", 403)
+            tenant = current_tenant_context()
+            if tenant.tenant_id != caller.tenant_id or body.reference.tenant_id != tenant.tenant_id:
+                raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403)
+            if target is None:
+                raise ApiBoundaryError("WORKSPACE_UNAVAILABLE", "workspace unavailable", 503)
+            view = getattr(target, method)(body.reference.to_reference())
+            return response_type(**asdict(view))
+        except ApiBoundaryError:
+            raise
+        except TenantError as exc:
+            raise ApiBoundaryError("AUTHORIZATION_DENIED", "tenant context rejected", 403) from exc
+        except (ClinicalStateExactReferenceError, GovernedEvidenceExactReferenceError,
+                ClinicalReasoningInputExactReferenceError, MedicalDocumentExactReferenceError,
+                HumanReviewExactReferenceError, GovernedLLMDraftExactReferenceError,
+                LLMInvocationExactReferenceError, AuditDefenseError, WorkspaceReadRejected) as exc:
+            raise ApiBoundaryError("EXACT_REFERENCE_REJECTED", "exact reference rejected", 409) from exc
+        except Exception as exc:
+            raise ApiBoundaryError("INTERNAL_ERROR", "workspace request failed", 500) from exc
+
+    @app.post(f"{PREFIX}/workspace/timeline/resolve", response_model=TimelineResponse)
+    def workspace_timeline(body: TimelineRequest, caller: CallerContext = Depends(workspace_access)):
+        return resolve_workspace(body, caller, remaining_workspace, "timeline", TimelineResponse)
+
+    @app.post(f"{PREFIX}/workspace/evidence/resolve", response_model=EvidenceResponse)
+    def workspace_evidence(body: EvidenceRequest, caller: CallerContext = Depends(workspace_access)):
+        return resolve_workspace(body, caller, workspace, "evidence", EvidenceResponse)
+
+    @app.post(f"{PREFIX}/workspace/explainability/resolve", response_model=ExplainabilityResponse)
+    def workspace_explainability(body: ExplainabilityRequest, caller: CallerContext = Depends(workspace_access)):
+        return resolve_workspace(body, caller, workspace, "explainability", ExplainabilityResponse)
+
+    @app.post(f"{PREFIX}/workspace/medical-document/resolve", response_model=WorkspaceDocumentResponse)
+    def workspace_medical_document(body: MedicalDocumentRequest, caller: CallerContext = Depends(workspace_access)):
+        return resolve_workspace(body, caller, remaining_workspace, "medical_document", WorkspaceDocumentResponse)
+
+    @app.post(f"{PREFIX}/workspace/human-review/resolve", response_model=HumanReviewResponse)
+    def workspace_human_review(body: HumanReviewRequest, caller: CallerContext = Depends(workspace_access)):
+        return resolve_workspace(body, caller, remaining_workspace, "human_review", HumanReviewResponse)
+
+    @app.post(f"{PREFIX}/workspace/audit-defense/resolve", response_model=WorkspaceDefenseResponse)
+    def workspace_audit_defense(body: AuditDefenseRequest, caller: CallerContext = Depends(workspace_access)):
+        return resolve_workspace(body, caller, remaining_workspace, "audit_defense", WorkspaceDefenseResponse)
 
     @app.get(f"{PREFIX}/health/live", response_model=HealthResponse)
     def live() -> HealthResponse: return HealthResponse(status="LIVE")

@@ -20,13 +20,15 @@ from jmoraIs.infrastructure.api_observability import RedactingJsonLogAdapter
 from jmoraIs.identity.configuration import OIDCProviderConfig
 from jmoraIs.secrets.domain import KeyReference, SecretPurpose, SecretReference
 from tests.test_internal_api import headers, operational, services
+from tests.test_managed_attestation import setup as managed_signing_setup
 
 NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
 
 def test_environment_configuration_excludes_production_and_requires_safe_homologation():
-    assert development_config().environment is InternalApiEnvironment.DEVELOPMENT
-    assert make_test_config().environment is InternalApiEnvironment.TEST
+    signing_key, _, _ = managed_signing_setup()
+    assert development_config(governed_draft_signing_key=signing_key).environment is InternalApiEnvironment.DEVELOPMENT
+    assert make_test_config(governed_draft_signing_key=signing_key).environment is InternalApiEnvironment.TEST
     with pytest.raises(TypeError): homologation_config("postgresql+psycopg://x:y@localhost/db")
     oidc = OIDCProviderConfig("test-idp", "https://issuer.test", "jmorais-api",
         "https://issuer.test/.well-known/openid-configuration", "https://issuer.test/jwks",
@@ -34,7 +36,7 @@ def test_environment_configuration_excludes_production_and_requires_safe_homolog
         "roles", "organization_id", (("service", "INTERNAL_SERVICE"),))
     database=SecretReference("vault","database/homologation",SecretPurpose.POSTGRESQL_CREDENTIALS,"1")
     key=KeyReference("vault","pseudonymization","1",SecretPurpose.PSEUDONYMIZATION_HMAC)
-    config=homologation_config(database,oidc,key)
+    config=homologation_config(database,oidc,key,governed_draft_signing_key=signing_key)
     assert config.environment is InternalApiEnvironment.HOMOLOGATION and config.database_url is None
     assert "PRODUCTION" in {item.value for item in InternalApiEnvironment}
 

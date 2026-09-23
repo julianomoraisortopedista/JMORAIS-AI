@@ -4,6 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 from jmoraIs.gateway_input import UpstreamArtifactReference
+from jmoraIs.secrets.domain import KeyReference, SecretPurpose
 
 class GovernedLLMDraftError(RuntimeError): pass
 class DraftBoundaryRejected(GovernedLLMDraftError): pass
@@ -24,6 +25,7 @@ class GovernedLLMDraft:
     review_policy:DraftReviewPolicyReference;reviewable_content:str;reviewable_content_hash:str
     integrity_hash:str;policy_version:str;tenant_id:str;provenance:tuple[str,...]
     issued_at:datetime;issuance_attestation:str
+    signing_key_reference:KeyReference|None=None
 
 @dataclass(frozen=True)
 class GovernedLLMDraftLifecycleEvent:

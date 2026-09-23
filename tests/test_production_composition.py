@@ -23,6 +23,7 @@ def config():
     return production_config(SecretReference("vault", "db", SecretPurpose.POSTGRESQL_CREDENTIALS, "1"), oidc,
         KeyReference("vault", "pseudo", "1", SecretPurpose.PSEUDONYMIZATION_HMAC),
         BuildMetadata("release-1", "build-1", "abc123", "2026-08-10T00:00:00Z"),
+        governed_draft_signing_key=KeyReference("vault", "draft-signing", "1", SecretPurpose.SIGNING_KEY),
         offline_replay_database_credential=SecretReference(
             "vault", "offline-replay", SecretPurpose.OFFLINE_REPLAY_DATABASE_CREDENTIAL, "1"))
 
@@ -32,7 +33,8 @@ def test_production_configuration_requires_external_security_and_bounded_runtime
     assert value.runtime_security == RuntimeSecurityPolicy()
     with pytest.raises(ValueError): replace(value, build_metadata=None)
     with pytest.raises(ValueError): replace(value, offline_replay_database_credential=value.database_credential)
-    with pytest.raises(ValueError): replace(value, offline_replay_database_credential=SecretReference(
+    with pytest.raises(ValueError): replace(value, governed_draft_signing_key=KeyReference("vault", "draft-signing", "1", SecretPurpose.SIGNING_KEY),
+        offline_replay_database_credential=SecretReference(
         value.database_credential.provider, value.database_credential.reference,
         SecretPurpose.OFFLINE_REPLAY_DATABASE_CREDENTIAL, "different-purpose"))
     with pytest.raises(ValueError): RuntimeSecurityPolicy(concurrency_limit=0)

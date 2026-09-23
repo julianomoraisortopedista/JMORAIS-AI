@@ -41,6 +41,19 @@ from jmoraIs.tenancy.application import CanonicalTenantAuthorizationService, Tru
 from jmoraIs.tenancy.context import TenantContextBinder
 from jmoraIs.secrets.domain import SecretReference
 
+from jmoraIs.clinical_workspace import ClinicalWorkspace, RemainingClinicalWorkspace
+from jmoraIs.clinical_state.exact_reference_persistence import PostgreSQLClinicalStateExactReferenceRepository
+from jmoraIs.appraisal.exact_reference_persistence import PostgreSQLGovernedEvidenceExactReferenceRepository
+from jmoraIs.infrastructure.appraisal_persistence import PostgreSQLClinicalAppraisalRepository
+from jmoraIs.reasoning_input.exact_reference_persistence import PostgreSQLClinicalReasoningInputExactReferenceRepository
+from jmoraIs.terminology import PostgreSQLTerminologyMappingGovernanceRepository
+from jmoraIs.medical_documents.exact_reference_persistence import PostgreSQLMedicalDocumentExactReferenceRepository
+from jmoraIs.llm_human_review.exact_reference_persistence import PostgreSQLHumanReviewExactReferenceRepository
+
+from jmoraIs.infrastructure.managed_attestation import ManagedAttestationFactory, ManagedGovernedDraftVerifier
+from jmoraIs.governed_llm_draft.exact_reference_persistence import PostgreSQLGovernedLLMDraftExactReferenceRepository
+from jmoraIs.llm_gateway.exact_reference_persistence import PostgreSQLLLMInvocationExactReferenceRepository
+
 from .app import ApiOperationalServices, ApiServices, create_app
 from .configuration import InternalApiConfig, InternalApiEnvironment
 from .security import ReadinessCheck, ReadinessReport
@@ -81,6 +94,10 @@ class HomologationComposition:
     authenticated_reviewer: AuthenticatedReviewerResolver
     database_credentials: SecretBackedDatabaseEngine
     pseudonymization_keys: ManagedHmacPseudonymizationKeyAdapter
+    workspace: ClinicalWorkspace
+    remaining_workspace: RemainingClinicalWorkspace
+    draft_attestor: object
+    draft_references: PostgreSQLGovernedLLMDraftExactReferenceRepository
 
 
 def compose_homologation(config: InternalApiConfig, *, metrics: ApiMetricsPort,
@@ -103,6 +120,30 @@ def compose_homologation(config: InternalApiConfig, *, metrics: ApiMetricsPort,
     engine=database_credentials.engine
     secret_audit=PostgreSQLSecretSecurityAudit(engine)
     key_metadata=PostgreSQLKeyMetadataRepository(engine)
+    factory = ManagedAttestationFactory(secrets_provider, key_metadata)
+    try:
+        draft_attestor = factory.draft_attestor(config.governed_draft_signing_key,
+                                               actor_id="governed-draft-runtime")
+    except Exception as exc:
+        database_credentials.close()
+        raise HomologationStartupError("governed draft signing key unavailable") from None
+    reader = engine.execution_options(postgresql_readonly=True)
+    draft_references = PostgreSQLGovernedLLMDraftExactReferenceRepository(reader,
+        ManagedGovernedDraftVerifier(factory, config.governed_draft_signing_key,
+                                    actor_id="governed-draft-verifier"),
+        invocation_references=PostgreSQLLLMInvocationExactReferenceRepository(reader))
+    exact_states = PostgreSQLClinicalStateExactReferenceRepository(reader)
+    exact_evidence = PostgreSQLGovernedEvidenceExactReferenceRepository(reader,
+        ScientificEvidencePackagePort(catalog=PostgreSQLPackageCatalogRepository(reader)),
+        PostgreSQLClinicalAppraisalRepository(reader),
+        SQLAlchemyGovernedEvidenceLifecycleRepository(reader))
+    exact_reasoning = PostgreSQLClinicalReasoningInputExactReferenceRepository(reader,
+        exact_states, exact_evidence, PostgreSQLTerminologyMappingGovernanceRepository(reader))
+    workspace = ClinicalWorkspace(exact_states, exact_evidence, exact_reasoning)
+    remaining_workspace = RemainingClinicalWorkspace(exact_states,
+        PostgreSQLMedicalDocumentExactReferenceRepository(reader),
+        PostgreSQLHumanReviewExactReferenceRepository(reader, draft_references),
+        PostgreSQLAuditDefenseRepository(reader))
     pseudonymization_keys=ManagedHmacPseudonymizationKeyAdapter(
         secrets_provider,key_metadata,secret_audit,metrics=metrics)
     tenant_repository = PostgreSQLTenantRepository(engine)
@@ -174,5 +215,7 @@ def compose_homologation(config: InternalApiConfig, *, metrics: ApiMetricsPort,
     operations = ApiOperationalServices(authentication, authorization, readiness, audit, metrics,
                                          structured_log, tenant_binding)
     startup_self_check(readiness.check())
-    return HomologationComposition(create_app(api_services, operations), api_services, operations,
-        reviewer_authorization, reviewer_governance, authenticated_reviewer,database_credentials,pseudonymization_keys)
+    return HomologationComposition(create_app(api_services, operations, workspace=workspace,
+        remaining_workspace=remaining_workspace), api_services, operations,
+        reviewer_authorization, reviewer_governance, authenticated_reviewer,database_credentials,pseudonymization_keys,
+        workspace,remaining_workspace,draft_attestor,draft_references)

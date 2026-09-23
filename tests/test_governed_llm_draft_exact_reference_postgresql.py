@@ -37,7 +37,7 @@ from jmoraIs.medical_documents.gateway_input import MedicalDocumentGatewayInputI
 from jmoraIs.secrets.domain import KeyReference, SecretPurpose
 from jmoraIs.tenancy.context import TenantContextBinder
 from jmoraIs.tenancy.domain import MissingTenantContext, TenantContext
-from tests.test_governed_llm_draft import DRAFT_KEY
+from tests.test_governed_llm_draft import DRAFT_KEY, DRAFT_KEY_REFERENCE
 from tests.test_llm_gateway import request, response, template
 from tests.test_medical_document_engine import setup as document_setup
 
@@ -58,7 +58,7 @@ def database():
     return url, create_engine(url, future=True)
 
 
-def persisted_draft(owner, writer, suffix, tenant):
+def persisted_draft(owner, writer, suffix, tenant, *, draft_attestor=None):
     document_engine, documents, _, document_input = document_setup()
     version = document_engine.generate(document_input, __import__("jmoraIs.medical_documents", fromlist=["DocumentType"]).DocumentType.CLINICAL_REPORT)
     input_attestor = HMACPersistedGatewayInputAttestor(INPUT_KEY)
@@ -90,7 +90,7 @@ def persisted_draft(owner, writer, suffix, tenant):
     )
     result = gateway.invoke_persisted(gateway_request)
     invocation = invocations.history(gateway_request.request_id)[0]
-    draft_attestor = GovernedDraftAttestor(DRAFT_KEY)
+    draft_attestor = draft_attestor or GovernedDraftAttestor(DRAFT_KEY,key_reference=DRAFT_KEY_REFERENCE)
     drafts = PostgreSQLGovernedLLMDraftRepository(writer, draft_attestor)
     draft = GovernedLLMDraftIssuanceService(
         drafts, invocations, contexts, input_attestor, draft_attestor, clock=lambda: NOW,

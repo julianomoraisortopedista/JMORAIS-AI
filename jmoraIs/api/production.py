@@ -67,7 +67,8 @@ def compose_production(config: InternalApiConfig, *, metrics, structured_log, id
         yield
         holder["composition"].shutdown()
     app = create_app(canonical.api_services, operations, runtime_security=config.runtime_security,
-                     lifespan=lifespan)
+                     lifespan=lifespan, workspace=canonical.workspace,
+                     remaining_workspace=canonical.remaining_workspace)
     composition = ProductionComposition(app, canonical, checks, audit, metrics, structured_log)
     holder["composition"] = composition
     app.state.production_composition = composition

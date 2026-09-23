@@ -11,7 +11,7 @@ from jmoraIs.identity.reviewer import AuthenticatedReviewerResolver
 from jmoraIs.llm_human_review import *
 from jmoraIs.tenancy.context import TenantContextBinder
 from jmoraIs.tenancy.domain import TenantContext
-from tests.test_governed_llm_draft import DRAFT_KEY, NOW, setup_draft
+from tests.test_governed_llm_draft import DRAFT_KEY, DRAFT_KEY_REFERENCE, NOW, setup_draft
 
 
 class Links:
@@ -46,7 +46,7 @@ def build(*, role=ReviewerRole.REVIEWER, reviewer_status=ReviewerStatus.ACTIVE, 
         PrincipalType.HUMAN, ("CLINICAL_VALIDATION",), ("clinical:review",), "reviewer-1", NOW, NOW, "ST-15.1")
     reviews = InMemoryLLMHumanReviewRepository(drafts)
     service = AuthorizedLLMHumanReviewService(drafts, drafts, invocations, contexts, PromptLookup(draft.prompt_version), reviews,
-        AuthenticatedReviewerResolver(Links(link), reviewers), reviewers, Upstream(conflicts, generated_by), GovernedDraftAttestor(DRAFT_KEY),
+        AuthenticatedReviewerResolver(Links(link), reviewers), reviewers, Upstream(conflicts, generated_by), GovernedDraftAttestor(DRAFT_KEY,key_reference=DRAFT_KEY_REFERENCE),
         ReviewAuthorizationPolicy("ST-15.1", False, True), clock=lambda: NOW, audit=audit)
     return service, reviews, drafts, draft
 
@@ -94,7 +94,7 @@ def test_service_principal_wrong_tenant_purpose_and_missing_draft_fail_closed():
 @pytest.mark.parametrize("target", [GovernedLLMDraftLifecycleStatus.SUPERSEDED, GovernedLLMDraftLifecycleStatus.INVALIDATED])
 def test_non_active_lifecycle_blocks_review(target):
     service, _, drafts, draft = build()
-    GovernedLLMDraftLifecycleService(drafts, drafts, GovernedDraftAttestor(DRAFT_KEY), clock=lambda: NOW).transition(draft.draft_id, 1, target, reason_reference="POLICY:block", actor_reference="policy", policy_version="ST-15.1")
+    GovernedLLMDraftLifecycleService(drafts, drafts, GovernedDraftAttestor(DRAFT_KEY,key_reference=DRAFT_KEY_REFERENCE), clock=lambda: NOW).transition(draft.draft_id, 1, target, reason_reference="POLICY:block", actor_reference="policy", policy_version="ST-15.1")
     with pytest.raises(LLMHumanReviewRejected, match="ACTIVE"):
         service.decide(draft_id=draft.draft_id, draft_version=1, principal=principal(), decision=LLMReviewDecision.APPROVE, justification_reference="x")
 

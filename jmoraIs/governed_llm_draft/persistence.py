@@ -32,6 +32,8 @@ class PostgreSQLGovernedLLMDraftRepository:
     def __init__(self,engine,attestor,codec=None):self._engine=engine;self._attestor=attestor;self._codec=codec or GovernedLLMDraftJsonCodec()
     def append(self,v):raise DraftBoundaryRejected("canonical draft issuance requires atomic ACTIVE lifecycle")
     def append_with_lifecycle(self,v,active,supersession=None):
+        if not isinstance(v.signing_key_reference,KeyReference) or v.signing_key_reference.purpose is not SecretPurpose.SIGNING_KEY:
+            raise DraftBoundaryRejected("authoritative draft signing key is required")
         if not validate_draft_integrity(v,self._attestor):raise DraftBoundaryRejected("draft integrity or issuance attestation is invalid")
         if v.tenant_id!=current_tenant_context().tenant_id or v.upstream_artifact_reference.tenant_id!=v.tenant_id:raise DraftBoundaryRejected("draft tenant mismatch")
         with self._engine.begin() as c:

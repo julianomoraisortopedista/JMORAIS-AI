@@ -65,7 +65,8 @@ def seed(owner, writer, tenant, suffix):
 def compose(reader):
     invocations = review_source.PostgreSQLLLMInvocationExactReferenceRepository(reader)
     drafts = review_source.PostgreSQLGovernedLLMDraftExactReferenceRepository(reader,
-        draft_source.GovernedDraftAttestor(draft_source.DRAFT_KEY), invocation_references=invocations)
+        draft_source.GovernedDraftAttestor(draft_source.DRAFT_KEY,
+            key_reference=draft_source.DRAFT_KEY_REFERENCE), invocation_references=invocations)
     return RemainingClinicalWorkspace(state_source.PostgreSQLClinicalStateExactReferenceRepository(reader),
         defense_source.PostgreSQLMedicalDocumentExactReferenceRepository(reader),
         review_source.PostgreSQLHumanReviewExactReferenceRepository(reader, drafts),

@@ -44,6 +44,7 @@ from jmoraIs.infrastructure.managed_secrets import EphemeralSecretProvider,InMem
 from jmoraIs.infrastructure.persisted_gateway_input import PostgreSQLPersistedGatewayInputRepository,PersistedGatewayInputTrustService
 from jmoraIs.secrets.domain import KeyReference,KeyState,ManagedKeyMetadata,SecretPurpose,SecretReference
 from jmoraIs.governed_llm_draft import GovernedDraftAttestor,GovernedLLMDraftIssuanceService,PostgreSQLGovernedLLMDraftRepository
+from tests.test_governed_llm_draft import DRAFT_KEY, DRAFT_KEY_REFERENCE
 from jmoraIs.clinical.governance_persistence import PostgreSQLReviewerIdentityRepository
 from jmoraIs.llm_human_review import (AuthorizedLLMHumanReviewService,LLMReviewDecision,PostgreSQLLLMHumanReviewRepository,
     PostgreSQLLLMHumanReviewSecurityAudit,UpstreamReviewGovernanceRouter)
@@ -86,7 +87,28 @@ from tests.test_stage13_real_service_postgresql import _StaticSigningKeys,_oidc_
 
 pytestmark=pytest.mark.integration
 
-def test_complete_case_1_to_14_persists_restarts_and_traces_exactly():
+@pytest.fixture
+def isolated_complete_case_database(monkeypatch):
+    # replay_all is global: this test owns a database, not a shared tenant namespace.
+    from sqlalchemy.engine import make_url
+    url = os.getenv("JMORAIS_TEST_POSTGRES_URL")
+    if not url:
+        pytest.skip("JMORAIS_TEST_POSTGRES_URL is required")
+    base = make_url(url)
+    name = "complete_case_" + uuid4().hex
+    admin = create_engine(base, isolation_level="AUTOCOMMIT")
+    with admin.connect() as connection:
+        connection.execute(text('CREATE DATABASE "' + name + '"'))
+    monkeypatch.setenv("JMORAIS_TEST_POSTGRES_URL", base.set(database=name).render_as_string(hide_password=False))
+    try:
+        yield
+    finally:
+        with admin.connect() as connection:
+            connection.execute(text('DROP DATABASE "' + name + '" WITH (FORCE)'))
+        admin.dispose()
+
+
+def test_complete_case_1_to_14_persists_restarts_and_traces_exactly(isolated_complete_case_database):
     url=os.getenv("JMORAIS_TEST_POSTGRES_URL")
     if not url:pytest.skip("JMORAIS_TEST_POSTGRES_URL is required")
     config=Config("alembic.ini");config.set_main_option("sqlalchemy.url",url);command.upgrade(config,"head")
@@ -324,7 +346,7 @@ def test_complete_case_1_to_14_persists_restarts_and_traces_exactly():
     input_verifier=ManagedPersistedGatewayInputVerifier(secret_provider,key_metadata)
     persisted_inputs=PostgreSQLPersistedGatewayInputRepository(gateway_writer,input_verifier)
     gateway=CanonicalLLMGateway(prompts,PostgreSQLPromptAuditRepository(gateway_writer),invocations,invocation_contexts,(provider,),clock=lambda:NOW,persisted_input_attestor=input_attestor,persisted_inputs=persisted_inputs)
-    draft_attestor=GovernedDraftAttestor(b"complete-case-governed-draft-key-material-32")
+    draft_attestor=GovernedDraftAttestor(DRAFT_KEY, key_reference=DRAFT_KEY_REFERENCE)
     drafts=PostgreSQLGovernedLLMDraftRepository(gateway_writer,draft_attestor)
     llm_request=LLMRequest("complete-request-"+suffix,prompt.prompt_version_id,LLMModel(LLMProvider.MOCK,"complete-model","1",1.0,2.0,True,"MIP-10.1"),gateway_input,ReviewPolicy("complete-human-review","MIP-10.1",True,False),.2,7,500,"MIP-10.1",NOW)
     with binder.bind_tenant(llm_context):

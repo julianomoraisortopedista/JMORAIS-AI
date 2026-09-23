@@ -1,8 +1,9 @@
+import re
 from pathlib import Path
 from jmoraIs.appraisal.exact_reference import PersistedGovernedEvidenceReference
 
 def test_governed_evidence_owner_defines_metadata_only_exact_reference():
-    definitions=[path for path in Path("jmoraIs").rglob("*.py") if "class PersistedGovernedEvidenceReference" in path.read_text()]
+    definitions=[path for path in Path("jmoraIs").rglob("*.py") if re.search(r"class PersistedGovernedEvidenceReference\s*[:(]", path.read_text())]
     assert definitions==[Path("jmoraIs/appraisal/exact_reference.py")]
     assert not {"payload","scientific_payload","appraisal_payload"}.intersection(PersistedGovernedEvidenceReference.__annotations__)
 

@@ -14,6 +14,19 @@ Não registrar:
 
 ---
 
+# S004 — API / Presentation Boundary — 2026-09-23
+
+Status: DONE.
+
+- Seven read-only Clinical Workspace API viewers and authenticated caller context.
+- Existing production/homologation composition supplies exact owner repositories; tenant isolation, RLS, secure errors and read-only behavior validated.
+- Explicit managed Governed Draft SIGNING_KEY binding persisted in signed JSON; restart verification preserved. Historical unbound drafts fail closed without backfill. No migration.
+- Obsolete test compositions and exact-class detectors corrected; COMPLETE_CASE database isolated from prior tamper probes.
+- Final gate: 958 passed, 8 skipped; coverage 94.00417476426978%. PostgreSQL 16.14; Alembic current == head `065_defense_reference_state`.
+- COMPLETE_CASE 1→14, global replay, runtime/auth/RLS/restart, API trust-path hygiene, pip check, compileall and diff check: PASS.
+
+---
+
 # S003 — Clinical Workspace Read-Only — 2026-09-21
 
 Status: DONE.

@@ -1,3 +1,26 @@
+# Sprint S004 — API / Presentation Boundary
+
+Status: DONE — 2026-09-23.
+
+Seven read-only Workspace resolve routes plus authenticated context are composed
+through existing production/homologation runtime and exact owner ports. Tenant
+isolation, RLS/read-only transactions, secure errors and authoritative prospective
+Governed Draft signing-key binding are preserved. Historical unbound drafts remain
+FAIL-CLOSED / NO BACKFILL. No new migration.
+
+Final gate: 958 passed, 8 skipped; coverage 94.00417476426978%.
+PostgreSQL 16.14 / Alembic current == head `065_defense_reference_state`.
+COMPLETE_CASE 1→14, global replay, runtime composition, auth/tenant, RLS/restart,
+exact-reference trust-path hygiene, pip check, compileall and diff check: PASS.
+Evidence: PROJECT_STATE.md and `/tmp/s004-final2-coverage.log`.
+
+NEXT ACTION: MINIMAL CLINICAL WORKSPACE UI planning. Not implemented.
+POST_RELEASE: existing Starlette/httpx deprecation warning.
+
+---
+
+## Historical S003 checkpoint
+
 # Sprint S003
 
 Status:

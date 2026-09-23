@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from jmoraIs.clinical_state.exact_reference import (
@@ -21,6 +22,6 @@ def test_only_clinical_state_defines_its_trusted_reference_types():
     definitions = []
     for path in Path("jmoraIs").rglob("*.py"):
         text = path.read_text()
-        if "class PersistedClinicalStateReference" in text or "class PersistedClinicalStateTimelineReference" in text:
+        if re.search(r"class (?:PersistedClinicalStateReference|PersistedClinicalStateTimelineReference)\s*[:(]", text):
             definitions.append(path)
     assert definitions == [Path("jmoraIs/clinical_state/exact_reference.py")]

@@ -28,6 +28,7 @@ from jmoraIs.infrastructure.persisted_gateway_input import PostgreSQLPersistedGa
 from jmoraIs.secrets.domain import KeyReference,KeyState,ManagedKeyMetadata,SecretPurpose,SecretReference
 from jmoraIs.gateway_input import HMACPersistedGatewayInputAttestor
 from jmoraIs.governed_llm_draft import GovernedDraftAttestor,GovernedLLMDraftIssuanceService,GovernedLLMDraftLifecycleService,GovernedLLMDraftLifecycleStatus,PostgreSQLGovernedLLMDraftRepository
+from tests.test_governed_llm_draft import DRAFT_KEY, DRAFT_KEY_REFERENCE
 from jmoraIs.llm_gateway import *
 from jmoraIs.audit_defense import (AuditDefenseGatewayInputIssuer,AuditDefenseGatewayInputResolver,
     AuditDefenseTraceabilityService,PostgreSQLAuditDefenseEventAdapter,PostgreSQLAuditDefenseRepository,
@@ -131,7 +132,7 @@ def test_stage13_real_persisted_audit_defense_gateway_restart_equivalence():
     input_verifier=ManagedPersistedGatewayInputVerifier(secret_provider,key_metadata)
     persisted_inputs=PostgreSQLPersistedGatewayInputRepository(writer,input_verifier)
     gateway=CanonicalLLMGateway(prompts,audits,invocations,contexts,(provider,),clock=lambda:now,persisted_input_attestor=attestor,persisted_inputs=persisted_inputs)
-    draft_attestor=GovernedDraftAttestor(b"stage13-governed-draft-attestation-key-32-bytes")
+    draft_attestor=GovernedDraftAttestor(DRAFT_KEY,key_reference=DRAFT_KEY_REFERENCE)
     drafts=PostgreSQLGovernedLLMDraftRepository(writer,draft_attestor)
     request_id="request-stage13-"+suffix
     request_value=LLMRequest(request_id,prompt.prompt_version_id,

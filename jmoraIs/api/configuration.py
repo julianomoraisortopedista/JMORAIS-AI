@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from jmoraIs.identity.configuration import OIDCProviderConfig
 from jmoraIs.secrets.domain import KeyReference, SecretPurpose, SecretReference
@@ -57,6 +57,7 @@ class BuildMetadata:
 
 @dataclass(frozen=True)
 class InternalApiConfig:
+    governed_draft_signing_key: KeyReference = field(kw_only=True)
     environment: InternalApiEnvironment
     bind_host: str
     database_url: str | None
@@ -73,6 +74,13 @@ class InternalApiConfig:
     build_metadata: BuildMetadata | None = None
 
     def __post_init__(self):
+        key = self.governed_draft_signing_key
+        if not isinstance(key, KeyReference) or key.purpose is not SecretPurpose.SIGNING_KEY:
+            raise ValueError("explicit SIGNING_KEY reference for governed drafts is required")
+        if self.pseudonymization_key is not None and (
+            key.provider, key.key_id, key.version
+        ) == (self.pseudonymization_key.provider, self.pseudonymization_key.key_id, self.pseudonymization_key.version):
+            raise ValueError("draft signing and pseudonymization keys must be distinct")
         if self.environment in {InternalApiEnvironment.HOMOLOGATION, InternalApiEnvironment.PRODUCTION}:
             if self.database_url is not None or self.oidc is None or self.bind_host not in {"127.0.0.1", "localhost"}:
                 raise ValueError("homologation requires secret-backed PostgreSQL, external OIDC and loopback binding")
@@ -93,18 +101,22 @@ class InternalApiConfig:
             raise ValueError("secure API configuration is required")
 
 
-def development_config() -> InternalApiConfig:
-    return InternalApiConfig(InternalApiEnvironment.DEVELOPMENT, "127.0.0.1", None)
+def development_config(*, governed_draft_signing_key: KeyReference) -> InternalApiConfig:
+    return InternalApiConfig(InternalApiEnvironment.DEVELOPMENT, "127.0.0.1", None,
+                             governed_draft_signing_key=governed_draft_signing_key)
 
 
-def test_config(database_url: str | None = None) -> InternalApiConfig:
-    return InternalApiConfig(InternalApiEnvironment.TEST, "127.0.0.1", database_url)
+def test_config(database_url: str | None = None, *, governed_draft_signing_key: KeyReference) -> InternalApiConfig:
+    return InternalApiConfig(InternalApiEnvironment.TEST, "127.0.0.1", database_url,
+                             governed_draft_signing_key=governed_draft_signing_key)
 
 
 def homologation_config(database_credential: SecretReference, oidc: OIDCProviderConfig,
-                         pseudonymization_key: KeyReference,
-                         provider_secret_references: tuple[SecretReference, ...] = ()) -> InternalApiConfig:
+                         pseudonymization_key: KeyReference, *,
+                         provider_secret_references: tuple[SecretReference, ...] = (),
+                         governed_draft_signing_key: KeyReference) -> InternalApiConfig:
     return InternalApiConfig(InternalApiEnvironment.HOMOLOGATION, "127.0.0.1", None, oidc,
+        governed_draft_signing_key=governed_draft_signing_key,
         runtime_database_role="jmorais_application_writer",database_credential=database_credential,
         pseudonymization_key=pseudonymization_key,provider_secret_references=provider_secret_references,
         runtime_security=RuntimeSecurityPolicy(database_tls_required=False))
@@ -114,8 +126,10 @@ def production_config(database_credential: SecretReference, oidc: OIDCProviderCo
                       pseudonymization_key: KeyReference, build_metadata: BuildMetadata, *,
                       offline_replay_database_credential: SecretReference,
                       runtime_security: RuntimeSecurityPolicy = RuntimeSecurityPolicy(),
-                      provider_secret_references: tuple[SecretReference, ...] = ()) -> InternalApiConfig:
+                      provider_secret_references: tuple[SecretReference, ...] = (),
+                      governed_draft_signing_key: KeyReference) -> InternalApiConfig:
     return InternalApiConfig(InternalApiEnvironment.PRODUCTION, "127.0.0.1", None, oidc,
+        governed_draft_signing_key=governed_draft_signing_key,
         runtime_database_role="jmorais_application_writer", database_credential=database_credential,
         offline_replay_database_credential=offline_replay_database_credential,
         pseudonymization_key=pseudonymization_key, provider_secret_references=provider_secret_references,

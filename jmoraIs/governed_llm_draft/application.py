@@ -10,11 +10,14 @@ from jmoraIs.tenancy.context import current_tenant_context
 from .domain import *
 
 class GovernedDraftAttestor:
-    def __init__(self,key:bytes):
+    def __init__(self,key:bytes,*,key_reference:KeyReference|None=None):
         if not isinstance(key,bytes) or len(key)<32:raise DraftBoundaryRejected("draft attestation key must contain at least 32 bytes")
-        self._key=key
-    def sign(self,value):return hmac.new(self._key,_attestation_material(value),sha256).hexdigest()
-    def verify(self,value):return isinstance(value,GovernedLLMDraft) and bool(value.issuance_attestation) and hmac.compare_digest(value.issuance_attestation,self.sign(value))
+        self._key=key;self.key_reference=key_reference
+    def sign(self,value):
+        if value.signing_key_reference != self.key_reference:
+            raise DraftBoundaryRejected("draft signing key binding mismatch")
+        return hmac.new(self._key,_attestation_material(value),sha256).hexdigest()
+    def verify(self,value):return isinstance(value,GovernedLLMDraft) and value.signing_key_reference==self.key_reference and bool(value.issuance_attestation) and hmac.compare_digest(value.issuance_attestation,self.sign(value))
 
 class ReviewableContentRedactor:
     _patterns=(
@@ -34,6 +37,9 @@ class GovernedLLMDraftIssuanceService:
     def __init__(self,repository,invocations,contexts,input_attestor,draft_attestor,*,clock,redactor=None):
         self._repository=repository;self._invocations=invocations;self._contexts=contexts;self._input_attestor=input_attestor;self._draft_attestor=draft_attestor;self._clock=clock;self._redactor=redactor or ReviewableContentRedactor()
     def issue(self,persisted_input,response,review_policy):
+        signing_key = getattr(self._draft_attestor, "key_reference", None)
+        if not isinstance(signing_key, KeyReference) or signing_key.purpose is not SecretPurpose.SIGNING_KEY:
+            raise DraftBoundaryRejected("authoritative draft signing key is required")
         tenant=current_tenant_context()
         if not isinstance(persisted_input,PersistedGatewayInput) or not self._input_attestor.verify(persisted_input) or canonical_dto_hash(persisted_input.dto)!=persisted_input.dto_hash:raise DraftBoundaryRejected("trusted persisted Gateway input is required")
         if persisted_input.reference.tenant_id!=tenant.tenant_id:raise DraftBoundaryRejected("draft tenant mismatch")
@@ -51,6 +57,7 @@ class GovernedLLMDraftIssuanceService:
         provenance=("invocation:"+invocation.invocation_id,"upstream:"+persisted_input.reference.artifact_id,"prompt:"+invocation.prompt_version_id)
         draft_id="draft_"+sha256((stream+"|"+str(version)+"|"+content_hash).encode()).hexdigest()
         unsigned=GovernedLLMDraft(draft_id,stream,version,predecessor,persisted_input.reference,invocation.invocation_id,response.request_id,context.correlation_id,invocation.prompt_version_id,invocation.provider.value,invocation.model_id,response.classification.value,review_status,policy,content,content_hash,"",invocation.policy_version,tenant.tenant_id,provenance,issued,"")
+        unsigned=replace(unsigned,signing_key_reference=signing_key)
         integrity=_integrity_hash(unsigned);with_integrity=replace(unsigned,integrity_hash=integrity)
         result=replace(with_integrity,issuance_attestation=self._draft_attestor.sign(with_integrity))
         from .lifecycle import lifecycle_event
@@ -71,6 +78,7 @@ class GovernedLLMDraftIssuanceService:
 
 def _integrity_hash(value):
     material=asdict(value);material["integrity_hash"]="";material["issuance_attestation"]=""
+    if value.signing_key_reference is None:material.pop("signing_key_reference")
     return sha256(json.dumps(material,sort_keys=True,separators=(",",":"),default=str).encode()).hexdigest()
 def _attestation_material(value):return (value.integrity_hash+"|"+value.reviewable_content_hash+"|"+value.draft_id+"|"+value.tenant_id).encode()
 def validate_draft_integrity(value,attestor):

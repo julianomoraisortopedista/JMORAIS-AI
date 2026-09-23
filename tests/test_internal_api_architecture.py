@@ -1,3 +1,4 @@
+import ast
 from pathlib import Path
 
 
@@ -14,7 +15,21 @@ def test_internal_api_is_an_adapter_and_does_not_import_forbidden_raw_boundaries
 
 def test_api_has_no_write_routes_or_public_prefix():
     source = Path("jmoraIs/api/app.py").read_text()
-    assert all(token not in source for token in ("@app.post", "@app.put", "@app.patch", "@app.delete"))
+    assert all(token not in source for token in ("@app.put", "@app.patch", "@app.delete"))
+    posts = [node for node in ast.walk(ast.parse(source)) if isinstance(node, ast.Call)
+             and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name)
+             and node.func.value.id == "app" and node.func.attr == "post"]
+    expected = {"/workspace/" + name + "/resolve" for name in (
+        "summary", "timeline", "evidence", "explainability", "medical-document", "human-review", "audit-defense")}
+    suffixes = []
+    for node in posts:
+        assert len(node.args) == 1 and isinstance(node.args[0], ast.JoinedStr)
+        prefix, suffix = node.args[0].values
+        assert isinstance(prefix, ast.FormattedValue) and isinstance(prefix.value, ast.Name)
+        assert prefix.value.id == "PREFIX" and isinstance(suffix, ast.Constant)
+        suffixes.append(suffix.value)
+    assert len(suffixes) == 7 and set(suffixes) == expected
+    # Only the approved read-only exact-resolution POST routes are allowed.
     assert 'PREFIX = f"/internal/api/{API_VERSION}"' in source
     assert 'openapi_url=f"{PREFIX}/openapi.json"' in source
 

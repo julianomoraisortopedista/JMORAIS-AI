@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 
 from jmoraIs.governed_llm_draft.exact_reference import PersistedGovernedLLMDraftReference
@@ -6,7 +7,7 @@ from jmoraIs.governed_llm_draft.exact_reference import PersistedGovernedLLMDraft
 def test_governed_draft_owner_defines_metadata_only_exact_reference():
     definitions = [
         path for path in Path("jmoraIs").rglob("*.py")
-        if "class PersistedGovernedLLMDraftReference" in path.read_text()
+        if re.search(r"class PersistedGovernedLLMDraftReference\s*[:(]", path.read_text())
     ]
     assert definitions == [Path("jmoraIs/governed_llm_draft/exact_reference.py")]
     assert not {"reviewable_content", "prompt", "raw_response", "provider_payload", "clinical_payload"}.intersection(
