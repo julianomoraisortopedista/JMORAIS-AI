@@ -21,6 +21,7 @@ def test_api_has_no_write_routes_or_public_prefix():
              and node.func.value.id == "app" and node.func.attr == "post"]
     expected = {"/workspace/" + name + "/resolve" for name in (
         "summary", "timeline", "evidence", "explainability", "medical-document", "human-review", "audit-defense")}
+    expected.add("/workspace/bootstrap")
     suffixes = []
     for node in posts:
         assert len(node.args) == 1 and isinstance(node.args[0], ast.JoinedStr)
@@ -28,7 +29,7 @@ def test_api_has_no_write_routes_or_public_prefix():
         assert isinstance(prefix, ast.FormattedValue) and isinstance(prefix.value, ast.Name)
         assert prefix.value.id == "PREFIX" and isinstance(suffix, ast.Constant)
         suffixes.append(suffix.value)
-    assert len(suffixes) == 7 and set(suffixes) == expected
+    assert len(suffixes) == 8 and set(suffixes) == expected
     # Only the approved read-only exact-resolution POST routes are allowed.
     assert 'PREFIX = f"/internal/api/{API_VERSION}"' in source
     assert 'openapi_url=f"{PREFIX}/openapi.json"' in source

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .workspace_launch import WorkspaceBootstrapRequest, WorkspaceBootstrapResponse
 
 import re
 from dataclasses import asdict, dataclass
@@ -118,7 +119,7 @@ def _approved(status: Any, name: str) -> None:
 
 def create_app(services: ApiServices, operations: ApiOperationalServices, *, runtime_security=None,
                lifespan=None, workspace: ClinicalWorkspace | None = None,
-               remaining_workspace: RemainingClinicalWorkspace | None = None) -> FastAPI:
+               remaining_workspace: RemainingClinicalWorkspace | None = None, launch_service=None) -> FastAPI:
     app = FastAPI(title="JMORAIS-AI Internal API", version=API_VERSION,
                   description="Internal development adapter only. External, patient-care and production use are prohibited.",
                   openapi_url=f"{PREFIX}/openapi.json", docs_url=f"{PREFIX}/docs", redoc_url=None,
@@ -275,6 +276,18 @@ def create_app(services: ApiServices, operations: ApiOperationalServices, *, run
             raise ApiBoundaryError("INTERNAL_ERROR", "workspace request failed", 500) from exc
 
     workspace_access = require("WORKSPACE_READ")
+
+    @app.post(f"{PREFIX}/workspace/bootstrap", response_model=WorkspaceBootstrapResponse)
+    def workspace_bootstrap(body: WorkspaceBootstrapRequest, response: Response,
+                            caller: CallerContext = Depends(workspace_access)):
+        response.headers["Cache-Control"] = "no-store"
+        if launch_service is None:
+            raise ApiBoundaryError("WORKSPACE_UNAVAILABLE", "workspace unavailable", 503)
+        try:
+            launch = launch_service.get_exact(caller, body.reference)
+            return WorkspaceBootstrapResponse(references=launch.references)
+        except Exception:
+            raise ApiBoundaryError("LAUNCH_UNAVAILABLE", "launch unavailable", 403) from None
 
     @app.get(f"{PREFIX}/workspace/context", response_model=WorkspaceContextResponse)
     def workspace_context(caller: CallerContext = Depends(workspace_access)):

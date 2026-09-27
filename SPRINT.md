@@ -1,3 +1,26 @@
+# Sprint S005 — Minimal Clinical Workspace UI
+
+Status: DONE — SOFTWARE BOUNDARY — 2026-09-27.
+
+Seven read-only viewers, authenticated shell, configurable public-client OIDC
+Code + PKCE S256, prospective exact ClinicalWorkspaceLaunch and secure bootstrap.
+Existing IAM/tenant/organization authorization and clinical exact-owner reads
+remain authoritative. No clinical browser persistence or historical backfill.
+
+Evidence: 21 PostgreSQL/API/runtime tests PASS; 7 frontend tests PASS;
+15 launch/architecture unit tests PASS; typecheck, lint, production build and
+git diff --check PASS. PostgreSQL 16.14; current=head `066_workspace_launch`.
+Detailed evidence and limits: PROJECT_STATE.md; `/tmp/s005-launch-focused.log`.
+Integration uses protocol fixtures plus real PostgreSQL/authenticated API tests.
+Real-browser automation is POST_RELEASE, not a new S005 requirement.
+
+EXTERNAL OIDC CLIENT REGISTRATION = PENDING (deployment prerequisite).
+NEXT MILESTONE: PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME. Not started.
+
+---
+
+## Historical S004 checkpoint
+
 # Sprint S004 — API / Presentation Boundary
 
 Status: DONE — 2026-09-23.

@@ -82,7 +82,7 @@ def persisted():
     with owner.connect() as c:
         assert c.execute(text("SHOW server_version_num")).scalar_one().startswith("16")
         assert MigrationContext.configure(c).get_current_heads() == tuple(
-            ScriptDirectory.from_config(Config("alembic.ini")).get_heads()) == ("065_defense_reference_state",)
+            ScriptDirectory.from_config(Config("alembic.ini")).get_heads()) == ("066_workspace_launch",)
     suffix = uuid4().hex
     tenants = tuple(review_source.TenantContext(prefix + suffix, prefix + "org-" + suffix, "service",
         "INTERNAL_SERVICE", "CLINICAL_VALIDATION", "MIP-10.1", "corr-" + suffix) for prefix in ("remaining-", "other-remaining-"))

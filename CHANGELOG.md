@@ -14,6 +14,19 @@ Não registrar:
 
 ---
 
+# S005 — Minimal Clinical Workspace UI — 2026-09-27
+
+Status: DONE — SOFTWARE BOUNDARY.
+
+- Seven read-only viewers and authenticated shell over the approved S004 API.
+- Public-client OIDC Code + PKCE S256 with configurable public metadata, state/nonce validation, callback cleanup and memory-only access token.
+- Prospective ClinicalWorkspaceLaunch with exact owner validation, principal/tenant/organization binding, append-only/RLS persistence and checkpoint/replay integration. Migration `066_workspace_launch`; no historical backfill.
+- Read-only bootstrap transports stored exact references unchanged; secure errors and no-store behavior.
+- Evidence: 21 focused PostgreSQL/API/runtime tests, 7 frontend tests and 15 launch/architecture unit tests PASS; typecheck/lint/build/diff check PASS. PostgreSQL 16.14/current=head `066_workspace_launch`.
+- Software completion does not assert institutional OIDC registration or live-pilot deployment readiness.
+
+---
+
 # S004 — API / Presentation Boundary — 2026-09-23
 
 Status: DONE.

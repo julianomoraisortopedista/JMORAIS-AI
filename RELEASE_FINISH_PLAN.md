@@ -1,18 +1,34 @@
 # RELEASE_FINISH_PLAN
 
-S003 DONE — 2026-09-21. S004 DONE — 2026-09-23. UI não implementada.
+S003 DONE — 2026-09-21. S004 DONE — 2026-09-23. S005 DONE — SOFTWARE BOUNDARY — 2026-09-27.
 
 | Etapa | Classificação | Entrega necessária |
 |---|---|---|
 | S004 — API / Presentation Boundary | MUST_HAVE | DONE: sete viewers, contexto autenticado e composição exata; gate final aprovado. |
-| Minimal Clinical Workspace UI | MUST_HAVE | Interface mínima read-only sobre a boundary aprovada. |
-| Autenticação / integração local interna | MUST_HAVE | Identidade e tenant explícitos para o piloto interno. |
+| Minimal Clinical Workspace UI | MUST_HAVE | DONE — SOFTWARE BOUNDARY: sete viewers, OIDC público/PKCE e bootstrap exato validados. |
+| Autenticação / integração local interna | MUST_HAVE | Contrato de software DONE; registro externo do cliente OIDC e valores reais de runtime PENDING. |
 | Packaging / runtime configuration | MUST_HAVE | Configuração reproduzível para operação interna. |
 | Validação final de release | MUST_HAVE | Gate da composição final e evidências de operação do piloto. |
 | Pré-requisitos de produção institucional | POST_RELEASE | Planejamento separado de operação, integração e governança institucional; obrigatório antes dessa implantação. |
 | Melhorias opcionais | POST_RELEASE | Fora do escopo mínimo de fechamento. |
 
-NEXT SINGLE ACTION: MINIMAL CLINICAL WORKSPACE UI planning.
+NEXT SINGLE ACTION: PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME.
+
+## S005 closure
+
+DONE — SOFTWARE BOUNDARY. All defined software gates PASS; evidence in PROJECT_STATE.md.
+No Playwright dependency or new browser E2E framework. Browser automation remains
+POST_RELEASE under the approved finalization scope. Existing Starlette/httpx and
+ESLint development-tool deprecation notices remain POST_RELEASE maintenance.
+
+EXTERNAL OIDC CLIENT REGISTRATION = PENDING. Before the internal pilot, configure
+the real public client, issuer, scopes, registered redirect and provider browser
+exchange support; serve static UI/config/callback and API on the approved origin.
+No secrets belong in public configuration. Provide a legitimate prospective launch
+through the authorized application producer. Do not fabricate clinical references.
+These are deployment prerequisites, not unfinished S005 source requirements.
+
+Next milestone: PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME (not started).
 
 ## S004 planning — API / Presentation Boundary
 

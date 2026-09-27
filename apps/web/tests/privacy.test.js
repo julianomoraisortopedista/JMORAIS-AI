@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFile,readdir} from 'node:fs/promises';
+import {labels,renderView,navigation} from '../src/view.js';
+class Element {constructor(tag){this.tagName=tag;this.children=[];this.dataset={};this.attributes={};this.textContent='';}append(...items){this.children.push(...items);}setAttribute(k,v){this.attributes[k]=v;}}
+globalThis.document={createElement:tag=>new Element(tag)};
+test('seven accessible navigation controls and explicit empty projections',()=>{const nav=navigation();assert.equal(nav.children.length,7);assert.equal(nav.attributes['aria-label'],'Viewers clínicos');for(const viewer of Object.keys(labels)){const root=renderView(viewer,{});assert.equal(root.attributes['aria-label'],labels[viewer]);assert.ok(root.children.length);}});
+test('owner order, text-only rendering and no review commands',()=>{const root=renderView('timeline',{entries:[{as_of:'later',state_version:2},{as_of:'earlier',state_version:1}]});assert.equal(root.children[0].children[0].children[0].textContent,'later');const review=renderView('human_review',{decision:'<script>unsafe</script>',reviewer_role:'CLINICAL_REVIEWER'});assert.ok(JSON.stringify(review).includes('<script>unsafe</script>'));assert.ok(!JSON.stringify(review).includes('"tagName":"button"'));});
+test('no clinical persistence, payload logs or HTML sinks',async()=>{const files=await readdir('src');for(const f of files.filter(f=>f.endsWith('.js'))){const s=await readFile('src/'+f,'utf8');assert.ok(!/localStorage|console\.|innerHTML|insertAdjacentHTML|document\.cookie/.test(s));}const main=await readFile('src/main.js','utf8');assert.ok(!/sessionStorage\.(setItem|getItem)/.test(main));const auth=await readFile('src/auth.js','utf8');assert.equal((auth.match(/storage\.setItem/g)||[]).length,1);assert.ok(auth.includes('JSON.stringify({verifier,state,nonce,created:'));});

@@ -228,6 +228,18 @@ class PostgreSQLCryptographicReplayEngine:
             for reference_id in sorted(registry):reports.append(self.replay_audit_defense_reference(reference_id))
         except Exception:
             reports.append(self._report("mandatory_family:audit_defense_persisted_references",(),(ReplayFailure("audit_defense_persisted_references",None,("UNVERIFIABLE_STREAM",)),)))
+        try:
+            with self._engine.connect() as connection:
+                rows = connection.execute(text("SELECT launch_id FROM clinical_workspace_launches")).scalars().all()
+                anchors = connection.execute(text("SELECT stream_id FROM cryptographic_stream_checkpoints WHERE stream_namespace='clinical_workspace_launches'")).scalars().all()
+            registry = set(rows) | set(anchors)
+            if not registry:
+                reports.append(self._report("mandatory_family:clinical_workspace_launches", (), ()))
+            for identifier in sorted(registry):
+                reports.append(self.replay_workspace_launch(identifier))
+        except Exception:
+            reports.append(self._report("mandatory_family:clinical_workspace_launches", (),
+                (ReplayFailure("clinical_workspace_launches", None, ("UNVERIFIABLE_STREAM",)),)))
         for definition in _MANDATORY_TRUST_STREAMS:
             try:
                 with self._engine.connect() as connection:
@@ -251,6 +263,19 @@ class PostgreSQLCryptographicReplayEngine:
             integrity_status=status,
             overall_decision=status,
         )
+
+    def replay_workspace_launch(self, identifier):
+        from jmoraIs.infrastructure.workspace_launch import verify_launch_row
+        failures = ()
+        try:
+            with self._engine.connect() as connection:
+                row = connection.execute(text("SELECT * FROM clinical_workspace_launches WHERE launch_id=:id"), {"id": identifier}).mappings().one_or_none()
+                checkpoints = connection.execute(text("SELECT stream_position,head_hash FROM cryptographic_stream_checkpoints WHERE stream_namespace='clinical_workspace_launches' AND stream_id=:id"), {"id": identifier}).all()
+            verify_launch_row(row, checkpoints)
+        except Exception:
+            failures = (ReplayFailure(identifier, None, ("LAUNCH_INTEGRITY_OR_COMPLETENESS_FAILURE",)),)
+        return self._report("clinical_workspace_launches:" + identifier,
+                            () if failures else (identifier,), failures)
 
     @staticmethod
     def _audit_defense_reference_hash(row):

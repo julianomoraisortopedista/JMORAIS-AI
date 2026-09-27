@@ -1,4 +1,6 @@
 from __future__ import annotations
+from .workspace_launch import ClinicalWorkspaceLaunchService
+from jmoraIs.infrastructure.workspace_launch import PostgreSQLClinicalWorkspaceLaunchRepository
 
 from dataclasses import dataclass
 
@@ -98,6 +100,8 @@ class HomologationComposition:
     remaining_workspace: RemainingClinicalWorkspace
     draft_attestor: object
     draft_references: PostgreSQLGovernedLLMDraftExactReferenceRepository
+    launch_service: ClinicalWorkspaceLaunchService
+    launch_producer: ClinicalWorkspaceLaunchService
 
 
 def compose_homologation(config: InternalApiConfig, *, metrics: ApiMetricsPort,
@@ -215,7 +219,11 @@ def compose_homologation(config: InternalApiConfig, *, metrics: ApiMetricsPort,
     operations = ApiOperationalServices(authentication, authorization, readiness, audit, metrics,
                                          structured_log, tenant_binding)
     startup_self_check(readiness.check())
+    launch_service = ClinicalWorkspaceLaunchService(PostgreSQLClinicalWorkspaceLaunchRepository(reader),
+        authorization, workspace, remaining_workspace)
+    launch_producer = ClinicalWorkspaceLaunchService(PostgreSQLClinicalWorkspaceLaunchRepository(engine),
+        authorization, workspace, remaining_workspace)
     return HomologationComposition(create_app(api_services, operations, workspace=workspace,
-        remaining_workspace=remaining_workspace), api_services, operations,
+        remaining_workspace=remaining_workspace, launch_service=launch_service), api_services, operations,
         reviewer_authorization, reviewer_governance, authenticated_reviewer,database_credentials,pseudonymization_keys,
-        workspace,remaining_workspace,draft_attestor,draft_references)
+        workspace,remaining_workspace,draft_attestor,draft_references,launch_service,launch_producer)

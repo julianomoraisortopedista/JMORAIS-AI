@@ -1,0 +1,9 @@
+{
+  "name": "jmorais-clinical-workspace", "version": "0.1.0", "private": true, "type": "module",
+  "engines": {"node": ">=22"}, "packageManager": "pnpm@10.17.1",
+  "scripts": {
+    "test": "node --test tests/*.test.js", "typecheck": "tsc --noEmit",
+    "lint": "eslint src tests scripts", "build": "node scripts/build.js"
+  },
+  "devDependencies": {"typescript": "5.9.2", "eslint": "9.36.0"}
+}

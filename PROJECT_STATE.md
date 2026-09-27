@@ -10,10 +10,11 @@ ULTRA LOW TOKEN EXECUTION MODE
 
 ## Current Sprint
 
-S004 — API / Presentation Boundary
+S005 — Minimal Clinical Workspace UI
 
 ## Sprint Status
 
+S005 = DONE — SOFTWARE BOUNDARY
 S004 IMPLEMENTATION = COMPLETE
 S004 FINAL VALIDATION = PASS
 S004 = DONE
@@ -43,6 +44,21 @@ S003 remains DONE
 - Clinical Workspace remaining read-only viewers — PASS
 
 ## Current Checkpoint
+
+S005 final software checkpoint — PASS (2026-09-27).
+
+- OIDC public-client Authorization Code + PKCE S256 implemented with public runtime configuration, state/nonce checks, signed RS256 ID-token verification and callback URL cleanup. Access token remains in memory; a five-minute, single-use PKCE transaction survives redirect in sessionStorage without tokens, clinical data or launch references. Existing backend Bearer/IAM validation remains authoritative.
+- Seven read-only Workspace viewers and authenticated shell implemented in `apps/web` using native ES modules. Complete owner-issued launch reference is imported as JSON and transported unchanged; no patient search, scalar reconstruction, clinical mutation or clinical browser persistence.
+- Prospective ClinicalWorkspaceLaunch service validates stored references through approved exact viewers; same-principal/tenant/organization/purpose/policy authorization is mandatory. Bootstrap returns stored transports with secure errors/no-store. Homologation/production composition uses existing IAM and exact owners. No historical backfill.
+- PostgreSQL focused evidence recovered from `/tmp/s005-launch-focused.log`: 21 passed, 1 existing Starlette/httpx warning, 8.85s. PostgreSQL 16.14; Alembic current == head == `066_workspace_launch` in the isolated test environment. No test rerun at closure.
+- That run covers launch creation, authorized bootstrap to all seven S004 viewers, wrong principal/tenant/organization and forged-reference denials, RLS/NOBYPASSRLS, append-only rejection, fresh exact reread and tamper/deletion/missing-checkpoint detection through the existing replay engine. S004 API/runtime regressions included. No separate global replay or full backend suite claimed for S005.
+- Retained local evidence: 7 frontend tests PASS; 10 launch unit tests + 5 API architecture tests PASS; TypeScript typecheck PASS; ESLint PASS. Development dependencies installed and pnpm lockfile present.
+- Final production build PASS using the exact package.json build script (`node scripts/build.js`); pnpm wrapper stalled and was cancelled without dependency changes. Final git diff --check PASS. Generated dist/node_modules are ignored; no obvious secret, environment or diagnostic artifact in the candidate source paths.
+- Integration evidence combines mocked standards-compliant browser OIDC/client tests with real PostgreSQL/authenticated HTTP launch/bootstrap/viewer tests. Real-browser automation is POST_RELEASE per the approved finalization scope; Playwright is not a dependency and was not required or executed. No real institutional IdP connection is claimed.
+- EXTERNAL OIDC CLIENT REGISTRATION = PENDING. Real issuer/client_id/scopes/redirect registration and same-origin static/runtime deployment remain prerequisites for the internal pilot, not S005 software blockers.
+- Earlier execution-environment blocks are resolved for the required gate. No commit/push/merge/reset/clean; no next milestone started.
+
+### S004 completed checkpoint
 
 S004 final milestone — PASS (2026-09-23). S004 DONE.
 
@@ -129,11 +145,11 @@ Focused validation: 15 tests passed (1 architecture/source-hygiene, 14 PostgreSQ
 
 ## Current Blocker
 
-None. S004 implementation and final validation complete.
+None for S005 software boundary. Institutional OIDC registration and pilot deployment remain pending.
 
 ## Next Action
 
-MINIMAL CLINICAL WORKSPACE UI — plan the next milestone; no implementation started.
+PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME — not started.
 
 ## Frozen / Approved
 
