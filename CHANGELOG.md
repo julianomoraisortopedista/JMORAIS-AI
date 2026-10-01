@@ -14,6 +14,19 @@ Não registrar:
 
 ---
 
+
+# Product Release Closure — 2026-10-01
+
+Status: SOFTWARE RELEASE CANDIDATE = PASS. Live internal pilot pending external deployment configuration.
+
+- Added `make release-candidate`: deterministic fail-fast stages, isolated PostgreSQL databases, sanitized structured results and one manual CI workflow calling the same gate.
+- Added prospective lifecycle exact references/current eligibility authority (067), with atomic projection/checkpoint updates, no historical backfill and fail-closed revocation/tamper checks.
+- Separated IAM policy from Evidence ST-02 and Gateway MIP-10.1 while preserving owner integrity, exact references, tenant authorization and RLS.
+- Corrected offline verifier SELECT visibility for Medical Document exact dependencies (068); no new verifier writes or API privilege expansion.
+- Validated actual production startup, TLS health/readiness, same-origin UI, bootstrap and seven read-only viewers; finalized operator runbook and configuration template.
+- Final gate: all 19 stages PASS; 78 focused subsystem/runtime tests plus scanner regression PASS; frontend build/tests/typecheck/lint, pip check, compileall, secret/artifact/diff checks PASS. PostgreSQL 16.14; current=head 068. Existing historical milestone evidence retained.
+
+
 # S005 — Minimal Clinical Workspace UI — 2026-09-27
 
 Status: DONE — SOFTWARE BOUNDARY.
@@ -278,3 +291,9 @@ Não remover histórico.
 Não reescrever versões anteriores.
 
 Este documento é append-only.
+
+## 2026-10-01 — Internal pilot deployment preparation
+
+- Added fail-closed production process controls and explicit existing-IAM physician/owner-launch operator commands; no clinical mutation or inferred references.
+- Consolidated configuration names, deployment prerequisites and live acceptance/recovery instructions.
+- 18 focused operator tests and compileall PASS; secret scan zero findings and diff check PASS. Accepted 19-stage NON-LIVE release evidence retained; LIVE deployment not claimed.

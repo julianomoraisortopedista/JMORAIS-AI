@@ -38,3 +38,23 @@ supply-chain-local: security-tools
 	@"$(VENV)/bin/bandit" -r jmoraIs scripts --severity-level medium --confidence-level medium -f json -o artifacts/bandit.json
 	@"$(VENV_PYTHON)" scripts/scan_release_sensitive_data.py
 	@"$(VENV)/bin/cyclonedx-py" requirements requirements-production.lock --output-format JSON --output-file artifacts/python-sbom.cdx.json --validate
+
+.PHONY: release-candidate
+release-candidate:
+	@"$(VENV_PYTHON)" scripts/release_candidate.py
+
+.PHONY: pilot-check pilot-up pilot-status pilot-down
+pilot-check:
+	@"$(VENV_PYTHON)" scripts/pilot.py check
+pilot-up:
+	@"$(VENV_PYTHON)" scripts/pilot.py up $(PILOT_FLAGS)
+pilot-status:
+	@"$(VENV_PYTHON)" scripts/pilot.py status $(PILOT_FLAGS)
+pilot-down:
+	@"$(VENV_PYTHON)" scripts/pilot.py down
+
+.PHONY: pilot-link-physician pilot-create-launch
+pilot-link-physician:
+	@"$(VENV_PYTHON)" -m scripts.pilot_admin link-physician $(PILOT_FLAGS)
+pilot-create-launch:
+	@"$(VENV_PYTHON)" -m scripts.pilot_admin create-launch $(PILOT_FLAGS)

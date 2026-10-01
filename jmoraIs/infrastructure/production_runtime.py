@@ -10,7 +10,7 @@ from sqlalchemy import text
 
 from jmoraIs.api.security import ReadinessCheck
 from jmoraIs import __version__
-CURRENT_SCHEMA_REVISION = "066_workspace_launch"
+CURRENT_SCHEMA_REVISION = "068_offline_medical_dependencies"
 
 
 EXPECTED_APPEND_ONLY_TABLES = (

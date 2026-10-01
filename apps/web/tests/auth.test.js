@@ -17,7 +17,7 @@ async function fixture(){
    exchange=options;const now=Math.floor(Date.now()/1000);
    const input=b64(JSON.stringify({alg:'RS256',kid:'fixture'}))+'.'+b64(JSON.stringify({iss:config.issuer,aud:config.client_id,sub:'doctor',nonce:tokenNonce??nonce,iat:now,exp:now+300}));
    const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,Buffer.from(input));
-   return json({access_token:'test-only-access-token',token_type:'Bearer',expires_in:300,id_token:input+'.'+b64(signature)});
+   return json({access_token:'local_test_only_browser_token',token_type:'Bearer',expires_in:300,id_token:input+'.'+b64(signature)});
   }
   throw new Error('Unexpected fixture request');
  };
@@ -36,12 +36,12 @@ test('Code + PKCE S256, signed nonce, one-use callback and memory bearer',async(
  assert.equal(f.url.searchParams.has('client_secret'),false);
  const callback=new URL(config.redirect_uri+'?code=one-use&state='+t.state);let cleared;
  await f.auth.callback(callback,p=>{cleared=p;});assert.equal(cleared,'/callback');
- assert.equal(f.storage.data.size,0);assert.equal(f.auth.bearer(),'test-only-access-token');
+ assert.equal(f.storage.data.size,0);assert.equal(f.auth.bearer(),'local_test_only_browser_token');
  assert.equal(f.exchange.body.get('code_verifier'),t.verifier);assert.equal(f.exchange.body.has('client_secret'),false);
  const calls=[];const client=new WorkspaceClient(()=>f.auth.bearer(),async(url,options)=>{calls.push({url,options});return json({});});
  const reference=launchReference({launch_id:'cwl_test',version:1,tenant_id:'tenant',integrity_hash:'a'.repeat(64)});
  await client.bootstrap(reference);assert.deepEqual(JSON.parse(calls[0].options.body),{reference});
- assert.equal(calls[0].options.headers.Authorization,'Bearer test-only-access-token');assert.equal(calls[0].options.cache,'no-store');
+ assert.equal(calls[0].options.headers.Authorization,'Bearer local_test_only_browser_token');assert.equal(calls[0].options.cache,'no-store');
  assert.equal(Object.keys(calls[0].options.headers).some(x=>x.toLowerCase().startsWith('x-')),false);
  for(const viewer of viewers)await client.view(viewer,{reference_id:'transport-unchanged'},new AbortController().signal);
  assert.equal(calls.length,8);assert.ok(calls.every(c=>c.options.method==='POST'));

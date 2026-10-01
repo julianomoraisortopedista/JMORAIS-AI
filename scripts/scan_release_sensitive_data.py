@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail closed on likely secrets, patient identifiers, dumps, or local paths."""
 from __future__ import annotations
-import re, subprocess
+import ast, re, subprocess
 from pathlib import Path
 
 PATTERNS = {
@@ -15,6 +15,18 @@ PATTERNS = {
 ALLOW = {"scripts/scan_release_sensitive_data.py", "jmoraIs/structured_logging.py"}
 SYNTHETIC_VALUES = ("local_ci_only", "ci_test_only", "local_test_only", "replace_me")
 
+def is_type_annotation(path, source, match):
+    """A Python annotation without a value is not credential material."""
+    if path.suffix != '.py': return False
+    line = source.count('\n', 0, match.start()) + 1
+    column = match.start() - (source.rfind('\n', 0, match.start()) + 1)
+    try: tree = ast.parse(source)
+    except SyntaxError: return False
+    return any(isinstance(node, ast.AnnAssign) and node.value is None
+               and node.lineno == line and node.col_offset == column
+               for node in ast.walk(tree))
+
+
 def main() -> int:
     names=subprocess.check_output(["git","ls-files","--cached","--others","--exclude-standard"],text=True).splitlines()
     findings=[]
@@ -25,6 +37,8 @@ def main() -> int:
         except UnicodeDecodeError: continue
         for kind,pattern in PATTERNS.items():
             for match in pattern.finditer(text):
+                if kind == "token" and is_type_annotation(path, text, match):
+                    continue
                 if any(value in match.group(0) for value in SYNTHETIC_VALUES):
                     continue
                 findings.append((name,text.count("\n",0,match.start())+1,kind))

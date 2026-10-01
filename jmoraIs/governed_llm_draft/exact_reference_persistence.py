@@ -55,7 +55,7 @@ class PostgreSQLGovernedLLMDraftExactReferenceRepository:
         canonical, invocation, gateway, lifecycle = self._validate_exact(draft.draft_id)
         if canonical != draft:
             raise GovernedLLMDraftReferenceRejected("draft does not match canonical persistence")
-        if tenant.tenant_id != draft.tenant_id or tenant.policy_version != draft.policy_version:
+        if tenant.tenant_id != draft.tenant_id or exact_invocation.policy_version != draft.policy_version:
             raise GovernedLLMDraftReferenceRejected("draft tenant or policy mismatch")
         if exact_invocation.invocation_id != draft.invocation_id:
             raise GovernedLLMDraftReferenceRejected("draft invocation reference mismatch")
@@ -113,7 +113,8 @@ class PostgreSQLGovernedLLMDraftExactReferenceRepository:
         if not validate_governed_draft_reference(reference):
             raise GovernedLLMDraftReferenceRejected("authentic owner-issued governed draft reference is required")
         tenant = current_tenant_context()
-        if reference.tenant_id != tenant.tenant_id or reference.policy_version != tenant.policy_version:
+        if (reference.tenant_id != tenant.tenant_id or reference.invocation_reference is None
+                or reference.policy_version != reference.invocation_reference.policy_version):
             raise GovernedLLMDraftReferenceRejected("governed draft tenant or policy mismatch")
         with self._engine.connect() as connection:
             row = connection.execute(text(
@@ -194,7 +195,7 @@ class PostgreSQLGovernedLLMDraftExactReferenceRepository:
                 "SELECT * FROM persisted_gateway_inputs WHERE persisted_gateway_input_id=:id"
             ), {"id": invocation["persisted_gateway_input_id"] if invocation else None}).mappings().first()
         draft = self._decode_draft(row)
-        if draft.tenant_id != tenant.tenant_id or draft.policy_version != tenant.policy_version:
+        if draft.tenant_id != tenant.tenant_id or draft.policy_version != draft.review_policy.policy_version:
             raise GovernedLLMDraftReferenceRejected("governed draft tenant or policy mismatch")
         decoded_chain = tuple(self._decode_draft(value) for value in stream_rows)
         if len(decoded_chain) != draft.version:

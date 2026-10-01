@@ -45,6 +45,30 @@ S003 remains DONE
 
 ## Current Checkpoint
 
+PRODUCT RELEASE CLOSURE = DONE — 2026-10-01
+SOFTWARE RELEASE CANDIDATE = PASS
+LIVE INTERNAL PILOT READY = PENDING — EXTERNAL DEPLOYMENT CONFIGURATION
+
+- Single repository-owned command: `make release-candidate`. All 19 stages PASS in `/tmp/release-candidate-final.log`; the command recreates the evidence without relying on that temporary log.
+- PostgreSQL 16.14; Alembic current=head `068_offline_medical_dependencies`. Migration 067 retained; no synthetic lifecycle backfill.
+- Lifecycle authority: 10 focused proofs PASS. Historical exact reference and read-only current projection are separate; revoked/withdrawn/superseded evidence fails closed. Restart, tenant isolation, NOBYPASSRLS, append-only, missing authority and deliberate tamper covered.
+- Policy domains: 53 focused tests PASS. Authenticated IAM policy is independent of ST-02 Evidence and MIP-10.1 Gateway/Invocation; same authorized launch retains references unchanged. Owner-specific policy, provenance and integrity checks remain enforced.
+- Cryptographic replay: 9 focused proofs PASS. Owner and offline verifier evidence valid; missing/tampered authority rejected. Migration 068 grants only SELECT on guideline/orthopedic exact-reference dependencies of Medical Document replay, with no verifier DML or API RLS changes.
+- Backend/runtime: 6 focused proofs PASS, including actual production ASGI process over TLS, startup offline replay, liveness/readiness, same-origin static serving, authorized bootstrap, all seven exact viewers, wrong-principal/tenant and forged-reference rejection.
+- Frontend production build, Node tests, typecheck and lint PASS. pip check, compileall, secret scan (zero findings), generated/private artifact check and git diff --check PASS. Scanner regression test PASS; annotations are distinguished from assigned credential values.
+- First release-command run stopped at CRYPTOGRAPHIC_REPLAY/PERMISSION. Exact missing SELECT corrected; subsequent secret-scan false positives corrected without suppressing credential assignments.
+- Operator instructions: `INTERNAL_PILOT_RUNBOOK.md`; configuration names: `config/internal-pilot.env.example`. Manual CI workflow invokes the same gate; remote CI was not executed.
+- Existing S001–S005 accepted evidence retained. No historical full-suite rerun, new feature sprint, commit, push or merge.
+
+### Deployment preparation — 2026-10-01
+
+- Existing software release gate remains 19/19 PASS; no historical gate repeated.
+- Operator wrappers added: pilot-check/up/status/down, explicit tenant-scoped physician link and owner-reference launch command. Existing production composition and IAM/owner services retained; no new persistence or infrastructure.
+- Focused operator proof: 18 tests PASS (15 initial + 3 process lifecycle), compileall PASS, sensitive-data scan zero findings, diff check PASS. Process and transaction wrapper tests use controlled doubles; real external deployment/provisioning has NOT been executed.
+- Single empty fail-closed template: config/internal-pilot.env.example. Runbook includes environment contract, identity/launch procedure, shutdown and recovery. DEPLOYMENT_PREREQUISITES.md consolidates external host/TLS/OIDC/provider/DB/IAM/clinical-owner inputs.
+- Candidate list prepared at /tmp/jmorais-release-checkpoint-candidates.nul; no staging/commit authorization used. No commit/push/merge.
+- LIVE INTERNAL PILOT READY remains PENDING. Next action: institutional owner supplies the approved deployment prerequisites through secure configuration, then execute real authenticated pilot acceptance. Checkpoint authorization is a separate decision.
+
 S005 final software checkpoint — PASS (2026-09-27).
 
 - OIDC public-client Authorization Code + PKCE S256 implemented with public runtime configuration, state/nonce checks, signed RS256 ID-token verification and callback URL cleanup. Access token remains in memory; a five-minute, single-use PKCE transaction survives redirect in sessionStorage without tokens, clinical data or launch references. Existing backend Bearer/IAM validation remains authoritative.
@@ -145,11 +169,15 @@ Focused validation: 15 tests passed (1 architecture/source-hygiene, 14 PostgreSQ
 
 ## Current Blocker
 
-None for S005 software boundary. Institutional OIDC registration and pilot deployment remain pending.
+None in the validated software release candidate. Real external OIDC registration,
+approved managed runtime configuration/TLS, identity/tenant provisioning and deployment
+remain external prerequisites; live pilot readiness is not claimed.
 
 ## Next Action
 
-PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME — not started.
+Configure the external deployment prerequisites using INTERNAL_PILOT_RUNBOOK.md,
+then require `make release-candidate` PASS before opening the authorized internal pilot.
+No S006 or new backend/UI functionality is authorized.
 
 ## Frozen / Approved
 

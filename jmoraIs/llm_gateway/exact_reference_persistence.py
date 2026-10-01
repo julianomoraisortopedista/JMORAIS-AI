@@ -10,7 +10,7 @@ from jmoraIs.gateway_input import persisted_gateway_input_integrity_hash
 from jmoraIs.tenancy.context import current_tenant_context
 
 from .domain import InvocationStatus, LLMInvocation, LLMOutputClassification
-from .application import PromptGovernanceService
+from .application import CanonicalLLMGateway, PromptGovernanceService
 from .exact_reference import (
     LegacyMissingPersistedLLMInvocationReference,
     LLMInvocationReferenceRejected,
@@ -89,7 +89,7 @@ class PostgreSQLLLMInvocationExactReferenceRepository:
         if not validate_llm_invocation_reference(reference):
             raise LLMInvocationReferenceRejected("authentic owner-issued invocation reference is required")
         tenant = current_tenant_context()
-        if reference.tenant_id != tenant.tenant_id or reference.policy_version != tenant.policy_version:
+        if reference.tenant_id != tenant.tenant_id or reference.policy_version != CanonicalLLMGateway.POLICY:
             raise LLMInvocationReferenceRejected("invocation tenant or policy mismatch")
         with self._engine.connect() as connection:
             row = connection.execute(text(
@@ -137,7 +137,7 @@ class PostgreSQLLLMInvocationExactReferenceRepository:
             raise LLMInvocationReferenceRejected("invocation context tenant mismatch")
         if (
             context["policy_version"] != invocation.policy_version
-            or tenant.policy_version != invocation.policy_version
+            or invocation.policy_version != CanonicalLLMGateway.POLICY
             or context["correlation_id"] != invocation.correlation_id
         ):
             raise LLMInvocationReferenceRejected("invocation context linkage mismatch")

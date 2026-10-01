@@ -7,12 +7,12 @@ S003 DONE — 2026-09-21. S004 DONE — 2026-09-23. S005 DONE — SOFTWARE BOUND
 | S004 — API / Presentation Boundary | MUST_HAVE | DONE: sete viewers, contexto autenticado e composição exata; gate final aprovado. |
 | Minimal Clinical Workspace UI | MUST_HAVE | DONE — SOFTWARE BOUNDARY: sete viewers, OIDC público/PKCE e bootstrap exato validados. |
 | Autenticação / integração local interna | MUST_HAVE | Contrato de software DONE; registro externo do cliente OIDC e valores reais de runtime PENDING. |
-| Packaging / runtime configuration | MUST_HAVE | Configuração reproduzível para operação interna. |
-| Validação final de release | MUST_HAVE | Gate da composição final e evidências de operação do piloto. |
+| Packaging / runtime configuration | MUST_HAVE | DONE: comando único, runbook e template público; valores reais de implantação pendentes. |
+| Validação final de release | MUST_HAVE | DONE: make release-candidate PASS em ambiente NON-LIVE, incluindo processo real e sete viewers. |
 | Pré-requisitos de produção institucional | POST_RELEASE | Planejamento separado de operação, integração e governança institucional; obrigatório antes dessa implantação. |
 | Melhorias opcionais | POST_RELEASE | Fora do escopo mínimo de fechamento. |
 
-NEXT SINGLE ACTION: PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME.
+NEXT SINGLE ACTION: Configure external deployment prerequisites through INTERNAL_PILOT_RUNBOOK.md.
 
 ## S005 closure
 
@@ -28,7 +28,9 @@ No secrets belong in public configuration. Provide a legitimate prospective laun
 through the authorized application producer. Do not fabricate clinical references.
 These are deployment prerequisites, not unfinished S005 source requirements.
 
-Next milestone: PRODUCT RELEASE CLOSURE / INTERNAL PILOT RUNTIME (not started).
+Product Release Closure: DONE — 2026-10-01. SOFTWARE RELEASE CANDIDATE = PASS.
+LIVE INTERNAL PILOT READY = PENDING — EXTERNAL DEPLOYMENT CONFIGURATION.
+The manual CI workflow calls the same `make release-candidate` gate; remote CI execution remains unclaimed.
 
 ## S004 planning — API / Presentation Boundary
 
@@ -170,3 +172,13 @@ health/readiness, a small transport/error/composition layer and focused tests.
 No planned migration, domain change, new infrastructure or UI.
 
 NEXT SINGLE ACTION: MINIMAL CLINICAL WORKSPACE UI planning. Do not start another backend feature.
+
+## External deployment handoff — 2026-10-01
+
+Software RC remains PASS (19/19 accepted stages). Operator preparation is available:
+`make pilot-check`, `pilot-up`, `pilot-status`, `pilot-down`, explicit identity and
+launch commands. 18 focused wrapper tests PASS; no real provider/tenant provisioning
+claimed. Use INTERNAL_PILOT_RUNBOOK.md and the single config template.
+LIVE acceptance remains pending only the concrete deployment inputs and real
+acceptance in DEPLOYMENT_PREREQUISITES.md. No S006, extra features or new infrastructure.
+The explicit Git candidate is prepared but neither staged nor committed.

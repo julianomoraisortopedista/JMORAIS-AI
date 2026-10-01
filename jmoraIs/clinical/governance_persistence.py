@@ -148,7 +148,76 @@ class SQLAlchemyConflictAdjudicationRepository:
 
 
 class SQLAlchemyGovernedEvidenceLifecycleRepository:
-    def __init__(self, engine): self._sessions = sessionmaker(bind=engine, expire_on_commit=False)
+    def __init__(self, engine):
+        self._engine = engine
+        self._sessions = sessionmaker(bind=engine, expire_on_commit=False)
+
+    def get_exact(self, reference):
+        from .lifecycle_exact import PersistedEvidenceLifecycleReference, LifecycleAuthorityRejected, verify_event
+        from jmoraIs.tenancy.context import current_tenant_context
+        tenant = current_tenant_context()
+        if not isinstance(reference, PersistedEvidenceLifecycleReference) or reference.tenant_id != tenant.tenant_id:
+            raise LifecycleAuthorityRejected('tenant-bound lifecycle reference required')
+        with self._engine.connect() as connection:
+            row = connection.execute(text("""SELECT * FROM governed_evidence_lifecycle_events
+                WHERE tenant_id=:tenant AND event_id=:event"""),
+                dict(tenant=tenant.tenant_id, event=reference.event_id)).mappings().one_or_none()
+            event, _ = verify_event(row, reference)
+            anchor = connection.execute(text("""SELECT head_hash FROM cryptographic_stream_checkpoints
+                WHERE stream_namespace='governed_evidence_lifecycle_events'
+                AND stream_id=:id AND stream_position=:position"""),
+                dict(id=reference.governed_evidence_id, position=reference.stream_position)).scalar_one_or_none()
+            if anchor != reference.event_hash:
+                raise LifecycleAuthorityRejected('lifecycle checkpoint missing or inconsistent')
+        return event
+
+    def reference_for(self, event):
+        from .lifecycle_exact import LifecycleAuthorityRejected, verify_event
+        from jmoraIs.tenancy.context import current_tenant_context
+        tenant = current_tenant_context()
+        with self._engine.connect() as connection:
+            row = connection.execute(text("""SELECT * FROM governed_evidence_lifecycle_events
+                WHERE tenant_id=:tenant AND event_id=:event"""),
+                dict(tenant=tenant.tenant_id, event=event.event_id)).mappings().one_or_none()
+        canonical, reference = verify_event(row)
+        if canonical != event:
+            raise LifecycleAuthorityRejected('event differs from canonical persistence')
+        self.get_exact(reference)
+        return reference
+
+    def resolve_persisted_reference(self, payload):
+        from .lifecycle_exact import PersistedEvidenceLifecycleReference, LifecycleAuthorityRejected
+        if not isinstance(payload, dict):
+            raise LifecycleAuthorityRejected('LEGACY_MISSING_EXACT_LIFECYCLE_REFERENCE')
+        reference = PersistedEvidenceLifecycleReference(**payload)
+        return self.get_exact(reference)
+
+    def get_current_eligibility(self, evidence):
+        from .lifecycle_exact import LifecycleAuthorityRejected, verify_event
+        from jmoraIs.tenancy.context import current_tenant_context
+        tenant = current_tenant_context()
+        with self._engine.connect() as connection:
+            # One statement observes pointer, exact event and completeness together.
+            row = connection.execute(text("""SELECT e.* FROM evidence_lifecycle_current p
+                JOIN governed_evidence_lifecycle_events e ON e.event_id=p.event_id
+                  AND e.tenant_id=p.tenant_id AND e.governed_evidence_id=p.governed_evidence_id
+                  AND e.stream_position=p.stream_position AND e.event_hash=p.event_hash
+                JOIN cryptographic_stream_checkpoints c ON c.stream_namespace='evidence_lifecycle_current'
+                  AND c.stream_id=p.tenant_id||'|'||p.governed_evidence_id
+                  AND c.stream_position=p.stream_position AND c.head_hash=p.event_hash
+                WHERE p.tenant_id=:tenant AND p.governed_evidence_id=:id
+                  AND NOT EXISTS (SELECT 1 FROM cryptographic_stream_checkpoints newer
+                    WHERE newer.stream_namespace=c.stream_namespace AND newer.stream_id=c.stream_id
+                      AND newer.stream_position>p.stream_position)"""),
+                dict(tenant=tenant.tenant_id, id=evidence.governed_evidence_id)).mappings().one_or_none()
+        if row is None:
+            raise LifecycleAuthorityRejected('current lifecycle authority missing or inconsistent')
+        event, reference = verify_event(row)
+        self.get_exact(reference)
+        if event.policy_version != evidence.policy_version:
+            raise LifecycleAuthorityRejected('current lifecycle owner policy mismatch')
+        return event
+
     def append(self, item):
         SQLAlchemyGovernedDecisionAuditRepository._append(self, GovernedEvidenceLifecycleEventRow, "governed_evidence_id", item.governed_evidence_id, item)
     def history(self, governed_evidence_id):

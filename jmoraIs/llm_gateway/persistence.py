@@ -101,7 +101,8 @@ class PostgreSQLLLMInvocationContextRepository:
         if value.request_id==value.correlation_id:raise LLMPolicyRejected("request and correlation identities must remain distinct")
         try:trusted=current_tenant_context()
         except MissingTenantContext as exc:raise LLMPolicyRejected("trusted tenant context is required for invocation context persistence") from exc
-        expected=(trusted.tenant_id,trusted.principal_id,trusted.purpose,trusted.policy_version,trusted.correlation_id)
+        from .application import CanonicalLLMGateway
+        expected=(trusted.tenant_id,trusted.principal_id,trusted.purpose,CanonicalLLMGateway.POLICY,trusted.correlation_id)
         actual=(value.tenant_id,value.principal_id,value.purpose,value.policy_version,value.correlation_id)
         if actual!=expected:raise LLMPolicyRejected("invocation context does not match trusted tenant context")
         with self._engine.begin() as c:

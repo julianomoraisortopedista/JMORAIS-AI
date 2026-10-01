@@ -240,6 +240,18 @@ class PostgreSQLCryptographicReplayEngine:
         except Exception:
             reports.append(self._report("mandatory_family:clinical_workspace_launches", (),
                 (ReplayFailure("clinical_workspace_launches", None, ("UNVERIFIABLE_STREAM",)),)))
+        try:
+            with self._engine.connect() as connection:
+                pointers = connection.execute(text("SELECT tenant_id||'|'||governed_evidence_id FROM evidence_lifecycle_current")).scalars().all()
+                anchors = connection.execute(text("SELECT stream_id FROM cryptographic_stream_checkpoints WHERE stream_namespace='evidence_lifecycle_current'")).scalars().all()
+            registry = set(pointers) | set(anchors)
+            if not registry:
+                reports.append(self._report('mandatory_family:evidence_lifecycle_current', (), ()))
+            for identifier in sorted(registry):
+                reports.append(self.replay_evidence_lifecycle_current(identifier))
+        except Exception:
+            reports.append(self._report('mandatory_family:evidence_lifecycle_current', (),
+                (ReplayFailure('evidence_lifecycle_current', None, ('UNVERIFIABLE_STREAM',)),)))
         for definition in _MANDATORY_TRUST_STREAMS:
             try:
                 with self._engine.connect() as connection:
@@ -263,6 +275,35 @@ class PostgreSQLCryptographicReplayEngine:
             integrity_status=status,
             overall_decision=status,
         )
+
+    def replay_evidence_lifecycle_current(self, identifier):
+        from jmoraIs.clinical.lifecycle_exact import verify_event
+        failures = ()
+        try:
+            tenant, evidence = identifier.split('|', 1)
+            with self._engine.connect() as connection:
+                pointer = connection.execute(text("""SELECT * FROM evidence_lifecycle_current
+                    WHERE tenant_id=:tenant AND governed_evidence_id=:id"""),
+                    dict(tenant=tenant, id=evidence)).mappings().one_or_none()
+                anchors = connection.execute(text("""SELECT stream_position,head_hash FROM cryptographic_stream_checkpoints
+                    WHERE stream_namespace='evidence_lifecycle_current' AND stream_id=:id ORDER BY stream_position"""),
+                    dict(id=identifier)).all()
+                if pointer is None or not anchors or tuple(anchors[-1]) != (pointer['stream_position'], pointer['event_hash']):
+                    raise ValueError('projection completeness')
+                rows = connection.execute(text("""SELECT * FROM governed_evidence_lifecycle_events
+                    WHERE tenant_id=:tenant AND governed_evidence_id=:id AND stream_position>=:start
+                    ORDER BY stream_position"""),
+                    dict(tenant=tenant, id=evidence, start=anchors[0][0])).mappings().all()
+                if len(rows) != len(anchors) or not rows or rows[-1]['event_id'] != pointer['event_id']:
+                    raise ValueError('projection event completeness')
+                for row, anchor in zip(rows, anchors):
+                    verify_event(row)
+                    if tuple(anchor) != (row['stream_position'], row['event_hash']):
+                        raise ValueError('projection checkpoint mismatch')
+        except Exception:
+            failures = (ReplayFailure(identifier, None, ('LIFECYCLE_AUTHORITY_INTEGRITY_OR_COMPLETENESS',)),)
+        return self._report('evidence_lifecycle_current:' + identifier,
+                            () if failures else (identifier,), failures)
 
     def replay_workspace_launch(self, identifier):
         from jmoraIs.infrastructure.workspace_launch import verify_launch_row
@@ -326,6 +367,19 @@ class PostgreSQLCryptographicReplayEngine:
         if row is not None:
             reference=PersistedGovernedEvidenceReference(row["reference_id"],row["governed_evidence_id"],row["stream_version"],row["tenant_id"],row["evidence_package_id"],row["appraisal_record_id"],row["appraisal_record_version"],row["policy_version"],row["lifecycle_event_id"],row["lifecycle_status"],row["lifecycle_integrity_hash"],row["provenance_reference"],row["governed_evidence_integrity_hash"],row["integrity_hash"],row["issued_at"])
             computed=reference_integrity(reference)
+            try:
+                from jmoraIs.clinical.lifecycle_exact import PersistedEvidenceLifecycleReference, verify_event
+                lifecycle = PersistedEvidenceLifecycleReference(**row['lifecycle_reference'])
+                with self._engine.connect() as connection:
+                    event_row = connection.execute(text("""SELECT * FROM governed_evidence_lifecycle_events
+                        WHERE tenant_id=:tenant AND event_id=:id"""),
+                        dict(tenant=tenant_id, id=lifecycle.event_id)).mappings().one_or_none()
+                verify_event(event_row, lifecycle)
+                if (lifecycle.tenant_id,lifecycle.governed_evidence_id,lifecycle.event_id,lifecycle.status,lifecycle.event_hash,lifecycle.policy_version) != (
+                    tenant_id,reference.governed_evidence_id,reference.lifecycle_event_id,reference.lifecycle_status,reference.lifecycle_integrity_hash,reference.policy_version):
+                    raise ValueError('lifecycle binding')
+            except Exception:
+                reasons.append('MISSING_OR_INVALID_EXACT_LIFECYCLE_BINDING')
             if computed!=row["integrity_hash"]:reasons.append("HASH_MISMATCH")
             if checkpoint and (checkpoint["stream_position"]!=1 or checkpoint["head_hash"]!=computed):reasons.append("STREAM_COMPLETENESS_FAILURE")
         if reasons:failures.append(ReplayFailure(reference_id,1,tuple(dict.fromkeys(reasons))))

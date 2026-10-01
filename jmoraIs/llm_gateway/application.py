@@ -102,7 +102,9 @@ class CanonicalLLMGateway:
         lowered=correlation.casefold()
         if any(token in lowered for token in ("pt_","cpf","email","@","bearer","sk-","password","token","secret")):raise LLMPolicyRejected("correlation ID contains prohibited data")
         if correlation==r.request_id:raise LLMPolicyRejected("request and correlation identities must remain distinct")
-        return LLMInvocationContext(correlation,tenant.tenant_id,tenant.principal_id,tenant.purpose,tenant.policy_version,r.request_id,self._clock())
+        # The invocation context carries the Gateway policy already checked by
+        # _guard; authenticated tenant/principal/purpose still come from IAM.
+        return LLMInvocationContext(correlation,tenant.tenant_id,tenant.principal_id,tenant.purpose,r.policy_version,r.request_id,self._clock())
     def _guard(self,r):
         if not isinstance(r,LLMRequest) or not r.policy_version or not isinstance(r.review_policy,ReviewPolicy) or not r.review_policy.policy_version:raise LLMPolicyRejected("request and review policy are mandatory")
         if not r.review_policy.human_review_required or r.review_policy.external_actionability_allowed:raise LLMPolicyRejected("human review is mandatory and external actionability forbidden")

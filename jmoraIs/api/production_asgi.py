@@ -11,4 +11,12 @@ def create():
     if not callable(factory): raise ProductionStartupError("production composition factory is invalid")
     composition = factory()
     if not isinstance(composition, ProductionComposition): raise ProductionStartupError("factory did not return canonical ProductionComposition")
+    directory = os.getenv("JMORAIS_WEB_DIST", "")
+    if directory:
+        from .pilot_static import attach_workspace
+        try:
+            attach_workspace(composition.app, directory)
+        except Exception:
+            composition.shutdown()
+            raise
     return composition.app
