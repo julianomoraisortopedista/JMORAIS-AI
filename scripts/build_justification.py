@@ -14,7 +14,11 @@ import json
 from pathlib import Path
 import sys
 
+from jmoraIs.application.coverage_document import render_coverage_html
 from jmoraIs.application.evidence_packages import ScientificEvidencePackagePort
+from jmoraIs.application.legal_basis import (
+    AnsAnalysis, CoverageContext, RolStatus, Urgency, build_legal_section, render_legal_markdown,
+)
 from jmoraIs.application.scientific_justification import JustificationRejected, build_justification, render_markdown
 from jmoraIs.application.scientific_verification import AuthoritativeReconciliationPipeline
 from jmoraIs.connect.crossref import CrossrefConnector
@@ -27,7 +31,20 @@ def main(argv=None, *, pubmed=None, crossref=None, write=print) -> int:
     parser.add_argument("--decisions", required=True, help="JSON from classify_evidence.py --out")
     parser.add_argument("--claim", help="Claim to justify (default: the claim in the decisions file)")
     parser.add_argument("--out", required=True, help="Markdown file to write")
+    parser.add_argument("--procedure", help="Procedure requested; enables the legal section and --html")
+    parser.add_argument("--rol", choices=[s.value for s in RolStatus], default=RolStatus.UNKNOWN.value)
+    parser.add_argument("--urgency", choices=[s.value for s in Urgency], default=Urgency.ELECTIVE.value)
+    parser.add_argument("--ans-analysis", choices=[s.value for s in AnsAnalysis], default=AnsAnalysis.UNKNOWN.value)
+    parser.add_argument("--no-rol-alternative", default="", help="Physician's reason why ANS-list alternatives do not fit")
+    parser.add_argument("--anvisa", default="", help="Anvisa registration of the device/technology")
+    parser.add_argument("--crm", default="", help="Prescriber registration, e.g. CRM-SP 000000")
+    parser.add_argument("--prior-request", choices=["sim", "nao"], help="Prior request filed with the insurer")
+    parser.add_argument("--autogestao", choices=["sim", "nao"], help="Self-managed (autogestão) plan")
+    parser.add_argument("--clinical-summary-file", help="Physician's clinical text to include verbatim")
+    parser.add_argument("--html", help="Printable document (HTML, save as PDF from the browser)")
     args = parser.parse_args(argv)
+    if args.html and not args.procedure:
+        parser.error("--html requires --procedure")
     try:
         records = json.loads(Path(args.decisions).read_text())
         if not isinstance(records, list) or not all(isinstance(r, dict) for r in records):
@@ -46,8 +63,24 @@ def main(argv=None, *, pubmed=None, crossref=None, write=print) -> int:
                                     clock=lambda: datetime.now(timezone.utc))
     except JustificationRejected as exc:
         parser.error(str(exc))
+    markdown = render_markdown(draft)
+    if args.procedure:
+        yes_no = {"sim": True, "nao": False, None: None}
+        context = CoverageContext(args.procedure, RolStatus(args.rol), Urgency(args.urgency), AnsAnalysis(args.ans_analysis),
+                                  args.no_rol_alternative, args.anvisa, args.crm, yes_no[args.prior_request],
+                                  yes_no[args.autogestao])
+        legal = build_legal_section(context, draft)
+        markdown += "\n" + render_legal_markdown(legal)
+        if args.html:
+            summary = Path(args.clinical_summary_file).read_text() if args.clinical_summary_file else ""
+            html_path = Path(args.html)
+            html_path.write_text(render_coverage_html(draft, legal, context, summary))
+            html_path.chmod(0o600)
+            write(f"Printable document -> {html_path}")
+        for warning in legal.warnings:
+            write("PENDING: " + warning)
     out = Path(args.out)
-    out.write_text(render_markdown(draft))
+    out.write_text(markdown)
     out.chmod(0o600)
     write(f"{len(draft.references)} reference(s) included, {len(draft.excluded)} excluded -> {out}")
     return 0

@@ -62,6 +62,21 @@ neutral and inconclusive evidence are all listed; rejected, changed, unverified 
 duplicate items appear under "Não incluídos" with the reason. No model-generated
 prose and no patient data enter the draft; it requires physician review and signature.
 
+## Legal section and printable document
+
+`jmoraIs/application/legal_basis.py` holds verbatim excerpts checked against official
+sources on 2026-10-05 (Planalto: Lei 9.656/1998 art. 10 §§ 12-13 and art. 35-C, CDC
+art. 47; STJ: Súmula 608; CNJ guide: ADI 7.265 thesis and the five cumulative
+requirements). Their hashes are pinned in tests; re-verify at the source before editing.
+From the physician's coverage facts (`--procedure --rol --ans-analysis --urgency
+--no-rol-alternative --anvisa --crm --prior-request --autogestao`) it assembles fixed
+paragraphs and, outside the ANS list, reports each STF requirement as atendido /
+pendente / não atendido. Requirement 4 is evaluated from the confirmed supporting
+references whose PubMed publication type is randomized trial, systematic review or
+meta-analysis. `--html` writes an A4 document (print to PDF) with blank identification
+lines, the physician's clinical text verbatim, evidence, legal section, references and
+a signature block. All values are HTML-escaped. Legal review is still recommended.
+
 ## Limits
 
 - Abstract-level appraisal only; full text and risk-of-bias are not assessed.

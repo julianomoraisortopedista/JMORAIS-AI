@@ -165,6 +165,7 @@ class PubMedConnector(BaseConnector):
             "volume": str(record.get("volume") or "").strip() or None,
             "issue": str(record.get("issue") or "").strip() or None,
             "pages": str(record.get("pages") or "").strip() or None,
+            "publication_types": [str(v) for v in record.get("pubtype") or [] if isinstance(v, str) and v.strip()],
             "year": year,
             "authors": authors,
         }

@@ -41,6 +41,14 @@ class JustificationRejected(ValueError):
     pass
 
 
+# PubMed publication types that count as high-level evidence (STF, ADI 7265: randomized
+# trials, systematic reviews, meta-analyses; guidelines kept separate as ATS-like sources).
+HIGH_LEVEL_TYPES = ("Randomized Controlled Trial", "Systematic Review", "Meta-Analysis")
+GUIDELINE_TYPES = ("Practice Guideline", "Guideline")
+STUDY_TYPE_PT = {"Randomized Controlled Trial": "ensaio clínico randomizado", "Systematic Review": "revisão sistemática",
+                 "Meta-Analysis": "meta-análise", "Practice Guideline": "diretriz", "Guideline": "diretriz"}
+
+
 @dataclass(frozen=True)
 class JustifiedReference:
     number: int
@@ -52,6 +60,16 @@ class JustifiedReference:
     reviewer: str
     decision: str
     model: str
+    study_types: tuple[str, ...] = ()
+
+    @property
+    def high_level(self) -> bool:
+        return any(t in HIGH_LEVEL_TYPES for t in self.study_types)
+
+    @property
+    def study_label(self) -> str:
+        labels = [STUDY_TYPE_PT[t] for t in self.study_types if t in STUDY_TYPE_PT]
+        return ", ".join(dict.fromkeys(labels))
 
 
 @dataclass(frozen=True)
@@ -142,7 +160,8 @@ def build_justification(claim: str, records: Iterable[dict], *, pubmed, pipeline
             continue
         references.append(JustifiedReference(
             len(references) + 1, pmid, decision.final_direction, record["quote"], vancouver.rendered_text,
-            publication.package.package_id, decision.reviewer_id, decision.decision.value, record["model"]))
+            publication.package.package_id, decision.reviewer_id, decision.decision.value, record["model"],
+            tuple((publication.article.raw_metadata or {}).get("publication_types") or ())))
     ledger.verify_integrity("claim-1")
     return JustificationDraft(claim, tuple(references), tuple(excluded), now)
 
@@ -162,7 +181,8 @@ def render_markdown(draft: JustificationDraft) -> str:
         if not items:
             lines.append("Nenhuma evidência confirmada nesta categoria.")
         for ref in items:
-            lines.append(f'- [{ref.number}] PMID {ref.pmid}: "{ref.quote}"')
+            kind = f" ({ref.study_label})" if ref.study_label else ""
+            lines.append(f'- [{ref.number}] PMID {ref.pmid}{kind}: "{ref.quote}"')
         lines.append("")
     lines += ["## Referências (Vancouver)", ""]
     lines += [f"{ref.number}. {ref.vancouver}" for ref in draft.references] or ["Nenhuma referência verificada."]

@@ -136,3 +136,18 @@ def test_cli_rejects_mixed_claims_and_bad_files(tmp_path):
     decisions.write_text("{}")
     with pytest.raises(SystemExit):
         cli.main(["--decisions", str(decisions), "--out", str(tmp_path / "j.md")], pubmed=PubMed(), crossref=Crossref())
+
+
+def test_cli_with_procedure_adds_legal_section_and_printable_html(tmp_path):
+    decisions = tmp_path / "d.json"
+    decisions.write_text(json.dumps([record()]))
+    summary = tmp_path / "s.txt"
+    summary.write_text("Dor refratária ao tratamento conservador.")
+    out, page, lines = tmp_path / "j.md", tmp_path / "doc.html", []
+    assert cli.main(["--decisions", str(decisions), "--out", str(out), "--procedure", "Artroplastia total do joelho",
+                     "--rol", "NAO", "--ans-analysis", "SEM_ANALISE", "--crm", "CRM-SP 1", "--html", str(page),
+                     "--clinical-summary-file", str(summary)], pubmed=PubMed(), crossref=Crossref(), write=lines.append) == 0
+    assert "## Fundamentação jurídica" in out.read_text() and "Dor refratária" in page.read_text()
+    assert any(line.startswith("PENDING:") for line in lines) and oct(page.stat().st_mode & 0o777) == "0o600"
+    with pytest.raises(SystemExit):
+        cli.main(["--decisions", str(decisions), "--out", str(out), "--html", str(page)], pubmed=PubMed(), crossref=Crossref())
