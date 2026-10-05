@@ -1,0 +1,64 @@
+name: jmorais-local-pilot
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pilot_owner
+      POSTGRES_DB: jmorais_local_synthetic
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:?local env required}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U pilot_owner -d jmorais_local_synthetic']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  oidc:
+    image: quay.io/keycloak/keycloak:26.8.0
+    command: [start-dev, --import-realm, '--hostname=http://localhost:8081']
+    ports: ['127.0.0.1:8081:8080']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: local-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${LOCAL_OIDC_ADMIN_PASSWORD:?local env required}
+    volumes:
+      - ${LOCAL_PILOT_DIR:?private directory required}/realm.json:/opt/keycloak/data/import/local.json:ro
+      - oidc:/opt/keycloak/data
+  seed:
+    pull_policy: build
+    build:
+      context: ../..
+      dockerfile: deploy/local/Dockerfile
+    image: jmorais-local-pilot:synthetic
+    command: [python, -m, deploy.local.seed]
+    env_file: ['${LOCAL_PILOT_DIR}/.env']
+    volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output']
+    depends_on:
+      postgres: {condition: service_healthy}
+      oidc: {condition: service_started}
+  backend:
+    pull_policy: never
+    image: jmorais-local-pilot:synthetic
+    command: [python, -m, uvicorn, 'deploy.local.runtime:create', --factory, --host, '0.0.0.0', --port, '8000', --no-access-log, --no-server-header]
+    environment:
+      JMORAIS_LOCAL_SYNTHETIC: 'YES'
+      LOCAL_RUNTIME_PASSWORD: ${LOCAL_RUNTIME_PASSWORD:?local env required}
+      LOCAL_DRAFT_KEY: ${LOCAL_DRAFT_KEY:?local env required}
+      LOCAL_PSEUDO_KEY: ${LOCAL_PSEUDO_KEY:?local env required}
+    volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output:ro']
+    depends_on:
+      seed: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:8000/internal/api/v1/health/live',headers={'Host':'localhost'}),timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 30
+  frontend:
+    build:
+      context: ../..
+      dockerfile: deploy/local/Frontend.Dockerfile
+    ports: ['127.0.0.1:80:80']
+    depends_on:
+      backend: {condition: service_healthy}
+volumes:
+  postgres:
+  oidc:

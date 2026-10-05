@@ -1,0 +1,79 @@
+"""Explicit NON-LIVE composition. Bound only by the local Compose deployment."""
+import os
+import json
+from pathlib import Path
+from dataclasses import replace
+from contextlib import asynccontextmanager
+import requests
+from sqlalchemy.engine import URL
+from jmoraIs.api.app import create_app
+from jmoraIs.api.configuration import homologation_config, RuntimeSecurityPolicy
+from jmoraIs.api.homologation import compose_homologation
+from jmoraIs.api.security_infrastructure import InMemoryStructuredLog, InMemoryOpenTelemetryExporter, OpenTelemetryCompatibleMetricsAdapter
+from jmoraIs.identity.configuration import OIDCProviderConfig
+from jmoraIs.infrastructure.managed_secrets import ProviderReadySecretAdapter, InMemorySecretSecurityAudit
+from jmoraIs.secrets.domain import KeyReference, SecretReference, SecretPurpose
+
+PROVIDER='local-synthetic'
+POLICY='MIP-10.1'
+ISSUER='http://localhost:8081/realms/jmorais-local'
+SIGNING=KeyReference(PROVIDER,'draft-signing','1',SecretPurpose.SIGNING_KEY)
+PSEUDO=KeyReference(PROVIDER,'pseudonymization','1',SecretPurpose.PSEUDONYMIZATION_HMAC)
+DATABASE=SecretReference(PROVIDER,'runtime-database',SecretPurpose.POSTGRESQL_CREDENTIALS,'1')
+
+
+def guard():
+    if os.environ.get('JMORAIS_LOCAL_SYNTHETIC')!='YES':
+        raise RuntimeError('explicit synthetic-only deployment required')
+
+
+def database_url(owner=False):
+    guard()
+    name=os.environ.get('LOCAL_DB_NAME')
+    if not name:
+        manifest=Path('/pilot-output/database.json')
+        name=json.loads(manifest.read_text())['database'] if manifest.exists() else 'jmorais_local_synthetic'
+    if not name.startswith('jmorais_local_synthetic'):raise RuntimeError('synthetic database required')
+    return URL.create('postgresql+psycopg',username='pilot_owner' if owner else 'pilot_runtime',
+        password=os.environ['LOCAL_DB_PASSWORD' if owner else 'LOCAL_RUNTIME_PASSWORD'],
+        host='postgres',database=name).render_as_string(hide_password=False)
+
+
+class LocalClient:
+    def resolve(self, reference, version, purpose):
+        guard()
+        if version!='1': raise RuntimeError('unavailable key version')
+        values={'runtime-database':(SecretPurpose.POSTGRESQL_CREDENTIALS,database_url()),
+            'draft-signing':(SecretPurpose.SIGNING_KEY,os.environ['LOCAL_DRAFT_KEY']),
+            'pseudonymization':(SecretPurpose.PSEUDONYMIZATION_HMAC,os.environ['LOCAL_PSEUDO_KEY'])}
+        expected,value=values[reference]
+        if purpose!=expected.value:raise RuntimeError('wrong key purpose')
+        return value.encode()
+
+
+def compose():
+    guard()
+    oidc=OIDCProviderConfig('local-keycloak',ISSUER,'jmorais-local',
+        ISSUER+'/.well-known/openid-configuration',
+        'http://oidc:8080/realms/jmorais-local/protocol/openid-connect/certs',
+        ('RS256',),30,('sub','iat','exp','auth_time'),'roles','organization_id',
+        (('reviewer','CLINICAL_REVIEWER'),('service','INTERNAL_SERVICE')),policy_version=POLICY)
+    config=homologation_config(DATABASE,oidc,PSEUDO,governed_draft_signing_key=SIGNING)
+    return compose_homologation(config,
+        metrics=OpenTelemetryCompatibleMetricsAdapter(InMemoryOpenTelemetryExporter()),
+        structured_log=InMemoryStructuredLog(),identity_http_get=requests.get,
+        secrets_provider=ProviderReadySecretAdapter(PROVIDER,LocalClient(),InMemorySecretSecurityAudit()))
+
+
+def create():
+    canonical=compose()
+    @asynccontextmanager
+    async def lifespan(app):
+        yield
+        canonical.database_credentials.close()
+    # HTTP is allowed only in this explicitly synthetic, loopback-published stack.
+    app=create_app(canonical.api_services,canonical.operational_services,
+        runtime_security=RuntimeSecurityPolicy(tls_termination_required=False,database_tls_required=False),
+        lifespan=lifespan,workspace=canonical.workspace,remaining_workspace=canonical.remaining_workspace,
+        launch_service=canonical.launch_service)
+    return app

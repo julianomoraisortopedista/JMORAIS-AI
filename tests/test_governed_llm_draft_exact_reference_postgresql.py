@@ -58,8 +58,11 @@ def database():
     return url, create_engine(url, future=True)
 
 
-def persisted_draft(owner, writer, suffix, tenant, *, draft_attestor=None):
+def persisted_draft(owner, writer, suffix, tenant, *, draft_attestor=None, subject_reference=None):
     document_engine, documents, _, document_input = document_setup()
+    if subject_reference is not None:
+        # Distinct synthetic subjects get distinct document (and draft) streams.
+        document_input = replace(document_input, subject_reference=subject_reference)
     version = document_engine.generate(document_input, __import__("jmoraIs.medical_documents", fromlist=["DocumentType"]).DocumentType.CLINICAL_REPORT)
     input_attestor = HMACPersistedGatewayInputAttestor(INPUT_KEY)
     bound = MedicalDocumentGatewayInputIssuer(

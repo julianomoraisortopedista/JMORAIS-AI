@@ -58,3 +58,11 @@ pilot-link-physician:
 	@"$(VENV_PYTHON)" -m scripts.pilot_admin link-physician $(PILOT_FLAGS)
 pilot-create-launch:
 	@"$(VENV_PYTHON)" -m scripts.pilot_admin create-launch $(PILOT_FLAGS)
+
+.PHONY: local-pilot-up local-pilot-down local-pilot-proof
+local-pilot-up:
+	@$(VENV_PYTHON) -m deploy.local.control up
+local-pilot-down:
+	@$(VENV_PYTHON) -m deploy.local.control down
+local-pilot-proof:
+	@$(VENV_PYTHON) -m deploy.local.control proof
