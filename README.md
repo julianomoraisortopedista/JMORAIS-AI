@@ -87,6 +87,10 @@ service) against PubMed/Crossref before relying on them:
 make evidence-search ARGS='--pmid 26488691 --doi 10.1056/NEJMoa1505467'
 ```
 
+AI-proposed, physician-confirmed classification and the justification draft with
+verified Vancouver references: see `docs/SUPPORT_CLASSIFICATION.md`
+(`make classify-evidence`, `make build-justification`).
+
 Third-party clinical services (OpenEvidence, OrthoEvidence) are not queried
 automatically: their terms restrict automated/AI access or reproduction without
 written authorization.

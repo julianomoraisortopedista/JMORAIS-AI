@@ -79,3 +79,9 @@ evidence-search: verify-python
 classify-evidence: verify-python
 	$(if $(strip $(ARGS)),,$(error Usage: make classify-evidence ARGS='--claim ... --pmid ... --reviewer ...'))
 	@"$(VENV_PYTHON)" scripts/classify_evidence.py $(ARGS)
+
+.PHONY: build-justification
+# Draft from confirmed decisions. Usage: make build-justification ARGS='--decisions decisions.json --out justificativa.md'
+build-justification: verify-python
+	$(if $(strip $(ARGS)),,$(error Usage: make build-justification ARGS='--decisions decisions.json --out justificativa.md'))
+	@"$(VENV_PYTHON)" scripts/build_justification.py $(ARGS)

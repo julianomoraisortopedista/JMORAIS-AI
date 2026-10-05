@@ -72,6 +72,12 @@ class TrustedEvidenceIssuanceError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class TrustedPublication:
+    package: EvidencePackage
+    article: ScientificArticle
+
+
 class AuthoritativeReconciliationPipeline:
     """The only application use case allowed to emit eligible scientific evidence."""
 
@@ -125,6 +131,31 @@ class AuthoritativeReconciliationPipeline:
                 claim_id=claim_id,
                 support_ids=support_ids,
                 pipeline_version=pipeline_version,
+            )
+            for article in result.eligible_articles
+        )
+
+    def issue_trusted_publications(
+        self,
+        request: ScientificVerificationInput,
+        *,
+        ledger: AppendOnlyEvidenceLedger,
+        claim_id: str,
+        support_ids: tuple[str, ...],
+        pipeline_version: str,
+    ) -> tuple["TrustedPublication", ...]:
+        """Issue packages and return each with the exact verified record it is bound to
+        (by metadata hash), as strict Vancouver formatting requires both."""
+        if self._packages is None:
+            raise TrustedEvidenceIssuanceError("EvidencePackage port is not configured")
+        result = self._execute_internal(request)
+        if not result.eligible_articles:
+            raise TrustedEvidenceIssuanceError("no verified evidence is eligible for package issuance")
+        return tuple(
+            TrustedPublication(
+                package=self._packages.issue(article=article, ledger=ledger, claim_id=claim_id,
+                                             support_ids=support_ids, pipeline_version=pipeline_version),
+                article=article,
             )
             for article in result.eligible_articles
         )

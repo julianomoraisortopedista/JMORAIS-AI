@@ -46,6 +46,22 @@ make classify-evidence ARGS='--claim "Total knee replacement improves pain and f
 
 Without credentials the command prints `MODEL_NOT_CONFIGURED` and sends nothing.
 
+## Justification draft
+
+`jmoraIs/application/scientific_justification.py`, command:
+
+```bash
+make build-justification ARGS='--decisions decisions.json --out justificativa.md'
+```
+
+Each confirmed decision is re-verified before use: same abstract SHA-256, quote still
+verbatim, publication still VERIFIED through the PubMed/Crossref pipeline
+(`issue_trusted_publications` returns each package with the exact record it is bound
+to), and Vancouver text only from `StrictVancouverFormatter`. Supporting, opposing,
+neutral and inconclusive evidence are all listed; rejected, changed, unverified or
+duplicate items appear under "Não incluídos" with the reason. No model-generated
+prose and no patient data enter the draft; it requires physician review and signature.
+
 ## Limits
 
 - Abstract-level appraisal only; full text and risk-of-bias are not assessed.
