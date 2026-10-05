@@ -22,10 +22,11 @@ FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 class AnthropicMessagesTransport:
     def __init__(self, *, client: Any = None, json_schema: Optional[dict] = None, effort: str = "low",
-                 monotonic: Callable[[], float] = time.monotonic):
+                 monotonic: Callable[[], float] = time.monotonic, api_key: Optional[str] = None):
         if client is None:
             import anthropic  # optional dependency: pip install '.[anthropic]'
-            client = anthropic.Anthropic(timeout=120.0, max_retries=2)
+            options = {"api_key": api_key} if api_key else {}
+            client = anthropic.Anthropic(timeout=120.0, max_retries=2, **options)
         self._client = client
         self._json_schema = json_schema
         self._effort = effort

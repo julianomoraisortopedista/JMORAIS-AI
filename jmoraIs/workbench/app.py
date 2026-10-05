@@ -240,6 +240,6 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
     return app
 
 
-def default_classifier_factory(environ=os.environ) -> Optional[Callable]:
-    from jmoraIs.application.support_classification_runtime import build_service, credentials_configured
-    return build_service if credentials_configured(environ) else None
+def default_classifier_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
+    from jmoraIs.application.support_classification_runtime import build_service, credentials_configured, keychain_api_key
+    return build_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None

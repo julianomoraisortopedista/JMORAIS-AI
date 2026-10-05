@@ -117,7 +117,8 @@ def ai(direction="SUPPORTING", quote=QUOTE):
 
 def test_without_credentials_nothing_is_sent():
     lines = []
-    code = classify_evidence.main(["--claim", "x" * 20, "--pmid", "1", "--reviewer", "r"], write=lines.append, environ={})
+    code = classify_evidence.main(["--claim", "x" * 20, "--pmid", "1", "--reviewer", "r"], write=lines.append, environ={},
+                                  keychain=lambda: None)
     assert code == 2 and lines == [classify_evidence.NOT_CONFIGURED]
 
 
@@ -148,5 +149,18 @@ def test_ungrounded_proposal_is_auto_rejected(tmp_path):
 
 
 def test_model_configuration_detection():
-    assert classify_evidence.model_configured({"ANTHROPIC_API_KEY": "x"})
-    assert not classify_evidence.model_configured({})
+    assert classify_evidence.model_configured({"ANTHROPIC_API_KEY": "x"}, keychain=lambda: None)
+    assert not classify_evidence.model_configured({}, keychain=lambda: None)
+
+
+def test_keychain_key_is_read_cleanly_and_only_on_macos():
+    from types import SimpleNamespace
+    from jmoraIs.application.support_classification_runtime import credentials_configured, keychain_api_key
+    ok = lambda *a, **k: SimpleNamespace(returncode=0, stdout="\x1b[200~sk-ant-abc123\x1b[201~\n")
+    assert keychain_api_key(run=ok, platform="darwin") == "sk-ant-abc123"
+    assert keychain_api_key(run=ok, platform="linux") is None
+    missing = lambda *a, **k: SimpleNamespace(returncode=44, stdout="")
+    assert keychain_api_key(run=missing, platform="darwin") is None
+    wrong = lambda *a, **k: SimpleNamespace(returncode=0, stdout="not-a-key")
+    assert keychain_api_key(run=wrong, platform="darwin") is None
+    assert credentials_configured({}, keychain=lambda: "sk-ant-x") and not credentials_configured({}, keychain=lambda: None)

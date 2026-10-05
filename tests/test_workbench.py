@@ -106,5 +106,7 @@ def test_without_model_proposal_is_503_and_unknown_abstract_is_404():
 
 
 def test_default_classifier_factory_depends_on_credentials():
-    assert default_classifier_factory({}) is None
-    assert default_classifier_factory({"ANTHROPIC_API_KEY": "x"}) is not None
+    no_key = lambda: None
+    assert default_classifier_factory({}, keychain=no_key) is None
+    assert default_classifier_factory({"ANTHROPIC_API_KEY": "x"}, keychain=no_key) is not None
+    assert default_classifier_factory({}, keychain=lambda: "sk-ant-x") is not None

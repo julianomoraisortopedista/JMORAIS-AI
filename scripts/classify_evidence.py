@@ -20,7 +20,7 @@ from uuid import uuid4
 from jmoraIs.application.support_classification import PhysicianDecisionType, ProposalStatus, decision_record
 from jmoraIs.connect.pubmed import AbstractUnavailable, PubMedConnector
 from jmoraIs.application.support_classification_runtime import (
-    DEFAULT_MODEL, MODEL_PRICES, build_service, credentials_configured,
+    DEFAULT_MODEL, MODEL_PRICES, build_service, credentials_configured, keychain_api_key,
 )
 from jmoraIs.scientific_domain import SupportDirection
 from jmoraIs.tenancy.context import TenantContextBinder
@@ -30,8 +30,8 @@ NOT_CONFIGURED = ("MODEL_NOT_CONFIGURED: set ANTHROPIC_API_KEY in your shell (se
                   "Nothing was sent.")
 
 
-def model_configured(environ=os.environ) -> bool:
-    return credentials_configured(environ)
+def model_configured(environ=os.environ, keychain=keychain_api_key) -> bool:
+    return credentials_configured(environ, keychain=keychain)
 
 
 def local_tenant(reviewer: str) -> TenantContext:
@@ -66,7 +66,8 @@ def ask_decision(service, proposal, reviewer, read=input, write=print):
             write("Invalid direction or empty reason.")
 
 
-def main(argv=None, *, service=None, pubmed=None, read=input, write=print, environ=os.environ) -> int:
+def main(argv=None, *, service=None, pubmed=None, read=input, write=print, environ=os.environ,
+         keychain=keychain_api_key) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--claim", required=True, help="Specific clinical claim, in English, no patient data")
     parser.add_argument("--pmid", required=True, help="Comma list of PMIDs")
@@ -74,7 +75,7 @@ def main(argv=None, *, service=None, pubmed=None, read=input, write=print, envir
     parser.add_argument("--model", default=DEFAULT_MODEL, choices=sorted(MODEL_PRICES))
     parser.add_argument("--out", help="Write decisions as JSON to this file")
     args = parser.parse_args(argv)
-    if service is None and not model_configured(environ):
+    if service is None and not model_configured(environ, keychain):
         write(NOT_CONFIGURED)
         return 2
     service = service or build_service(args.model)
