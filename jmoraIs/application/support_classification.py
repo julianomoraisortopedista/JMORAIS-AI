@@ -30,6 +30,17 @@ SCHEMA_VERSION = "1"
 OUTPUT_SCHEMA_ID = "support-classification-output-v1"
 CLASSIFIER_VERSION = "support-classification-v1"
 MIN_QUOTE_CHARS = 20
+MAX_OUTPUT_TOKENS = 4000  # includes model reasoning on current Claude models
+OUTPUT_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "direction": {"type": "string", "enum": [d.value for d in SupportDirection]},
+        "quote": {"type": "string"},
+        "rationale": {"type": "string"},
+    },
+    "required": ["direction", "quote", "rationale"],
+    "additionalProperties": False,
+}
 INSTRUCTIONS = (
     "You assist a physician. Given CLAIM and a PubMed ABSTRACT, decide whether the abstract is "
     "SUPPORTING, OPPOSING, NEUTRAL or INCONCLUSIVE for the claim. Use only the abstract. Copy one "
@@ -121,7 +132,7 @@ class SupportClassificationService:
         response = self._gateway.invoke(LLMRequest(
             request_id, self._prompt_version_id, self._model, dto,
             ReviewPolicy("physician-support-review", POLICY, True, False),
-            0.0, None, 800, POLICY, self._clock()))
+            0.0, None, MAX_OUTPUT_TOKENS, POLICY, self._clock()))
         status, direction, quote, rationale = self._interpret(response, abstract)
         return SupportClassificationProposal(
             "prop-" + self._ids(), claim, abstract.pmid, abstract.content_hash, abstract.source_locator,

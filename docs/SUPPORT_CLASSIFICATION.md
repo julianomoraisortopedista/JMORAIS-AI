@@ -21,9 +21,33 @@ Module: `jmoraIs/application/support_classification.py`. Abstracts: `PubMedConne
    physician direction, model and prompt versions. Existing package issuance and
    strict Vancouver formatting then apply unchanged.
 
+## Running it with Claude
+
+Model: `claude-opus-5-5` (default) or `claude-sonnet-5-5` (`--model`). Transport:
+`jmoraIs/llm_gateway/anthropic_transport.py`, official `anthropic` SDK as the optional
+extra `.[anthropic]` (not part of the production lock). Requests use structured JSON
+output, `effort: low`, server-side refusal fallback (`fallbacks: "default"`), and no
+sampling parameters. A refusal becomes a `BLOCKED` proposal; truncation, rate limits
+and timeouts become gateway failures without provider message text.
+
+One-time setup on macOS (key stored in Keychain, not in a file):
+
+```bash
+.venv/bin/python -m pip install -e '.[anthropic]'
+security add-generic-password -a "$USER" -s anthropic-api-key -w
+echo 'export ANTHROPIC_API_KEY="$(security find-generic-password -a "$USER" -s anthropic-api-key -w 2>/dev/null)"' >> ~/.zshrc
+```
+
+Then, in a new terminal:
+
+```bash
+make classify-evidence ARGS='--claim "Total knee replacement improves pain and function versus nonsurgical treatment in knee osteoarthritis" --pmid 26488691 --reviewer CRM-UF-000000 --out decisions.json'
+```
+
+Without credentials the command prints `MODEL_NOT_CONFIGURED` and sends nothing.
+
 ## Limits
 
 - Abstract-level appraisal only; full text and risk-of-bias are not assessed.
 - Proposals and decisions are in-memory in this slice; durable persistence is pending.
-- A real model provider requires a configured transport and credentials; none is
-  configured in the repository. Tests use the gateway's mock provider only.
+- Credentials are never stored in the repository; tests use fakes and never call the API.
