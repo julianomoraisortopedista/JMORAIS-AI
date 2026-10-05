@@ -102,3 +102,17 @@ def test_json_output_never_claims_trusted_evidence():
 def test_empty_query_is_rejected(capsys):
     with pytest.raises(SystemExit):
         evidence_search.main(["   "])
+
+
+def test_identifiers_from_other_sources_are_verified_one_request_each():
+    pipeline = FakePipeline(RESULT)
+    result = evidence_search.verify_identifiers(("26488691",), ("10.1056/NEJMoa1505467",), pipeline)
+    assert [(r.pmid, r.doi, r.query) for r in pipeline.requests] == [
+        ("26488691", None, None), (None, "10.1056/NEJMoa1505467", None)]
+    # Same publications from both requests are listed once; unidentified rows are kept.
+    assert [a.pmid for a in result.articles] == ["12345678", None, None] and result.trusted_evidence is False
+
+
+def test_identifier_mode_cannot_be_mixed_with_search(capsys):
+    with pytest.raises(SystemExit):
+        evidence_search.main(["knee", "--pmid", "26488691"])

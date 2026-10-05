@@ -80,6 +80,17 @@ ignored); elements are ANDed and designs (`rct`, `sr`, `ma`, `guideline`) become
 Query syntax (quotes, brackets, boolean operators) is rejected in terms; MeSH lookup
 failures fall back to free text.
 
+Verify identifiers found elsewhere (for example read manually in a subscription
+service) against PubMed/Crossref before relying on them:
+
+```bash
+make evidence-search ARGS='--pmid 26488691 --doi 10.1056/NEJMoa1505467'
+```
+
+Third-party clinical services (OpenEvidence, OrthoEvidence) are not queried
+automatically: their terms restrict automated/AI access or reproduction without
+written authorization.
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust the database connection as needed. The default application config uses SQLite for local development and tests, while PostgreSQL remains the intended production target.

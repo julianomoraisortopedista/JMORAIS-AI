@@ -36,6 +36,23 @@ def discover(query: str, pipeline: AuthoritativeReconciliationPipeline | None = 
     return pipeline.discover(ScientificVerificationInput(query=query))
 
 
+def verify_identifiers(pmids: tuple[str, ...], dois: tuple[str, ...],
+                       pipeline: AuthoritativeReconciliationPipeline | None = None) -> ScientificDiscoveryResult:
+    """Check identifiers brought from other sources (e.g. read manually elsewhere) against PubMed/Crossref."""
+    pipeline = pipeline or AuthoritativeReconciliationPipeline(pubmed=PubMedConnector(), crossref=CrossrefConnector())
+    requests_ = [ScientificVerificationInput(pmid=v) for v in pmids] + [ScientificVerificationInput(doi=v) for v in dois]
+    results = [pipeline.discover(request) for request in requests_]
+    articles, seen = [], set()
+    for article in (a for r in results for a in r.articles):
+        keys = {k for k in (article.pmid and "pmid:" + article.pmid,
+                            article.doi and "doi:" + article.doi.casefold()) if k}
+        if keys and keys & seen:
+            continue
+        seen |= keys
+        articles.append(article)
+    return ScientificDiscoveryResult(search_id=",".join(r.search_id for r in results), articles=tuple(articles))
+
+
 def split_terms(value: str | None) -> tuple[str, ...]:
     return tuple(term.strip() for term in (value or "").split(";") if term.strip())
 
@@ -93,8 +110,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--outcome", help="Synonyms separated by ';'")
     parser.add_argument("--design", help="Comma list of: " + ", ".join(STUDY_DESIGN_FILTERS))
     parser.add_argument("--no-mesh", action="store_true", help="Do not add MeSH headings")
+    parser.add_argument("--pmid", help="Verify PMIDs (comma list) brought from another source")
+    parser.add_argument("--doi", help="Verify DOIs (comma list) brought from another source")
     parser.add_argument("--json", action="store_true", help="Machine-readable output")
     args = parser.parse_args(argv)
+    if args.pmid or args.doi:
+        if args.query or args.population or args.intervention or args.comparison or args.outcome or args.design:
+            parser.error("use --pmid/--doi alone")
+        pmids = tuple(v.strip() for v in (args.pmid or "").split(",") if v.strip())
+        dois = tuple(v.strip() for v in (args.doi or "").split(",") if v.strip())
+        label = "identifiers: " + ", ".join(pmids + dois)
+        result = verify_identifiers(pmids, dois)
+        print(render_json(label, result) if args.json else render_text(label, result))
+        return 0
     try:
         built = build_query(args)
     except EvidenceQueryRejected as exc:
