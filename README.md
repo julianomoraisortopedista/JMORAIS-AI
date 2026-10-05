@@ -54,6 +54,19 @@ project environment. The reproducible shortcuts `make test`, `make coverage`
 and `make hygiene` also invoke `.venv/bin/python` directly and reject a virtual
 environment created with any Python version other than 3.12.
 
+## Scientific discovery (read-only)
+
+```bash
+make evidence-search Q="total knee arthroplasty versus nonoperative treatment knee osteoarthritis"
+```
+
+Runs the authoritative reconciliation pipeline live against PubMed (relevance-ranked,
+throttled to the NCBI 3 requests/second limit) and Crossref, through its public
+discovery boundary. Output is a list of **candidates only**: not trusted evidence,
+not classified as supporting/opposing, no Vancouver text. Those require ledger-backed
+package issuance, appraisal and physician review. Never include patient identifiers
+in the query. Add `--json` when calling `scripts/evidence_search.py` directly.
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust the database connection as needed. The default application config uses SQLite for local development and tests, while PostgreSQL remains the intended production target.

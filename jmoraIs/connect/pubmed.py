@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any
+import time
+from typing import Any, Callable
 
 import requests
 
@@ -15,20 +16,44 @@ from jmoraIs.scientific_domain import (
 
 PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+# NCBI E-utilities allow 3 requests/second without an API key.
+NCBI_MIN_INTERVAL_SECONDS = 0.34
 
 
 class PubMedConnector(BaseConnector):
     """Resolve publication existence against the authoritative NCBI PubMed API."""
 
-    def __init__(self, http_client: Any = requests, timeout: float = 20.0):
+    def __init__(
+        self,
+        http_client: Any = requests,
+        timeout: float = 20.0,
+        *,
+        min_interval: float = NCBI_MIN_INTERVAL_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ):
         self.http_client = http_client
         self.timeout = timeout
+        self._min_interval = min_interval
+        self._monotonic = monotonic
+        self._sleep = sleep
+        self._last_request_at: float | None = None
+
+    def _get(self, url: str, **kwargs: Any) -> Any:
+        if self._last_request_at is not None:
+            wait = self._min_interval - (self._monotonic() - self._last_request_at)
+            if wait > 0:
+                self._sleep(wait)
+        try:
+            return self.http_client.get(url, **kwargs)
+        finally:
+            self._last_request_at = self._monotonic()
 
     def search_by_pmid(self, pmid: str) -> IdentifierVerificationResult:
         checked_at = utc_now()
         locator = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
         try:
-            response = self.http_client.get(
+            response = self._get(
                 PUBMED_SUMMARY_URL,
                 params={"db": "pubmed", "id": pmid, "retmode": "json"},
                 timeout=self.timeout,
@@ -142,13 +167,14 @@ class PubMedConnector(BaseConnector):
     ) -> list[str] | IdentifierVerificationResult:
         checked_at = utc_now()
         try:
-            response = self.http_client.get(
+            response = self._get(
                 PUBMED_SEARCH_URL,
                 params={
                     "db": "pubmed",
                     "term": term,
                     "retmode": "json",
                     "retmax": str(max_results),
+                    "sort": "relevance",
                 },
                 timeout=self.timeout,
             )
