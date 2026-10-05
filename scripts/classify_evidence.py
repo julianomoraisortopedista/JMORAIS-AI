@@ -11,49 +11,27 @@ persisted in the database.
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
-from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
 import sys
 from uuid import uuid4
 
-from jmoraIs.application.support_classification import (
-    OUTPUT_JSON_SCHEMA, PhysicianDecisionType, ProposalStatus, SupportClassificationService,
-    support_classification_prompt,
-)
+from jmoraIs.application.support_classification import PhysicianDecisionType, ProposalStatus, decision_record
 from jmoraIs.connect.pubmed import AbstractUnavailable, PubMedConnector
-from jmoraIs.llm_gateway import CanonicalLLMGateway, LLMModel, LLMProvider, PromptGovernanceService
-from jmoraIs.llm_gateway.anthropic_transport import DEFAULT_MODEL, AnthropicMessagesTransport
-from jmoraIs.llm_gateway.infrastructure import (
-    AnthropicProviderAdapter, InMemoryInvocationRepository, InMemoryLLMInvocationContextRepository,
-    InMemoryPromptAuditRepository, InMemoryPromptRepository,
+from jmoraIs.application.support_classification_runtime import (
+    DEFAULT_MODEL, MODEL_PRICES, build_service, credentials_configured,
 )
 from jmoraIs.scientific_domain import SupportDirection
 from jmoraIs.tenancy.context import TenantContextBinder
 from jmoraIs.tenancy.domain import TenantContext
 
-# USD per million tokens (input, output) for the default model.
-MODEL_PRICES = {"claude-opus-5-5": (4.0, 20.0), "claude-sonnet-5-5": (2.0, 10.0)}
 NOT_CONFIGURED = ("MODEL_NOT_CONFIGURED: set ANTHROPIC_API_KEY in your shell (see docs/SUPPORT_CLASSIFICATION.md). "
                   "Nothing was sent.")
 
 
 def model_configured(environ=os.environ) -> bool:
-    return bool(environ.get("ANTHROPIC_API_KEY") or environ.get("ANTHROPIC_AUTH_TOKEN") or environ.get("ANTHROPIC_PROFILE"))
-
-
-def build_service(model_id: str, transport=None) -> SupportClassificationService:
-    clock = lambda: datetime.now(timezone.utc)
-    prompts, audit = InMemoryPromptRepository(), InMemoryPromptAuditRepository()
-    version = PromptGovernanceService(prompts, audit, clock=clock).register(support_classification_prompt(), created_by="jmorais")
-    input_price, output_price = MODEL_PRICES.get(model_id, (0.0, 0.0))
-    model = LLMModel(LLMProvider.ANTHROPIC, model_id, model_id, input_price, output_price, True, "MIP-10.1")
-    adapter = AnthropicProviderAdapter(transport or AnthropicMessagesTransport(json_schema=OUTPUT_JSON_SCHEMA))
-    gateway = CanonicalLLMGateway(prompts, audit, InMemoryInvocationRepository(),
-                                  InMemoryLLMInvocationContextRepository(), (adapter,), clock=clock)
-    return SupportClassificationService(gateway, prompt_version_id=version.prompt_version_id, model=model, clock=clock)
+    return credentials_configured(environ)
 
 
 def local_tenant(reviewer: str) -> TenantContext:
@@ -86,16 +64,6 @@ def ask_decision(service, proposal, reviewer, read=input, write=print):
                 return service.decide(proposal, reviewer_id=reviewer, decision=PhysicianDecisionType.OVERRIDE,
                                       final_direction=SupportDirection(pick), note=note)
             write("Invalid direction or empty reason.")
-
-
-def decision_record(decision) -> dict:
-    p = decision.proposal
-    return {"pmid": p.pmid, "claim": p.claim, "source": p.source_locator, "abstract_sha256": p.abstract_hash,
-            "ai_status": p.status.value, "ai_direction": p.proposed_direction.value if p.proposed_direction else None,
-            "quote": p.quote, "ai_rationale": p.rationale, "model": p.model_id, "prompt_version": p.prompt_version_id,
-            "physician_decision": decision.decision.value,
-            "final_direction": decision.final_direction.value if decision.final_direction else None,
-            "reviewer": decision.reviewer_id, "note": decision.note, "decided_at": decision.decided_at.isoformat()}
 
 
 def main(argv=None, *, service=None, pubmed=None, read=input, write=print, environ=os.environ) -> int:

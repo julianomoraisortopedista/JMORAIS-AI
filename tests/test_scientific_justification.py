@@ -16,7 +16,8 @@ from tests.test_support_classification import CLAIM, QUOTE, abstract
 NOW = datetime(2026, 10, 5, tzinfo=timezone.utc)
 META = {"pmid": "26488691", "doi": "10.1056/NEJMoa1505467", "title": "A Randomized, Controlled Trial of Total Knee Replacement.",
         "journal": "The New England journal of medicine", "journal_abbreviation": "N Engl J Med", "volume": "373",
-        "issue": "17", "pages": "1597-606", "year": 2015, "authors": ["Skou ST", "Roos EM"]}
+        "issue": "17", "pages": "1597-606", "year": 2015, "authors": ["Skou ST", "Roos EM"],
+        "publication_types": ["Journal Article", "Randomized Controlled Trial"]}
 CROSSREF = {"doi": "10.1056/NEJMoa1505467", "title": "A Randomized, Controlled Trial of Total Knee Replacement",
             "journal": "New England Journal of Medicine", "year": 2015, "year_candidates": (2015,),
             "authors": ["Skou, Søren T.", "Roos, Ewa M."]}
@@ -78,7 +79,7 @@ def test_confirmed_verified_evidence_becomes_numbered_vancouver_reference():
     assert ref.vancouver == ("Skou ST, Roos EM. A Randomized, Controlled Trial of Total Knee Replacement. "
                              "N Engl J Med. 2015;373(17):1597-606. doi: 10.1056/NEJMoa1505467.")
     text = render_markdown(draft)
-    assert "RASCUNHO PARA REVISÃO MÉDICA" in text and f'[1] PMID 26488691: "{QUOTE}"' in text
+    assert "RASCUNHO PARA REVISÃO MÉDICA" in text and f'[1] PMID 26488691 (ensaio clínico randomizado): "{QUOTE}"' in text
     assert "1 a favor, 0 contrárias, 0 neutras, 0 inconclusivas" in text and "1. Skou ST" in text
 
 

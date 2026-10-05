@@ -85,3 +85,8 @@ classify-evidence: verify-python
 build-justification: verify-python
 	$(if $(strip $(ARGS)),,$(error Usage: make build-justification ARGS='--decisions decisions.json --out justificativa.md'))
 	@"$(VENV_PYTHON)" scripts/build_justification.py $(ARGS)
+
+.PHONY: workbench
+# Local physician workbench (browser UI), loopback only: http://127.0.0.1:8770
+workbench: verify-python
+	@"$(VENV_PYTHON)" scripts/workbench.py

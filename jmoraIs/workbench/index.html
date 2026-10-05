@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="workbench-token" content="__WORKBENCH_TOKEN__">
+<title>JMORAIS — Fundamentação de cirurgias</title>
+<style>
+:root { --bg:#f6f7f9; --card:#fff; --ink:#15202b; --muted:#5b6876; --line:#d9dee4; --accent:#0b5cad; --ok:#0a7a3b; --warn:#a15c00; --bad:#b3261e; }
+@media (prefers-color-scheme: dark) { :root { --bg:#0f141a; --card:#171e26; --ink:#e7edf3; --muted:#9aa7b4; --line:#2a3440; --accent:#5aa2ef; --ok:#45c57e; --warn:#e0a24a; --bad:#ef6b62; } }
+* { box-sizing:border-box; } body { margin:0; font:15px/1.45 -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--ink); }
+header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--card); display:flex; gap:12px; align-items:baseline; flex-wrap:wrap; }
+header h1 { font-size:18px; margin:0; } header .muted { flex:1; }
+main { max-width:1040px; margin:0 auto; padding:16px; }
+nav { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+nav button { border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 12px; border-radius:8px; cursor:pointer; }
+nav button.active { border-color:var(--accent); color:var(--accent); font-weight:600; }
+section { display:none; } section.active { display:block; }
+.card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:12px; }
+label { display:block; font-weight:600; margin:10px 0 4px; } .hint { color:var(--muted); font-size:13px; font-weight:400; }
+input[type=text], textarea, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); font:inherit; }
+textarea { min-height:80px; resize:vertical; } .row { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+button.primary { background:var(--accent); color:#fff; border:0; padding:9px 16px; border-radius:8px; cursor:pointer; font-weight:600; }
+button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); padding:6px 10px; border-radius:8px; cursor:pointer; }
+button:disabled { opacity:.55; cursor:wait; }
+.muted { color:var(--muted); font-size:13px; } .mono { font-family:ui-monospace, Menlo, monospace; font-size:12px; word-break:break-word; }
+.cand { border-top:1px solid var(--line); padding:10px 0; } .cand:first-child { border-top:0; }
+.cand h3 { font-size:15px; margin:0 0 4px; } .actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+.abstract { white-space:pre-wrap; background:var(--bg); border-radius:8px; padding:10px; margin-top:8px; font-size:14px; }
+.badge { display:inline-block; border-radius:999px; padding:1px 8px; font-size:12px; font-weight:600; border:1px solid currentColor; }
+.SUPPORTING,.ATENDIDO { color:var(--ok); } .OPPOSING,.NAO_ATENDIDO { color:var(--bad); } .NEUTRAL,.INCONCLUSIVE,.PENDENTE { color:var(--warn); }
+.msg { padding:8px 12px; border-radius:8px; margin:8px 0; } .msg.err { background:color-mix(in srgb, var(--bad) 14%, transparent); }
+.msg.ok { background:color-mix(in srgb, var(--ok) 14%, transparent); } .msg.info { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+blockquote { margin:6px 0; padding-left:10px; border-left:3px solid var(--line); font-style:italic; }
+table { width:100%; border-collapse:collapse; } td, th { text-align:left; padding:6px; border-top:1px solid var(--line); vertical-align:top; }
+</style>
+</head>
+<body>
+<header><h1>JMORAIS · Fundamentação de cirurgias</h1><span class="muted">Uso local. Não digite dados que identifiquem o paciente.</span><span id="modelStatus" class="muted"></span></header>
+<main>
+<nav>
+  <button data-step="s1" class="active">1. Pergunta e busca</button>
+  <button data-step="s2">2. Classificar artigos</button>
+  <button data-step="s3">3. Dados da cobertura</button>
+  <button data-step="s4">4. Documento</button>
+</nav>
+
+<section id="s1" class="active">
+  <div class="card">
+    <label for="claim">Afirmação a fundamentar <span class="hint">(em inglês, específica; ex.: Total knee replacement improves pain and function versus nonsurgical treatment in knee osteoarthritis)</span></label>
+    <input type="text" id="claim" maxlength="600">
+    <div class="row">
+      <div><label for="population">População <span class="hint">sinônimos separados por ;</span></label><input type="text" id="population" placeholder="knee osteoarthritis"></div>
+      <div><label for="intervention">Intervenção</label><input type="text" id="intervention" placeholder="total knee arthroplasty; total knee replacement"></div>
+      <div><label for="comparison">Comparação <span class="hint">opcional</span></label><input type="text" id="comparison" placeholder="nonoperative; exercise therapy"></div>
+      <div><label for="outcome">Desfecho <span class="hint">opcional</span></label><input type="text" id="outcome"></div>
+    </div>
+    <label>Tipos de estudo</label>
+    <div class="actions">
+      <label class="hint"><input type="checkbox" name="design" value="rct" checked> Ensaio randomizado</label>
+      <label class="hint"><input type="checkbox" name="design" value="sr" checked> Revisão sistemática</label>
+      <label class="hint"><input type="checkbox" name="design" value="ma" checked> Meta-análise</label>
+      <label class="hint"><input type="checkbox" name="design" value="guideline"> Diretriz</label>
+    </div>
+    <p><button class="primary" id="searchBtn">Buscar no PubMed</button></p>
+    <div id="searchMsg"></div>
+    <div id="queryBox" class="muted mono"></div>
+  </div>
+  <div class="card" id="results" hidden></div>
+</section>
+
+<section id="s2">
+  <div class="card">
+    <label for="reviewer">Seu registro (CRM) <span class="hint">usado para assinar as decisões</span></label>
+    <input type="text" id="reviewer" placeholder="CRM-UF 000000" maxlength="60">
+    <p class="muted">Para cada artigo: peça a sugestão da IA e confirme, ou classifique manualmente colando um trecho literal do resumo.</p>
+  </div>
+  <div class="card" id="classifyList"><p class="muted">Faça a busca no passo 1 primeiro.</p></div>
+  <div class="card"><h3>Decisões confirmadas</h3><div id="decisionsBox" class="muted">Nenhuma ainda.</div></div>
+</section>
+
+<section id="s3">
+  <div class="card">
+    <label for="procedure">Procedimento solicitado</label><input type="text" id="procedure" maxlength="300" placeholder="Artroplastia total do joelho">
+    <div class="row">
+      <div><label for="rol">Consta do Rol da ANS?</label><select id="rol"><option value="NAO_INFORMADO">Não sei / verificar</option><option value="SIM">Sim</option><option value="NAO">Não</option></select></div>
+      <div><label for="urgency">Caráter</label><select id="urgency"><option value="ELETIVA">Eletivo</option><option value="URGENCIA">Urgência</option><option value="EMERGENCIA">Emergência</option></select></div>
+      <div><label for="ans">Situação na ANS (se fora do rol)</label><select id="ans"><option value="NAO_INFORMADO">Não sei</option><option value="SEM_ANALISE">Nunca analisado</option><option value="NEGADA">Incorporação negada</option><option value="PENDENTE">Análise pendente</option></select></div>
+      <div><label for="crm">Médico assistente (CRM)</label><input type="text" id="crm" maxlength="60"></div>
+      <div><label for="anvisa">Registro Anvisa do material</label><input type="text" id="anvisa" maxlength="120"></div>
+      <div><label for="prior">Pedido prévio à operadora?</label><select id="prior"><option value="">Não informado</option><option value="true">Sim, com protocolo</option><option value="false">Ainda não</option></select></div>
+      <div><label for="autogestao">Plano de autogestão?</label><select id="autogestao"><option value="">Não sei</option><option value="false">Não</option><option value="true">Sim</option></select></div>
+    </div>
+    <label for="alt">Por que as alternativas do rol não servem? <span class="hint">(necessário se fora do rol)</span></label><textarea id="alt" maxlength="1500"></textarea>
+    <label for="summary">Justificativa clínica <span class="hint">texto do médico, sem nome ou documentos do paciente</span></label><textarea id="summary" maxlength="8000" style="min-height:140px"></textarea>
+  </div>
+</section>
+
+<section id="s4">
+  <div class="card">
+    <p><button class="primary" id="docBtn">Gerar documento</button> <span class="muted">Tudo é reverificado no PubMed/Crossref na hora.</span></p>
+    <div id="docMsg"></div>
+    <div id="docSummary"></div>
+    <p class="actions" id="docActions" hidden>
+      <button class="secondary" id="openDoc">Abrir para imprimir / salvar PDF</button>
+      <button class="secondary" id="saveHtml">Baixar documento (.html)</button>
+      <button class="secondary" id="saveMd">Baixar texto (.md)</button>
+      <button class="secondary" id="saveDecisions">Baixar decisões (.json)</button>
+    </p>
+  </div>
+</section>
+</main>
+<script>
+"use strict";
+const TOKEN = document.querySelector('meta[name="workbench-token"]').content;
+const $ = (id) => document.getElementById(id);
+const DIR_PT = { SUPPORTING: "a favor", OPPOSING: "contra", NEUTRAL: "neutro", INCONCLUSIVE: "inconclusivo" };
+const REQ_PT = { ATENDIDO: "atendido", PENDENTE: "pendente", NAO_ATENDIDO: "não atendido" };
+let lastDoc = null;
+
+function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v; else if (k === "text") node.textContent = v; else node.setAttribute(k, v);
+  }
+  for (const c of children) if (c != null) node.append(c);
+  return node;
+}
+function message(box, text, kind = "err") { box.replaceChildren(el("div", { class: `msg ${kind}`, text })); }
+async function api(path, body, method = body === undefined ? "GET" : "POST") {
+  const res = await fetch(path, { method, headers: { "Content-Type": "application/json", "X-Workbench-Token": TOKEN },
+    body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const detail = Array.isArray(data.detail) ? data.detail.map(d => d.msg).join("; ") : data.detail;
+    throw new Error(detail || `Erro ${res.status}`);
+  }
+  return data;
+}
+async function busy(button, fn) { button.disabled = true; try { return await fn(); } finally { button.disabled = false; } }
+function download(name, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  const a = el("a", { href: url, download: name }); document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+document.querySelectorAll("nav button").forEach(b => b.addEventListener("click", () => {
+  document.querySelectorAll("nav button").forEach(x => x.classList.toggle("active", x === b));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === b.dataset.step));
+}));
+
+api("/api/status").then(s => { $("modelStatus").textContent = s.model_configured ? "IA: Claude conectado" : "IA não configurada — use a classificação manual"; });
+
+$("searchBtn").addEventListener("click", (e) => busy(e.target, async () => {
+  const designs = [...document.querySelectorAll('input[name="design"]:checked')].map(x => x.value);
+  message($("searchMsg"), "Buscando e conferindo no PubMed/Crossref…", "info");
+  try {
+    const r = await api("/api/search", { population: $("population").value, intervention: $("intervention").value,
+      comparison: $("comparison").value, outcome: $("outcome").value, designs });
+    $("searchMsg").replaceChildren();
+    $("queryBox").textContent = "Consulta usada: " + r.query + (r.mesh.length ? "  ·  MeSH: " + r.mesh.map(m => `${m.synonym} → ${m.heading}`).join("; ") : "");
+    renderResults(r.candidates);
+  } catch (err) { message($("searchMsg"), err.message); }
+}));
+
+function renderResults(cands) {
+  const box = $("results"); box.hidden = false;
+  box.replaceChildren(el("h3", { text: `${cands.length} artigo(s) encontrados — candidatos, ainda não classificados` }));
+  const list = $("classifyList"); list.replaceChildren();
+  if (!cands.length) { list.append(el("p", { class: "muted", text: "Nenhum artigo. Ajuste a pergunta." })); return; }
+  for (const c of cands) {
+    box.append(el("div", { class: "cand" }, el("div", { text: c.title || "[sem título]" }),
+      el("a", { href: `https://pubmed.ncbi.nlm.nih.gov/${c.pmid}/`, target: "_blank", rel: "noopener noreferrer", class: "muted", text: `PMID ${c.pmid}` })));
+    list.append(candidateCard(c));
+  }
+}
+
+function candidateCard(c) {
+  const card = el("div", { class: "cand" });
+  const out = el("div");
+  const abstractBtn = el("button", { class: "secondary", text: "Ver resumo" });
+  const aiBtn = el("button", { class: "secondary", text: "Sugestão da IA" });
+  const manualBtn = el("button", { class: "secondary", text: "Classificar manualmente" });
+  card.append(el("h3", { text: c.title || "[sem título]" }), el("div", { class: "muted", text: `PMID ${c.pmid}` }),
+    el("div", { class: "actions" }, abstractBtn, aiBtn, manualBtn), out);
+  abstractBtn.onclick = () => busy(abstractBtn, async () => {
+    try { const a = await api("/api/abstract", { pmid: c.pmid }); out.replaceChildren(el("div", { class: "abstract", text: a.text })); }
+    catch (err) { message(out, err.message); }
+  });
+  aiBtn.onclick = () => busy(aiBtn, async () => {
+    if (!requireBasics(out)) return;
+    message(out, "Consultando o Claude…", "info");
+    try { renderProposal(out, await api("/api/propose", { claim: $("claim").value, pmid: c.pmid })); }
+    catch (err) { message(out, err.message); }
+  });
+  manualBtn.onclick = () => renderManual(out, c);
+  return card;
+}
+
+function requireBasics(out) {
+  if ($("claim").value.trim().length < 10) { message(out, "Preencha a afirmação no passo 1."); return false; }
+  if ($("reviewer").value.trim().length < 3) { message(out, "Preencha o seu CRM acima."); return false; }
+  return true;
+}
+
+function renderProposal(out, p) {
+  out.replaceChildren();
+  if (p.status !== "PENDING_PHYSICIAN_REVIEW") {
+    out.append(el("div", { class: "msg err", text: `Sugestão descartada (${p.status}): ${p.rationale}. Classifique manualmente se quiser.` }));
+    return;
+  }
+  const select = el("select");
+  for (const [v, t] of Object.entries(DIR_PT)) select.append(el("option", { value: v, text: t }));
+  select.value = p.direction;
+  const note = el("input", { type: "text", placeholder: "Motivo (obrigatório se mudar a classificação)" });
+  const accept = el("button", { class: "primary", text: "Confirmar" });
+  const reject = el("button", { class: "secondary", text: "Rejeitar artigo" });
+  out.append(el("div", {}, el("span", { class: `badge ${p.direction}`, text: "IA: " + DIR_PT[p.direction] }), " ",
+      el("span", { class: "muted", text: p.model })),
+    el("blockquote", { text: p.quote }), el("div", { class: "muted", text: p.rationale }),
+    el("label", { text: "Sua classificação" }), select, note, el("div", { class: "actions" }, accept, reject));
+  const send = (decision, button) => busy(button, async () => {
+    try {
+      const body = { proposal_id: p.proposal_id, decision, reviewer: $("reviewer").value, note: note.value };
+      if (decision !== "REJECT" && select.value !== p.direction) { body.decision = "OVERRIDE"; body.final_direction = select.value; }
+      const r = await api("/api/decide", body);
+      message(out, r.final_direction ? `Confirmado: ${DIR_PT[r.final_direction]}.` : "Artigo rejeitado.", "ok");
+      refreshDecisions();
+    } catch (err) { message(out, err.message); }
+  });
+  accept.onclick = () => send("ACCEPT", accept);
+  reject.onclick = () => send("REJECT", reject);
+}
+
+function renderManual(out, c) {
+  const select = el("select");
+  for (const [v, t] of Object.entries(DIR_PT)) select.append(el("option", { value: v, text: t }));
+  const quote = el("textarea", { placeholder: "Cole aqui um trecho LITERAL do resumo (mínimo 20 caracteres)" });
+  const save = el("button", { class: "primary", text: "Salvar classificação" });
+  const status = el("div");
+  out.replaceChildren(el("label", { text: "Classificação" }), select, el("label", { text: "Trecho do resumo" }), quote,
+    el("div", { class: "actions" }, save), status);
+  save.onclick = () => busy(save, async () => {
+    if (!requireBasics(status)) return;
+    try {
+      const r = await api("/api/manual", { claim: $("claim").value, pmid: c.pmid, direction: select.value,
+        quote: quote.value, reviewer: $("reviewer").value });
+      message(out, `Confirmado manualmente: ${DIR_PT[r.final_direction]}.`, "ok"); refreshDecisions();
+    } catch (err) { message(status, err.message); }
+  });
+}
+
+async function refreshDecisions() {
+  const list = await api("/api/decisions");
+  const box = $("decisionsBox");
+  if (!list.length) { box.textContent = "Nenhuma ainda."; return; }
+  const table = el("table", {}, el("tr", {}, el("th", { text: "PMID" }), el("th", { text: "Decisão" }), el("th", { text: "Trecho" }), el("th")));
+  for (const r of list) {
+    const remove = el("button", { class: "secondary", text: "Remover" });
+    remove.onclick = async () => { await api(`/api/decisions/${encodeURIComponent(r.pmid)}`, undefined, "DELETE"); refreshDecisions(); };
+    table.append(el("tr", {}, el("td", { text: r.pmid }),
+      el("td", {}, r.final_direction ? el("span", { class: `badge ${r.final_direction}`, text: DIR_PT[r.final_direction] }) : el("span", { class: "muted", text: "rejeitado" })),
+      el("td", { class: "muted", text: r.quote || "" }), el("td", {}, remove)));
+  }
+  box.replaceChildren(table);
+}
+
+const optBool = (v) => v === "" ? null : v === "true";
+$("docBtn").addEventListener("click", (e) => busy(e.target, async () => {
+  message($("docMsg"), "Reverificando evidências e montando o documento…", "info");
+  try {
+    const r = await api("/api/document", { claim: $("claim").value, procedure: $("procedure").value, rol: $("rol").value,
+      urgency: $("urgency").value, ans_analysis: $("ans").value, no_rol_alternative: $("alt").value, anvisa: $("anvisa").value,
+      crm: $("crm").value, prior_request: optBool($("prior").value), autogestao: optBool($("autogestao").value),
+      clinical_summary: $("summary").value });
+    lastDoc = r;
+    message($("docMsg"), `${r.included} referência(s) incluída(s).`, "ok");
+    const s = $("docSummary"); s.replaceChildren();
+    if (r.requirements.length) {
+      const t = el("table", {}, el("tr", {}, el("th", { text: "Requisito do STF (ADI 7.265)" }), el("th", { text: "Situação" })));
+      for (const q of r.requirements) t.append(el("tr", {}, el("td", {}, el("div", { text: q.label }), el("div", { class: "muted", text: q.basis })),
+        el("td", {}, el("span", { class: `badge ${q.status}`, text: REQ_PT[q.status] }))));
+      s.append(t);
+    }
+    for (const w of r.warnings) s.append(el("div", { class: "msg err", text: "Pendência: " + w }));
+    for (const x of r.excluded) s.append(el("div", { class: "muted", text: `Não incluído PMID ${x.pmid}: ${x.reason}` }));
+    $("docActions").hidden = false;
+  } catch (err) { message($("docMsg"), err.message); }
+}));
+$("openDoc").onclick = () => {
+  if (!lastDoc) return;
+  const url = URL.createObjectURL(new Blob([lastDoc.html], { type: "text/html" }));
+  if (!window.open(url, "_blank")) message($("docMsg"), "O navegador bloqueou a nova aba. Use \"Baixar documento (.html)\" e abra o arquivo.");
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+};
+$("saveHtml").onclick = () => lastDoc && download("solicitacao-cobertura.html", lastDoc.html, "text/html");
+$("saveMd").onclick = () => lastDoc && download("fundamentacao.md", lastDoc.markdown, "text/markdown");
+$("saveDecisions").onclick = async () => download("decisoes.json", JSON.stringify(await api("/api/decisions"), null, 2), "application/json");
+</script>
+</body>
+</html>

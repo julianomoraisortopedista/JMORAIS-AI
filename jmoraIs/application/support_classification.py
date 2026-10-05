@@ -17,7 +17,7 @@ import re
 from typing import Callable, Optional
 from uuid import uuid4
 
-from jmoraIs.connect.pubmed import PublishedAbstract
+from jmoraIs.connect.pubmed import AbstractUnavailable, PublishedAbstract  # noqa: F401 (re-exported)
 from jmoraIs.evidence_ledger import AppendOnlyEvidenceLedger
 from jmoraIs.llm_gateway.domain import (
     CanonicalStructuredDTO, LLMModel, LLMOutputClassification, LLMRequest, ReviewPolicy, StructuredField,
@@ -159,26 +159,34 @@ class SupportClassificationService:
     def decide(self, proposal: SupportClassificationProposal, *, reviewer_id: str,
                decision: PhysicianDecisionType, final_direction: Optional[SupportDirection] = None,
                note: str = "") -> PhysicianSupportDecision:
-        if not reviewer_id or not reviewer_id.strip():
-            raise SupportClassificationRejected("identified physician reviewer is required")
-        if decision is PhysicianDecisionType.REJECT:
-            final = None
-        elif proposal.status is not ProposalStatus.PENDING_PHYSICIAN_REVIEW:
-            raise SupportClassificationRejected("only grounded proposals can be accepted or overridden")
-        elif decision is PhysicianDecisionType.ACCEPT:
-            if final_direction not in (None, proposal.proposed_direction):
-                raise SupportClassificationRejected("ACCEPT keeps the proposed direction; use OVERRIDE")
-            final = proposal.proposed_direction
-        elif decision is PhysicianDecisionType.OVERRIDE:
-            if not isinstance(final_direction, SupportDirection) or final_direction is proposal.proposed_direction:
-                raise SupportClassificationRejected("OVERRIDE requires a different direction")
-            if not note.strip():
-                raise SupportClassificationRejected("OVERRIDE requires the physician's reason")
-            final = final_direction
-        else:
-            raise SupportClassificationRejected("unknown decision")
-        return PhysicianSupportDecision("dec-" + self._ids(), proposal, decision, final,
-                                        reviewer_id.strip(), note.strip(), self._clock())
+        return decide_proposal(proposal, reviewer_id=reviewer_id, decision=decision, final_direction=final_direction,
+                               note=note, clock=self._clock, id_factory=self._ids)
+
+
+def decide_proposal(proposal: SupportClassificationProposal, *, reviewer_id: str,
+                    decision: PhysicianDecisionType, final_direction: Optional[SupportDirection] = None,
+                    note: str = "", clock: Callable[[], datetime],
+                    id_factory: Callable[[], str] = lambda: uuid4().hex) -> PhysicianSupportDecision:
+    if not reviewer_id or not reviewer_id.strip():
+        raise SupportClassificationRejected("identified physician reviewer is required")
+    if decision is PhysicianDecisionType.REJECT:
+        final = None
+    elif proposal.status is not ProposalStatus.PENDING_PHYSICIAN_REVIEW:
+        raise SupportClassificationRejected("only grounded proposals can be accepted or overridden")
+    elif decision is PhysicianDecisionType.ACCEPT:
+        if final_direction not in (None, proposal.proposed_direction):
+            raise SupportClassificationRejected("ACCEPT keeps the proposed direction; use OVERRIDE")
+        final = proposal.proposed_direction
+    elif decision is PhysicianDecisionType.OVERRIDE:
+        if not isinstance(final_direction, SupportDirection) or final_direction is proposal.proposed_direction:
+            raise SupportClassificationRejected("OVERRIDE requires a different direction")
+        if not note.strip():
+            raise SupportClassificationRejected("OVERRIDE requires the physician's reason")
+        final = final_direction
+    else:
+        raise SupportClassificationRejected("unknown decision")
+    return PhysicianSupportDecision("dec-" + id_factory(), proposal, decision, final,
+                                    reviewer_id.strip(), note.strip(), clock())
 
 
 def register_confirmed_support(decision: PhysicianSupportDecision, *, ledger: AppendOnlyEvidenceLedger,
@@ -202,3 +210,37 @@ def support_classification_prompt():
     return PromptTemplate(CLASSIFIER_VERSION, "Support direction proposal",
                           "Propose support direction of a publication for physician review",
                           INSTRUCTIONS, ("CanonicalStructuredDTO",), OUTPUT_SCHEMA_ID, POLICY)
+
+
+MANUAL_MODEL = "physician-manual"
+
+
+def manual_proposal(claim: str, abstract: PublishedAbstract, direction: SupportDirection, quote: str,
+                    *, clock: Callable[[], datetime], id_factory: Callable[[], str] = lambda: uuid4().hex
+                    ) -> SupportClassificationProposal:
+    """Physician classifies without a model; the same verbatim-quote rule applies."""
+    claim = " ".join((claim or "").split())
+    if len(claim) < 10:
+        raise SupportClassificationRejected("a specific claim is required")
+    if not isinstance(abstract, PublishedAbstract) or sha256(abstract.text.encode("utf-8")).hexdigest() != abstract.content_hash:
+        raise SupportClassificationRejected("integrity-checked PubMed abstract is required")
+    if not isinstance(direction, SupportDirection):
+        raise SupportClassificationRejected("a support direction is required")
+    quote = " ".join((quote or "").split())
+    if not _is_verbatim(quote, abstract):
+        raise SupportClassificationRejected("quote must be a verbatim passage of the abstract (>= 20 characters)")
+    return SupportClassificationProposal(
+        "prop-" + id_factory(), claim, abstract.pmid, abstract.content_hash, abstract.source_locator,
+        ProposalStatus.PENDING_PHYSICIAN_REVIEW, direction, quote, "classificação manual pelo médico",
+        "manual-" + id_factory(), MANUAL_MODEL, "none", clock())
+
+
+def decision_record(decision: PhysicianSupportDecision) -> dict:
+    """Portable record consumed by the justification builder (re-verified there)."""
+    p = decision.proposal
+    return {"pmid": p.pmid, "claim": p.claim, "source": p.source_locator, "abstract_sha256": p.abstract_hash,
+            "ai_status": p.status.value, "ai_direction": p.proposed_direction.value if p.proposed_direction else None,
+            "quote": p.quote, "ai_rationale": p.rationale, "model": p.model_id, "prompt_version": p.prompt_version_id,
+            "physician_decision": decision.decision.value,
+            "final_direction": decision.final_direction.value if decision.final_direction else None,
+            "reviewer": decision.reviewer_id, "note": decision.note, "decided_at": decision.decided_at.isoformat()}
