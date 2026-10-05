@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from datetime import datetime
+from hashlib import sha256
 import re
 import time
+from xml.etree import ElementTree
 from typing import Any, Callable
 
 import requests
@@ -17,9 +20,52 @@ from jmoraIs.scientific_domain import (
 
 PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi"
 PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+PUBMED_FETCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
 # NCBI E-utilities allow 3 requests/second without an API key.
 NCBI_MIN_INTERVAL_SECONDS = 0.34
 _MESH_CLAUSE = re.compile(r'"([A-Za-z0-9][A-Za-z0-9 ,\-\']*)"\[MeSH Terms\]')
+
+
+class AbstractUnavailable(RuntimeError):
+    pass
+
+
+@dataclass(frozen=True)
+class PublishedAbstract:
+    """Exact abstract text as published in PubMed; public bibliographic data only."""
+    pmid: str
+    title: str
+    text: str
+    source_locator: str
+    retrieved_at: datetime
+    content_hash: str
+
+
+def parse_pubmed_abstract(pmid: str, xml_text: str, retrieved_at: datetime) -> PublishedAbstract:
+    # PubMed sends an external-DTD DOCTYPE; internal subsets/entities are refused.
+    if "<!ENTITY" in xml_text or re.search(r"<!DOCTYPE[^>]*\[", xml_text):
+        raise AbstractUnavailable("unsafe XML declaration")
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError as exc:
+        raise AbstractUnavailable("invalid PubMed XML") from exc
+    article = next((a for a in root.iter("PubmedArticle")
+                    if (a.findtext("MedlineCitation/PMID") or "").strip() == pmid), None)
+    if article is None:
+        raise AbstractUnavailable("PMID absent from PubMed response")
+    title = " ".join("".join(article.find("MedlineCitation/Article/ArticleTitle").itertext()).split()) \
+        if article.find("MedlineCitation/Article/ArticleTitle") is not None else ""
+    sections = []
+    for node in article.iter("AbstractText"):
+        text = " ".join("".join(node.itertext()).split())
+        if text:
+            label = node.get("Label")
+            sections.append(f"{label}: {text}" if label else text)
+    if not sections:
+        raise AbstractUnavailable("no abstract published for this PMID")
+    text = "\n".join(sections)
+    return PublishedAbstract(pmid, title, text, f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+                             retrieved_at, sha256(text.encode("utf-8")).hexdigest())
 
 
 class PubMedConnector(BaseConnector):
@@ -152,6 +198,17 @@ class PubMedConnector(BaseConnector):
                 authoritative_metadata={**result.authoritative_metadata, "doi": doi},
             )
         return result
+
+    def fetch_abstract(self, pmid: str) -> PublishedAbstract:
+        if not re.fullmatch(r"[1-9][0-9]{0,8}", pmid or ""):
+            raise AbstractUnavailable("malformed PMID")
+        try:
+            response = self._get(PUBMED_FETCH_URL, params={"db": "pubmed", "id": pmid, "retmode": "xml"},
+                                 timeout=self.timeout)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise AbstractUnavailable("PubMed unavailable") from exc
+        return parse_pubmed_abstract(pmid, response.text, utc_now())
 
     def mesh_headings_for(self, phrase: str) -> tuple[str, ...]:
         """MeSH headings PubMed maps to the whole phrase; empty on any failure."""
