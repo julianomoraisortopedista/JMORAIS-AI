@@ -50,7 +50,7 @@ def test_foreign_host_and_missing_token_are_rejected():
     assert c.get("/", headers={"Host": "evil.example"}).status_code == 403
     assert c.get("/api/status").status_code == 403
     assert c.get("/api/status", headers={"X-Workbench-Token": "wrong"}).status_code == 403
-    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0}
+    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0, "can_save_key": False}
 
 
 def test_search_builds_pico_query_and_lists_candidates():
@@ -110,3 +110,30 @@ def test_default_classifier_factory_depends_on_credentials():
     assert default_classifier_factory({}, keychain=no_key) is None
     assert default_classifier_factory({"ANTHROPIC_API_KEY": "x"}, keychain=no_key) is not None
     assert default_classifier_factory({}, keychain=lambda: "sk-ant-x") is not None
+
+
+def test_key_can_be_saved_from_the_page_and_is_never_echoed():
+    saved = []
+    app = create_app(pubmed=SearchablePubMed(), crossref=Crossref(), clock=lambda: NOW, token=TOKEN,
+                     resolve_classifier=lambda: (lambda: None) if saved else None,
+                     save_key=lambda key: saved.append(key) or key.startswith("sk-ant-"))
+    c = TestClient(app, base_url="http://127.0.0.1:8770")
+    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0, "can_save_key": True}
+    bad = c.post("/api/settings/anthropic-key", headers=H, json={"key": "nope"})
+    assert bad.status_code == 400 and "nope" not in bad.text
+    good = c.post("/api/settings/anthropic-key", headers=H, json={"key": "sk-ant-secret-value"})
+    assert good.json() == {"model_configured": True} and "secret" not in good.text
+    assert c.post("/api/settings/anthropic-key", json={"key": "sk-ant-x"}).status_code == 403  # token required
+    assert client().post("/api/settings/anthropic-key", headers=H, json={"key": "sk-ant-x"}).status_code == 404
+
+
+def test_save_keychain_key_validates_and_uses_stdin_not_argv():
+    from types import SimpleNamespace
+    from jmoraIs.application.support_classification_runtime import save_keychain_api_key
+    calls = []
+    run = lambda args, **kw: calls.append((args, kw.get("input"))) or SimpleNamespace(returncode=0)
+    assert save_keychain_api_key("\x1b[200~sk-ant-" + "a" * 30 + "\x1b[201~", run=run, platform="darwin")
+    (args, stdin), = calls
+    assert args == ["security", "-i"] and "sk-ant-" + "a" * 30 in stdin and "sk-ant" not in " ".join(args)
+    assert not save_keychain_api_key("sk-ant-short; rm -rf /", run=run, platform="darwin")
+    assert not save_keychain_api_key("sk-ant-" + "a" * 30, run=run, platform="linux")

@@ -17,7 +17,7 @@ from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from jmoraIs.application.coverage_document import render_coverage_html
 from jmoraIs.application.evidence_packages import ScientificEvidencePackagePort
@@ -50,6 +50,10 @@ class SearchIn(BaseModel):
 
 class PmidIn(BaseModel):
     pmid: str = Field(pattern=r"^[1-9][0-9]{0,8}$")
+
+
+class KeyIn(BaseModel):
+    key: SecretStr = Field(max_length=400)
 
 
 class ProposeIn(PmidIn):
@@ -97,8 +101,14 @@ def _split(value: str) -> tuple[str, ...]:
 
 
 def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = None,
-               clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc), token: Optional[str] = None) -> FastAPI:
-    """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py)."""
+               clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc), token: Optional[str] = None,
+               resolve_classifier: Optional[Callable[[], Optional[Callable]]] = None,
+               save_key: Optional[Callable[[str], bool]] = None) -> FastAPI:
+    """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
+    `resolve_classifier` re-checks credentials per request (so a key saved while running
+    is picked up); `save_key` stores a pasted key in the macOS Keychain."""
+    def current_classifier():
+        return resolve_classifier() if resolve_classifier else classifier_factory
     token = token or secrets.token_urlsafe(32)
     state = WorkbenchState()
     app = FastAPI(title="JMORAIS Workbench", docs_url=None, redoc_url=None, openapi_url=None)
@@ -140,7 +150,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
 
     @app.get("/api/status")
     def status():
-        return {"model_configured": classifier_factory is not None, "decisions": len(state.decisions)}
+        return {"model_configured": current_classifier() is not None, "decisions": len(state.decisions),
+                "can_save_key": save_key is not None}
 
     @app.post("/api/search")
     def search(body: SearchIn):
@@ -156,6 +167,14 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 "mesh": [dict(element=e.element, synonym=e.synonym, heading=e.mesh_heading) for e in built.expansions],
                 "candidates": [dict(pmid=a.pmid, doi=a.doi, title=a.title) for a in result.articles if a.pmid]}
 
+    @app.post("/api/settings/anthropic-key")
+    def store_key(body: KeyIn):
+        if save_key is None:
+            bad("Configuração de chave indisponível neste computador.", 404)
+        if not save_key(body.key.get_secret_value()):
+            bad("Chave não aceita. Copie de novo em platform.claude.com (começa com sk-ant-).")
+        return {"model_configured": current_classifier() is not None}
+
     @app.post("/api/abstract")
     def abstract(body: PmidIn):
         value = fetch(body.pmid)
@@ -169,10 +188,11 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
 
     @app.post("/api/propose")
     def propose(body: ProposeIn):
-        if classifier_factory is None:
+        factory = current_classifier()
+        if factory is None:
             bad("Modelo de IA não configurado (ANTHROPIC_API_KEY). Use a classificação manual.", 503)
         value = fetch(body.pmid)
-        service = classifier_factory()
+        service = factory()
         try:
             with TenantContextBinder().bind_tenant(tenant("workbench")):
                 return proposal_out(service.propose(body.claim, value))

@@ -40,6 +40,28 @@ def keychain_api_key(run=None, platform=None) -> Optional[str]:
     return value if result.returncode == 0 and value.startswith("sk-ant-") else None
 
 
+_KEY_SHAPE = __import__("re").compile(r"^sk-ant-[A-Za-z0-9_-]{20,300}$")
+
+
+def save_keychain_api_key(key: str, run=None, platform=None) -> bool:
+    """Store the key in the login Keychain. The value is passed on stdin to `security -i`
+    (not on the command line) and is never logged or returned."""
+    import subprocess
+    import sys
+    key = "".join(str(key or "").replace("\x1b[200~", "").replace("\x1b[201~", "").split())
+    if (platform or sys.platform) != "darwin" or not _KEY_SHAPE.match(key):
+        return False
+    run = run or subprocess.run
+    account = os.environ.get("USER", "")
+    account = account if __import__("re").fullmatch(r"[A-Za-z0-9._-]{1,64}", account) else "jmorais"
+    command = f"add-generic-password -U -a {account} -s {KEYCHAIN_SERVICE} -w {key}\n"
+    try:
+        result = run(["security", "-i"], input=command, capture_output=True, text=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
 def credentials_configured(environ, keychain=keychain_api_key) -> bool:
     return bool(environ.get("ANTHROPIC_API_KEY") or environ.get("ANTHROPIC_AUTH_TOKEN")
                 or environ.get("ANTHROPIC_PROFILE") or keychain())

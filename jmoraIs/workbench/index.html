@@ -37,6 +37,11 @@ table { width:100%; border-collapse:collapse; } td, th { text-align:left; paddin
 </head>
 <body>
 <header><h1>JMORAIS · Fundamentação de cirurgias</h1><span class="muted">Uso local. Não digite dados que identifiquem o paciente.</span><span id="modelStatus" class="muted"></span></header>
+<div id="keyPanel" class="card" style="max-width:1040px;margin:12px auto 0" hidden>
+  <label for="apiKey">Configurar chave do Claude <span class="hint">cole a chave copiada em platform.claude.com (começa com sk-ant-). Ela é guardada no Chaves do Mac e não aparece na tela.</span></label>
+  <div class="actions"><input type="password" id="apiKey" autocomplete="off" spellcheck="false" style="flex:1;min-width:240px"><button class="primary" id="saveKey">Salvar chave</button></div>
+  <div id="keyMsg"></div>
+</div>
 <main>
 <nav>
   <button data-step="s1" class="active">1. Pergunta e busca</button>
@@ -149,7 +154,19 @@ document.querySelectorAll("nav button").forEach(b => b.addEventListener("click",
   document.querySelectorAll("section").forEach(s => s.classList.toggle("active", s.id === b.dataset.step));
 }));
 
-api("/api/status").then(s => { $("modelStatus").textContent = s.model_configured ? "IA: Claude conectado" : "IA não configurada — use a classificação manual"; });
+function showStatus(s) {
+  $("modelStatus").textContent = s.model_configured ? "IA: Claude conectado" : "IA não configurada — use a classificação manual";
+  $("keyPanel").hidden = s.model_configured || !s.can_save_key;
+}
+api("/api/status").then(showStatus);
+$("saveKey").addEventListener("click", (e) => busy(e.target, async () => {
+  try {
+    const r = await api("/api/settings/anthropic-key", { key: $("apiKey").value });
+    $("apiKey").value = "";
+    message($("keyMsg"), r.model_configured ? "Chave salva. Claude conectado." : "Chave salva, mas o Claude ainda não foi detectado.", "ok");
+    showStatus({ model_configured: r.model_configured, can_save_key: true });
+  } catch (err) { $("apiKey").value = ""; message($("keyMsg"), err.message); }
+}));
 
 $("searchBtn").addEventListener("click", (e) => busy(e.target, async () => {
   const designs = [...document.querySelectorAll('input[name="design"]:checked')].map(x => x.value);
