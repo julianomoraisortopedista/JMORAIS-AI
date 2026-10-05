@@ -60,6 +60,13 @@ LIVE INTERNAL PILOT READY = PENDING — EXTERNAL DEPLOYMENT CONFIGURATION
 - Operator instructions: `INTERNAL_PILOT_RUNBOOK.md`; configuration names: `config/internal-pilot.env.example`. Manual CI workflow invokes the same gate; remote CI was not executed.
 - Existing S001–S005 accepted evidence retained. No historical full-suite rerun, new feature sprint, commit, push or merge.
 
+### Local synthetic pilot proof — 2026-10-05
+
+- `make local-pilot-up` + `make local-pilot-proof` PASS: real Keycloak code+PKCE, 3 synthetic launches x 7 viewers, readiness, authorization denials, cryptographic replay VALID, runtime role NOBYPASSRLS. Synthetic data only; secrets live in `~/.local/share/jmorais-local-pilot` (0600), never in the repository.
+- Root cause of the earlier bootstrap 403: the seed issued all three governed drafts from one fixture document, so drafts 2 and 3 correctly SUPERSEDED their predecessors and patient 1/2 launches failed closed ("governed draft lifecycle is not ACTIVE"). Fix: one pseudonymous `pt_` subject per synthetic patient. No authorization, signature or lifecycle validation changed.
+- Full suite against isolated PostgreSQL 16: 1004 passed, 8 skipped; pilot production runtime test PASS on a migrated `pilot_release_*` database. Stale Alembic head pins (065/066) updated to `068_offline_medical_dependencies`; API identity-SDK guard now checks imports via AST instead of banning the OIDC scope string "openid".
+- LIVE INTERNAL PILOT READY remains PENDING on external deployment prerequisites (DEPLOYMENT_PREREQUISITES.md).
+
 ### Deployment preparation — 2026-10-01
 
 - Existing software release gate remains 19/19 PASS; no historical gate repeated.
