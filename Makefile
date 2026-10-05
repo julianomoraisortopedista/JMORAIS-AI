@@ -70,12 +70,12 @@ local-pilot-proof:
 .PHONY: evidence-search
 # Read-only PubMed + Crossref discovery; candidates only, never patient data. Usage: make evidence-search Q="..."
 evidence-search: verify-python
-	@test -n "$(Q)$(ARGS)" || { echo 'Usage: make evidence-search Q="question" or ARGS="--population ... --intervention ..."' >&2; exit 2; }
+	$(if $(strip $(Q)$(ARGS)),,$(error Usage: make evidence-search Q="question" or ARGS='--population ... --intervention ...'))
 	@"$(VENV_PYTHON)" scripts/evidence_search.py $(if $(Q),"$(Q)") $(ARGS)
 
 .PHONY: classify-evidence
 # AI proposes, physician confirms (Claude via the Canonical LLM Gateway). Usage:
 # make classify-evidence ARGS='--claim "..." --pmid 26488691 --reviewer CRM-UF-000000'
 classify-evidence: verify-python
-	@test -n "$(ARGS)" || { echo 'Usage: make classify-evidence ARGS="--claim ... --pmid ... --reviewer ..."' >&2; exit 2; }
+	$(if $(strip $(ARGS)),,$(error Usage: make classify-evidence ARGS='--claim ... --pmid ... --reviewer ...'))
 	@"$(VENV_PYTHON)" scripts/classify_evidence.py $(ARGS)
