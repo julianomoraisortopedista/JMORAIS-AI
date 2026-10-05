@@ -45,7 +45,7 @@ def test_pre_link_stage11_transition_restart_rls_and_state_tamper(monkeypatch):
     command.upgrade(cfg,"head")
     with owner.connect() as c:
         assert c.execute(text("SHOW server_version_num")).scalar_one().startswith("16")
-        assert MigrationContext.configure(c).get_current_heads()==tuple(ScriptDirectory.from_config(cfg).get_heads())==("065_defense_reference_state",)
+        assert MigrationContext.configure(c).get_current_heads()==tuple(ScriptDirectory.from_config(cfg).get_heads())==("068_offline_medical_dependencies",)
         assert before==c.execute(text("SELECT reference_id,integrity_hash,issued_at FROM audit_defense_persisted_references ORDER BY sequence_id")).all()
         assert anchors_before==c.execute(text("SELECT * FROM cryptographic_stream_checkpoints WHERE stream_namespace='audit_defense_persisted_references' ORDER BY checkpoint_id")).all()
     suffix=uuid4().hex

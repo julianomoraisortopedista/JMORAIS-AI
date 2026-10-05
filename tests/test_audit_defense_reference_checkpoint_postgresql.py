@@ -77,7 +77,7 @@ def _reference_checkpoint_proof(monkeypatch,*,native_only=False):
         from alembic.runtime.migration import MigrationContext
         from alembic.script import ScriptDirectory
         assert c.execute(text("SHOW server_version_num")).scalar_one().startswith("16")
-        assert MigrationContext.configure(c).get_current_heads()==tuple(ScriptDirectory.from_config(config).get_heads())==("065_defense_reference_state",)
+        assert MigrationContext.configure(c).get_current_heads()==tuple(ScriptDirectory.from_config(config).get_heads())==("068_offline_medical_dependencies",)
         canonical_bytes=b"abc"
         expected="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         assert c.execute(text("SELECT encode(sha256(CAST(:value AS bytea)), 'hex')"),{"value":canonical_bytes}).scalar_one()==sha256(canonical_bytes).hexdigest()==expected

@@ -38,7 +38,14 @@ def test_api_has_no_write_routes_or_public_prefix():
 def test_api_authentication_is_port_driven_and_has_no_external_identity_sdk():
     source = "\n".join(path.read_text() for path in Path("jmoraIs/api").glob("*.py"))
     assert "ApiAuthenticationPort" in source and "CallerContext" in source
-    assert all(name not in source.lower() for name in ("auth0", "okta", "openid", "oauth2", "boto3"))
+    assert all(name not in source.lower() for name in ("auth0", "okta", "oauth2", "boto3"))
+    # "openid" is a legitimate OIDC scope value; only identity SDK imports are forbidden.
+    forbidden = ("auth0", "okta", "openid", "oauth2", "oauthlib", "authlib", "jose", "keycloak", "boto3")
+    for path in Path("jmoraIs/api").glob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text())):
+            modules = [a.name for a in node.names] if isinstance(node, ast.Import) else (
+                [node.module or ""] if isinstance(node, ast.ImportFrom) else [])
+            assert not any(m.split(".")[0].lower().startswith(forbidden) for m in modules), path
 
 
 def test_domain_and_application_do_not_depend_on_observability_infrastructure():
