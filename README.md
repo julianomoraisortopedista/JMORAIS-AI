@@ -67,6 +67,19 @@ not classified as supporting/opposing, no Vancouver text. Those require ledger-b
 package issuance, appraisal and physician review. Never include patient identifiers
 in the query. Add `--json` when calling `scripts/evidence_search.py` directly.
 
+Structured PICO search (recommended; synonyms separated by `;`, in English):
+
+```bash
+make evidence-search ARGS='--population "knee osteoarthritis" --intervention "total knee arthroplasty;total knee replacement" --comparison "nonoperative;exercise therapy;conservative treatment" --design rct,sr,ma'
+```
+
+Each element becomes an OR-group of the synonyms as `[tiab]` plus the MeSH heading
+PubMed's Automatic Term Mapping assigns to a *whole* synonym (word-level splits are
+ignored); elements are ANDed and designs (`rct`, `sr`, `ma`, `guideline`) become
+`[pt]` filters. The exact query and every MeSH expansion are printed for audit.
+Query syntax (quotes, brackets, boolean operators) is rejected in terms; MeSH lookup
+failures fall back to free text.
+
 ## Environment
 
 Copy `.env.example` to `.env` and adjust the database connection as needed. The default application config uses SQLite for local development and tests, while PostgreSQL remains the intended production target.

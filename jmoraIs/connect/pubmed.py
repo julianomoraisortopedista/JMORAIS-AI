@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import re
 import time
 from typing import Any, Callable
 
@@ -18,6 +19,7 @@ PUBMED_SUMMARY_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcg
 PUBMED_SEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 # NCBI E-utilities allow 3 requests/second without an API key.
 NCBI_MIN_INTERVAL_SECONDS = 0.34
+_MESH_CLAUSE = re.compile(r'"([A-Za-z0-9][A-Za-z0-9 ,\-\']*)"\[MeSH Terms\]')
 
 
 class PubMedConnector(BaseConnector):
@@ -150,6 +152,28 @@ class PubMedConnector(BaseConnector):
                 authoritative_metadata={**result.authoritative_metadata, "doi": doi},
             )
         return result
+
+    def mesh_headings_for(self, phrase: str) -> tuple[str, ...]:
+        """MeSH headings PubMed maps to the whole phrase; empty on any failure."""
+        try:
+            response = self._get(
+                PUBMED_SEARCH_URL,
+                params={"db": "pubmed", "term": phrase, "retmode": "json", "retmax": "0"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            translations = response.json()["esearchresult"].get("translationset") or []
+        except (requests.RequestException, KeyError, TypeError, ValueError):
+            return ()
+        wanted = " ".join(phrase.casefold().split())
+        headings: list[str] = []
+        for item in translations:
+            if not isinstance(item, dict) or " ".join(str(item.get("from", "")).casefold().split()) != wanted:
+                continue
+            for heading in (value.casefold() for value in _MESH_CLAUSE.findall(str(item.get("to", "")))):
+                if heading not in headings:
+                    headings.append(heading)
+        return tuple(headings)
 
     def search_by_title(self, title: str) -> list[IdentifierVerificationResult]:
         ids_or_error = self._search_ids(title, requested_identifier=title, identifier_type=IdentifierType.PMID)

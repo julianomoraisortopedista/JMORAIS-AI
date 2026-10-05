@@ -70,5 +70,5 @@ local-pilot-proof:
 .PHONY: evidence-search
 # Read-only PubMed + Crossref discovery; candidates only, never patient data. Usage: make evidence-search Q="..."
 evidence-search: verify-python
-	@test -n "$(Q)" || { echo 'Usage: make evidence-search Q="clinical question"' >&2; exit 2; }
-	@"$(VENV_PYTHON)" scripts/evidence_search.py "$(Q)"
+	@test -n "$(Q)$(ARGS)" || { echo 'Usage: make evidence-search Q="question" or ARGS="--population ... --intervention ..."' >&2; exit 2; }
+	@"$(VENV_PYTHON)" scripts/evidence_search.py $(if $(Q),"$(Q)") $(ARGS)
