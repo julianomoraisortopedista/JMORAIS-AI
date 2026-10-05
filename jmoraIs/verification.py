@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import re
+import unicodedata
 from collections import OrderedDict
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -170,6 +172,10 @@ def normalize_article(raw: dict[str, Any]) -> ArticleRecord:
             raw_payload=raw,
         ),
     )
+    for field_name in ("journal_abbreviation", "volume", "issue", "pages"):
+        value = raw.get(field_name)
+        if isinstance(value, (str, int)) and str(value).strip():
+            setattr(article, field_name, str(value).strip())
     if article.pmid and article.doi is None and isinstance(raw.get("elocationid"), str):
         article.doi = normalize_doi(raw.get("elocationid"))
     return article
@@ -195,23 +201,15 @@ def reconcile_with_crossref(article: ArticleRecord, crossref_record: dict[str, A
         crossref_authors = []
 
     conflicts: list[str] = []
-    if article.title and crossref_title and normalize_title(article.title) != normalize_title(crossref_title):
+    if article.title and crossref_title and not titles_match(article.title, crossref_title):
         conflicts.append("title")
-    if article.journal and crossref_journal and normalize_title(article.journal) != normalize_title(crossref_journal):
+    if article.journal and crossref_journal and normalize_journal(article.journal) != normalize_journal(crossref_journal):
         conflicts.append("journal")
-    if article.year and crossref_year and article.year != crossref_year:
+    if article.year and crossref_year and article.year != crossref_year and \
+            article.year not in (crossref_record.get("year_candidates") or ()):
         conflicts.append("year")
     if article.authors and crossref_authors:
-        def author_key(authors: list[str]) -> tuple[tuple[str, ...], ...]:
-            normalized_authors = []
-            for author in authors:
-                cleaned = re.sub(r"[^a-z0-9]+", " ", author.lower()).strip()
-                tokens = tuple(sorted(token for token in cleaned.split() if token))
-                if tokens:
-                    normalized_authors.append(tokens)
-            return tuple(sorted(normalized_authors))
-
-        if author_key(article.authors) != author_key(crossref_authors):
+        if _author_key(article.authors) != _author_key(crossref_authors):
             conflicts.append("authors")
 
     if conflicts:
@@ -271,14 +269,79 @@ def _malformed_result(identifier_type: IdentifierType, value: str) -> Identifier
     )
 
 
+_FOLD = str.maketrans({"ø": "o", "Ø": "O", "æ": "ae", "Æ": "AE", "ł": "l", "Ł": "L", "ß": "ss", "đ": "d", "Đ": "D"})
+_INITIALS = re.compile(r"^[A-Z]{1,4}$")
+_SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "2nd", "3rd"}
+# Collective (group) authors are listed by PubMed but usually omitted by Crossref.
+_COLLECTIVE = re.compile(r"\b(association|society|group|committee|consortium|collaborat\w*|investigators|"
+                         r"network|foundation|academy|college|council|federation|institute|working party)\b", re.I)
+
+
+def _fold(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value.translate(_FOLD))
+    return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def _family_key(family: str) -> str:
+    # Order-insensitive surname parts: "Raaij van" == "van Raaij"; hyphens/spaces ignored.
+    return "".join(sorted(re.sub(r"[^a-z0-9 ]+", "", family.lower().replace("-", " ")).split()))
+
+
 def _author_key(authors: list[str]) -> tuple[tuple[str, ...], ...]:
+    """(family, first initial) per author, accepting both "Skou ST" (PubMed/Vancouver)
+    and "Søren T. Skou" (Crossref given + family). The whole sorted list must match."""
     normalized_authors = []
     for author in authors:
-        cleaned = re.sub(r"[^a-z0-9]+", " ", author.lower()).strip()
-        tokens = tuple(sorted(token for token in cleaned.split() if token))
-        if tokens:
-            normalized_authors.append(tokens)
+        text = _fold(str(author)).strip()
+        if _COLLECTIVE.search(text):
+            continue
+        # Drop generational suffixes but keep a comma they carried ("Zeni Jr, Joseph").
+        text = " ".join(("," if t.endswith(",") else "") if t.strip(".,").lower() in _SUFFIXES else t
+                        for t in text.split()).replace(" ,", ",")
+        if "," in text:  # "Doe, Jane"
+            family_part, _, given_part = text.partition(",")
+            family = _family_key(family_part)
+            given = re.sub(r"[^A-Za-z]", "", given_part)
+            if family:
+                normalized_authors.append((family, given[:1].lower()))
+            continue
+        tokens = [t for t in text.split() if t]
+        if not tokens:
+            continue
+        if len(tokens) > 1 and _INITIALS.match(tokens[-1]):
+            family, initial = " ".join(tokens[:-1]), tokens[-1][0]
+        elif len(tokens) > 1:
+            family, initial = tokens[-1], tokens[0][0]
+        else:
+            family, initial = tokens[0], ""
+        family = _family_key(family)
+        if family:
+            normalized_authors.append((family, initial.lower()))
     return tuple(sorted(normalized_authors))
+
+
+def normalize_journal(value: Any) -> str:
+    text = html.unescape(str(value or "")).replace("&", " and ")
+    text = re.sub(r"\([^)]*\)", " ", text)       # "(Heidelberg, Germany)"
+    text = re.split(r"\s:\s", text, maxsplit=1)[0]  # ": official journal of the ESSKA"
+    return re.sub(r"^(the|die|der|das) ", "", normalize_title(_fold(text)))
+
+
+def _main_title(value: str) -> str:
+    """Title before a subtitle boundary (": " or ". "), as Crossref often omits subtitles."""
+    return re.split(r":\s|\.\s", value, maxsplit=1)[0]
+
+
+def titles_match(left: Any, right: Any) -> bool:
+    a, b = (html.unescape(str(v or "")).strip() for v in (left, right))
+    na, nb = normalize_title(_fold(a)), normalize_title(_fold(b))
+    if na == nb:
+        return True
+    for full, short in ((a, nb), (b, na)):
+        main = normalize_title(_fold(_main_title(full)))
+        if main == short and len(short.split()) >= 5:
+            return True
+    return False
 
 
 def _reconcile_metadata_fields(
@@ -296,14 +359,15 @@ def _reconcile_metadata_fields(
         "title": (
             article.title,
             authoritative_title,
-            lambda left, right: normalize_title(left) == normalize_title(right),
+            titles_match,
         ),
         "journal": (
             article.journal,
             authoritative_journal,
-            lambda left, right: normalize_title(left) == normalize_title(right),
+            lambda left, right: normalize_journal(left) == normalize_journal(right),
         ),
-        "year": (article.publication_year, authoritative_year, lambda left, right: left == right),
+        "year": (article.publication_year, authoritative_year,
+                 lambda left, right: left == right or left in (metadata.get("year_candidates") or ())),
         "authors": (article.authors, authoritative_authors, lambda left, right: _author_key(left) == _author_key(right)),
     }
     for field_name, (local_value, authoritative_value, comparator) in comparisons.items():

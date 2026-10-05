@@ -77,7 +77,10 @@ class CrossrefConnector(BaseConnector):
         for author in message.get("author") or []:
             if not isinstance(author, dict):
                 continue
-            name = f"{author.get('given') or ''} {author.get('family') or ''}".strip()
+            family = str(author.get("family") or "").strip()
+            given = str(author.get("given") or "").strip()
+            # "Family, Given" keeps multi-word surnames (van Raaij, De Bie) unambiguous.
+            name = f"{family}, {given}" if family and given else (family or str(author.get("name") or "").strip())
             if name:
                 authors.append(name)
         metadata = {
@@ -85,6 +88,13 @@ class CrossrefConnector(BaseConnector):
             "title": title_values[0] if isinstance(title_values, list) and title_values else None,
             "journal": journal_values[0] if isinstance(journal_values, list) and journal_values else None,
             "year": year,
+            # Earliest ("issued") plus print/online years: PubMed often cites the print year.
+            "year_candidates": tuple(sorted({
+                parts[0][0] for key in ("issued", "published-print", "published-online")
+                for parts in [(message.get(key) or {}).get("date-parts") or [[None]]]
+                if isinstance(parts, list) and parts and isinstance(parts[0], list) and parts[0]
+                and isinstance(parts[0][0], int)
+            })),
             "authors": authors,
         }
         return IdentifierVerificationResult(

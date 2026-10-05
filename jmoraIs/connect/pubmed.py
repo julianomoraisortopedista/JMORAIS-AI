@@ -161,6 +161,10 @@ class PubMedConnector(BaseConnector):
             "doi": doi,
             "title": record.get("title") or None,
             "journal": record.get("fulljournalname") or record.get("source") or None,
+            "journal_abbreviation": str(record.get("source") or "").strip() or None,
+            "volume": str(record.get("volume") or "").strip() or None,
+            "issue": str(record.get("issue") or "").strip() or None,
+            "pages": str(record.get("pages") or "").strip() or None,
             "year": year,
             "authors": authors,
         }

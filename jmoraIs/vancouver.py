@@ -91,7 +91,9 @@ class StrictVancouverFormatter:
 
     def _journal_article(self, article: ScientificArticle) -> str:
         self._required(article, "authors", "title", "journal", "publication_year")
-        text = f"{format_author_list(article.authors)}. {article.title}. {article.journal}. {article.publication_year}"
+        # Vancouver cites the NLM journal abbreviation when the verified record has one.
+        journal = article.journal_abbreviation or article.journal
+        text = f"{format_author_list(article.authors)}. {article.title.rstrip('.')}. {journal}. {article.publication_year}"
         if article.volume:
             text += f";{article.volume}"
             if article.issue:
