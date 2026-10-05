@@ -90,3 +90,8 @@ build-justification: verify-python
 # Local physician workbench (browser UI), loopback only: http://127.0.0.1:8770
 workbench: verify-python
 	@"$(VENV_PYTHON)" scripts/workbench.py
+
+.PHONY: set-anthropic-key
+# Copy the new key at platform.claude.com, then run this. Stores it in the macOS Keychain.
+set-anthropic-key:
+	@zsh scripts/set_anthropic_key.sh
