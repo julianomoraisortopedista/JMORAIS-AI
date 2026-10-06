@@ -144,3 +144,10 @@ def test_text_output_lists_mesh_provenance():
     from tests.test_evidence_search_cli import RESULT
     text = evidence_search.render_text("q", RESULT, built)
     assert "MeSH: population 'knee osteoarthritis' -> osteoarthritis, knee" in text
+
+
+def test_recency_window_adds_publication_date_filter():
+    built = build_pubmed_query(question(designs=(), from_year=2022))
+    assert built.query.endswith('AND ("2022/01/01"[dp] : "3000"[dp])')
+    with pytest.raises(EvidenceQueryRejected):
+        question(from_year=1500)

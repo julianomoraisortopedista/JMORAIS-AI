@@ -137,3 +137,14 @@ def test_save_keychain_key_validates_and_uses_stdin_not_argv():
     assert args == ["security", "-i"] and "sk-ant-" + "a" * 30 in stdin and "sk-ant" not in " ".join(args)
     assert not save_keychain_api_key("sk-ant-short; rm -rf /", run=run, platform="darwin")
     assert not save_keychain_api_key("sk-ant-" + "a" * 30, run=run, platform="linux")
+
+
+def test_search_recency_and_identifier_import():
+    pubmed = SearchablePubMed()
+    c = client(pubmed=pubmed)
+    r = c.post("/api/search", headers=H, json={"population": "knee osteoarthritis", "intervention": "tka", "since_years": 5})
+    assert r.status_code == 200 and pubmed.last_query.endswith('("2022/01/01"[dp] : "3000"[dp])')  # NOW is 2026
+    imported = c.post("/api/import", headers=H, json={"identifiers": "26488691, https://doi.org/10.1056/NEJMoa1505467; xyz"}).json()
+    assert [x["pmid"] for x in imported["candidates"]] == ["26488691"] and imported["invalid"] == ["xyz"]
+    too_many = ", ".join(str(10000000 + i) for i in range(11))
+    assert c.post("/api/import", headers=H, json={"identifiers": too_many}).status_code == 400

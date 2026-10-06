@@ -23,6 +23,7 @@ export class EvidenceClient {
   }
   status(){return this.call('status');}
   /** @param {Record<string,unknown>} q */ search(q){return this.call('search',q);}
+  /** @param {string} identifiers */ importIds(identifiers){return this.call('import',{identifiers});}
   /** @param {string} pmid */ abstract(pmid){return this.call('abstract',{pmid});}
   /** @param {string} claim @param {string} pmid */ propose(claim,pmid){return this.call('propose',{claim,pmid});}
   /** @param {Record<string,unknown>} body */ manual(body){return this.call('manual',body);}
@@ -80,18 +81,21 @@ export function evidencePage(client,onDecisions){
     const c=document.createElement('input');c.type='checkbox';c.value=value;c.checked=on;boxes.push(c);
     const l=box('label','chip');l.append(c,el('span',label));designs.append(l);
   }
-  form.append(box('div','field-label','Tipos de estudo'),designs,field('Seu registro profissional (CRM)',reviewer,'assina as decisões'));
+  const since=select([['10','Últimos 10 anos'],['5','Últimos 5 anos'],['3','Últimos 3 anos'],['','Qualquer data']]);
+  form.append(box('div','field-label','Tipos de estudo'),designs,field('Período de publicação',since,'prioriza os estudos mais atuais'),
+    field('Seu registro profissional (CRM)',reviewer,'assina as decisões'));
   const go=button('Buscar evidências');const status=box('div','status-area');const query=box('p','query mono');
   form.append(box('div','actions'),status,query);/** @type {HTMLElement} */(form.querySelector('.actions')).append(go);
   const results=box('section','card');results.append(box('h2','card-title','Artigos encontrados'),box('p','muted','Faça a busca para listar os candidatos. Nada é usado sem a sua confirmação.'));
   const confirmed=box('section','card');confirmed.append(box('h2','card-title','Decisões confirmadas'));const table=box('div','decisions');confirmed.append(table);
-  root.append(form,results,confirmed);
+  root.append(form,externalSources(client,results,()=>refresh()),results,confirmed);
 
   const refresh=async()=>{const list=await client.decisions();session.decisions=list;onDecisions(list.length);renderDecisions(client,table,list,refresh);};
   go.onclick=()=>busy(go,async()=>{
     say(status,'Buscando no PubMed e conferindo no Crossref…','info');query.textContent='';
     try{
-      const r=await client.search({population:population.value,intervention:intervention.value,comparison:comparison.value,outcome:outcome.value,designs:boxes.filter(b=>b.checked).map(b=>b.value)});
+      const r=await client.search({population:population.value,intervention:intervention.value,comparison:comparison.value,outcome:outcome.value,
+        designs:boxes.filter(b=>b.checked).map(b=>b.value),since_years:since.value?Number(since.value):null});
       status.replaceChildren();query.textContent='Consulta: '+r.query+(r.mesh.length?'  ·  MeSH: '+r.mesh.map((/** @type {any} */m)=>m.synonym+' → '+m.heading).join('; '):'');
       results.replaceChildren(box('h2','card-title',`${r.candidates.length} artigo(s) candidato(s)`));
       if(!r.candidates.length)results.append(box('p','muted','Nenhum artigo. Ajuste a pergunta.'));
@@ -100,6 +104,37 @@ export function evidencePage(client,onDecisions){
   });
   refresh().catch(()=>{});
   return root;
+}
+
+/** Services used by the physician with their own login; nothing is fetched from them automatically. */
+const EXTERNAL=[['OpenEvidence','https://www.openevidence.com/'],['OrthoEvidence','https://myorthoevidence.com/']];
+
+/** @param {EvidenceClient} client @param {HTMLElement} results @param {()=>Promise<void>} refresh */
+function externalSources(client,results,refresh){
+  const card=box('section','card');
+  card.append(box('h2','card-title','Outras fontes (com o seu login)'),
+    box('p','muted','Consulte a pergunta no OpenEvidence ou no OrthoEvidence com a sua conta e traga para cá os PMIDs ou DOIs dos melhores artigos. Eles são conferidos no PubMed e no Crossref e entram no mesmo fluxo de classificação. Os termos de uso desses serviços não permitem acesso automatizado, por isso a consulta é feita por você.'));
+  const links=box('div','actions');
+  for(const [name,url] of EXTERNAL){const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';a.className='btn btn-ghost';a.textContent='Abrir '+name;links.append(a);}
+  const copy=button('Copiar pergunta','quiet');const copied=box('span','muted','');
+  copy.onclick=async()=>{try{await navigator.clipboard.writeText(session.claim);copied.textContent='Pergunta copiada.';}catch{copied.textContent='Não foi possível copiar.';}};
+  links.append(copy,copied);
+  const ids=textarea('Cole PMIDs ou DOIs, separados por vírgula ou linha (até 10). Ex.: 26488691, 10.1056/NEJMoa1505467');ids.rows=3;
+  const add=button('Verificar e adicionar');const status=box('div','status-area');const actions=box('div','actions');actions.append(add);
+  card.append(links,field('PMIDs ou DOIs encontrados',ids),actions,status);
+  add.onclick=()=>busy(add,async()=>{
+    say(status,'Conferindo no PubMed e no Crossref…','info');
+    try{
+      const r=await client.importIds(ids.value);
+      say(status,`${r.candidates.length} artigo(s) verificado(s) e adicionado(s) à lista.`+(r.invalid.length?' Ignorados: '+r.invalid.join(', '):''),r.candidates.length?'ok':'error');
+      if(r.candidates.length){
+        if(!results.querySelector('.article'))results.replaceChildren(box('h2','card-title','Artigos'));
+        for(const c of r.candidates)results.append(articleCard(client,c,refresh));
+        ids.value='';
+      }
+    }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
+  });
+  return card;
 }
 
 /** @param {EvidenceClient} client @param {{pmid:string,title:string,doi?:string}} c @param {()=>Promise<void>} refresh */

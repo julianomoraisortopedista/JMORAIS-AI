@@ -44,6 +44,8 @@ class PICOQuestion:
     comparison: tuple[str, ...] = ()
     outcome: tuple[str, ...] = ()
     designs: tuple[str, ...] = ()
+    # Optional recency window: publications from (from_year) onward.
+    from_year: Optional[int] = None
 
     def __post_init__(self) -> None:
         if not self.population or not self.intervention:
@@ -52,6 +54,8 @@ class PICOQuestion:
             for term in getattr(self, name):
                 if not isinstance(term, str) or not _SAFE_TERM.match(term.strip()) or _RESERVED.search(term):
                     raise EvidenceQueryRejected(f"unsafe or empty {name} term")
+        if self.from_year is not None and not (1900 <= self.from_year <= 2100):
+            raise EvidenceQueryRejected("invalid publication year")
         unknown = set(self.designs) - set(STUDY_DESIGN_FILTERS)
         if unknown:
             raise EvidenceQueryRejected("unknown study design: " + ", ".join(sorted(unknown)))
@@ -84,4 +88,6 @@ def build_pubmed_query(question: PICOQuestion, mesh_lookup: Optional[MeshLookup]
     if question.designs:
         designs = tuple(dict.fromkeys(question.designs))
         groups.append("(" + " OR ".join(STUDY_DESIGN_FILTERS[d] for d in designs) + ")")
+    if question.from_year is not None:
+        groups.append(f'("{question.from_year}/01/01"[dp] : "3000"[dp])')
     return BuiltEvidenceQuery(" AND ".join(groups), tuple(expansions))

@@ -18,6 +18,15 @@ Sections after login:
 - **Documento ao convênio** — coverage facts, STF (ADI 7.265) requirement checklist,
   printable/PDF document with verified Vancouver references and fixed-source legal text.
 
+## External clinical services
+
+OpenEvidence and OrthoEvidence are never queried automatically: their terms restrict
+automated/AI access and reuse of content. The Evidências page offers links to open them
+with the physician's own login, copies the clinical question, and imports up to 10
+PMIDs/DOIs found there (`POST /internal/evidence/api/import`), which are verified in
+PubMed/Crossref before joining the same classification flow. Searches accept a recency
+window (`since_years`: publications from that year onward, PubMed `[dp]`).
+
 ## Security
 
 The evidence endpoints are mounted in the backend at `/internal/evidence/` (local

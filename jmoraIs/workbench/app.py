@@ -39,6 +39,7 @@ from jmoraIs.tenancy.domain import TenantContext
 
 PAGE = Path(__file__).with_name("index.html")
 ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+MAX_IMPORT = 10  # keeps verification inside the platform's 30 s request budget
 
 
 class SearchIn(BaseModel):
@@ -47,6 +48,11 @@ class SearchIn(BaseModel):
     comparison: str = Field("", max_length=500)
     outcome: str = Field("", max_length=500)
     designs: list[str] = Field(default_factory=list, max_length=4)
+    since_years: Optional[int] = Field(None, ge=1, le=30)
+
+
+class ImportIn(BaseModel):
+    identifiers: str = Field(min_length=3, max_length=2000)
 
 
 class PmidIn(BaseModel):
@@ -184,8 +190,9 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
     @app.post("/api/search")
     def search(body: SearchIn):
         try:
+            from_year = clock().year - body.since_years + 1 if body.since_years else None
             question = PICOQuestion(_split(body.population), _split(body.intervention), _split(body.comparison),
-                                    _split(body.outcome), tuple(body.designs))
+                                    _split(body.outcome), tuple(body.designs), from_year)
         except EvidenceQueryRejected as exc:
             bad(f"Pergunta inválida: {exc}")
         built = build_pubmed_query(question, pubmed.mesh_headings_for)
@@ -202,6 +209,31 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         if not save_key(body.key.get_secret_value()):
             bad("Chave não aceita. Copie de novo em platform.claude.com (começa com sk-ant-).")
         return {"model_configured": current_classifier() is not None}
+
+    @app.post("/api/import")
+    def import_identifiers(body: ImportIn):
+        """PMIDs/DOIs the physician found elsewhere (e.g. read in a subscription service)."""
+        import re
+        tokens = [t.strip().rstrip(".,;") for t in re.split(r"[\s,;]+", body.identifiers) if t.strip()]
+        if not tokens or len(tokens) > MAX_IMPORT:
+            bad(f"Informe de 1 a {MAX_IMPORT} PMIDs ou DOIs.")
+        requests_, invalid = [], []
+        for token in dict.fromkeys(tokens):
+            doi = re.sub(r"^(https?://(dx\.)?doi\.org/|doi:)", "", token, flags=re.I)
+            if re.fullmatch(r"[1-9][0-9]{0,8}", token):
+                requests_.append(ScientificVerificationInput(pmid=token))
+            elif re.fullmatch(r"10\.\d{4,9}/\S{1,200}", doi):
+                requests_.append(ScientificVerificationInput(doi=doi))
+            else:
+                invalid.append(token[:40])
+        pipeline = AuthoritativeReconciliationPipeline(pubmed=pubmed, crossref=crossref)
+        found, seen = [], set()
+        for request in requests_:
+            for article in pipeline.discover(request).articles:
+                if article.pmid and article.pmid not in seen:
+                    seen.add(article.pmid)
+                    found.append(dict(pmid=article.pmid, doi=article.doi, title=article.title))
+        return {"candidates": found, "invalid": invalid}
 
     @app.post("/api/abstract")
     def abstract(body: PmidIn):

@@ -32,3 +32,13 @@ test('fetch is never stored unbound as a method (browsers throw Illegal invocati
     assert.ok(!/request\s*=\s*fetch\b/.test(s),f+' stores fetch unbound');
   }
 });
+
+test('external services are links only and identifiers go to the verifying import route',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const src=await readFile('src/evidence.js','utf8');
+  assert.ok(!/fetch\(\s*['"]https:\/\/(www\.)?(openevidence|myorthoevidence)/.test(src));
+  const calls=[];
+  const client=new EvidenceClient(()=>'t',async(url,init)=>{calls.push([url,JSON.parse(init.body)]);return respond(200,{candidates:[],invalid:[]});});
+  await client.importIds('26488691');
+  assert.deepEqual(calls,[['/internal/evidence/api/import',{identifiers:'26488691'}]]);
+});
