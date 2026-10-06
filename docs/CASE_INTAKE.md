@@ -55,3 +55,31 @@ the surgery template and laterality chosen in the documents card. The physician 
 reviews facts, report and request; identification is filled into the final request only
 in the browser, after that review.
 
+
+## Dictated request and hospital scheduling
+
+"O que você quer solicitar" (`jmoraIs/application/request_intake.py`, `POST /api/request/parse`)
+turns a spoken or typed request ("ATJ direita, Zimmer, Hospital X, dia 20/10 às 7h, raqui,
+UTI") into the surgery template, laterality, preferred supplier and hospital scheduling
+(hospital, date, time, duration, anesthesia, ICU and blood reserve, notes). The text is
+de-identified first; only templates and suppliers that exist in the catalog are accepted,
+dates must fall within the next two years and times are normalised to HH:MM. The page fills
+the form and the physician confirms. Scheduling is rendered in the request as "Agendamento
+cirúrgico".
+
+## The physician's report model
+
+"Meu modelo de relatório" (Modelos de cirurgia page; `jmoraIs/application/report_style.py`):
+an uploaded model report is de-identified (identifiers found on its labelled lines are
+removed everywhere, plus the generic patterns) and shown for review without being stored.
+Only after the physician confirms it has no patient data is it saved (0600 JSON, generic
+patterns applied again). The report writer receives it as the `MODELO` field: it follows
+its section order, titles and tone; sentences citing `MODELO` are discarded and its numbers
+cannot pass the grounding check.
+
+## Final medical report
+
+"Relatório final com dados do paciente" assembles the edited report in the browser with
+name, birth date, CPF, card number and insurer from the identification card, plus date and
+signature line. The request document also carries birth date and CPF placeholders filled
+locally. None of these values reach the server's AI calls.

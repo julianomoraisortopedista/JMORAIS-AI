@@ -29,6 +29,13 @@ SECTIONS = (
     ("imagem", "Exames de imagem"),
     ("indicacao", "Indicação cirúrgica"),
     ("opme", "Justificativa do OPME"),
+    ("solicitacao", "Solicitação"),
+)
+STYLE_ID = "MODELO"
+STYLE_INSTRUCTIONS = (
+    " Quando houver o campo MODELO (modelo de relatório do próprio médico, sem identificação), siga a ordem das "
+    "seções, os títulos (campo 'title'), o tom e as expressões típicas dele. O MODELO é só formato: nunca use "
+    "dados clínicos, números, lados ou achados do MODELO, e nunca cite MODELO como fonte."
 )
 CONTEXT_ID = "CTX"
 INSTRUCTIONS = (
@@ -38,17 +45,19 @@ INSTRUCTIONS = (
     "invente dados, números, graus, escalas, datas, lateralidade ou achados que não estejam nos fatos. Se uma "
     "seção não tiver fatos suficientes, deixe-a vazia e descreva a lacuna em 'gaps' (ex.: 'Exame físico não "
     "documentado: descrever amplitude de movimento e estabilidade'). Na justificativa do OPME, relacione cada "
-    "material à necessidade clínica documentada. Responda somente com o JSON solicitado."
-)
+    "material à necessidade clínica documentada. Em 'solicitacao', peça a autorização do procedimento e do OPME "
+    "do contexto (CTX). Em 'title' use o título padrão da seção, salvo quando houver MODELO. Responda somente com o JSON solicitado."
+) + STYLE_INSTRUCTIONS
 OUTPUT_JSON_SCHEMA = {
     "type": "object",
     "properties": {
         "sections": {"type": "array", "items": {"type": "object", "properties": {
             "section": {"type": "string", "enum": [k for k, _ in SECTIONS]},
+            "title": {"type": "string"},
             "sentences": {"type": "array", "items": {"type": "object", "properties": {
                 "text": {"type": "string"}, "fact_ids": {"type": "array", "items": {"type": "string"}}},
                 "required": ["text", "fact_ids"], "additionalProperties": False}}},
-            "required": ["section", "sentences"], "additionalProperties": False}},
+            "required": ["section", "title", "sentences"], "additionalProperties": False}},
         "gaps": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["sections", "gaps"],
@@ -86,6 +95,7 @@ def report_prompt() -> PromptTemplate:
                           INSTRUCTIONS, ("CanonicalStructuredDTO",), "medical-report-output-v1", POLICY)
 
 
+MAX_STYLE_CHARS = 6000
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 
 
@@ -97,7 +107,7 @@ class ReportDraftingService:
     def __init__(self, gateway, *, prompt_version_id: str, model: LLMModel, clock: Callable[[], datetime]):
         self._gateway, self._prompt, self._model, self._clock = gateway, prompt_version_id, model, clock
 
-    def draft(self, facts: list[dict], context: str) -> ReportDraft:
+    def draft(self, facts: list[dict], context: str, style: str = "") -> ReportDraft:
         if not facts:
             raise ReportDraftRejected("Confirme os fatos clínicos antes de redigir o relatório.")
         ids = {f"F{n}": fact for n, fact in enumerate(facts, 1)}
@@ -106,6 +116,8 @@ class ReportDraftingService:
         fields = [StructuredField(fid, f"[{f['category_label']}] {f['statement']} (fonte: “{f['quote']}”)", "confirmed-fact")
                   for fid, f in ids.items()]
         fields.append(StructuredField(CONTEXT_ID, context or "(sem contexto)", "physician-request"))
+        if style.strip():
+            fields.append(StructuredField(STYLE_ID, style.strip()[:MAX_STYLE_CHARS], "physician-format-example"))
         dto = CanonicalStructuredDTO("medical-report-input", "1", tuple(fields), POLICY, ("confirmed-facts",))
         response = self._gateway.invoke(LLMRequest(
             "report-" + uuid4().hex, self._prompt, self._model, dto, ReviewPolicy("physician-report-review", POLICY, True, False),
@@ -118,11 +130,18 @@ class ReportDraftingService:
         except (ValueError, AttributeError):
             raise ReportDraftRejected("Resposta do modelo fora do formato. Tente de novo.") from None
         by_key: dict[str, list[DraftSentence]] = {k: [] for k, _ in SECTIONS}
+        titles = dict(SECTIONS)
+        order: list[str] = []
         dropped = 0
         for section in data.get("sections") or []:
             key = section.get("section")
             if key not in by_key:
                 continue
+            title = " ".join(str(section.get("title") or "").split())[:80]
+            if style.strip() and title:
+                titles[key] = title
+            if key not in order:
+                order.append(key)
             for sentence in section.get("sentences") or []:
                 text = " ".join(str(sentence.get("text", "")).split())[:600]
                 cited = tuple(dict.fromkeys(str(i).strip().upper() for i in sentence.get("fact_ids") or []))
@@ -133,4 +152,6 @@ class ReportDraftingService:
                     continue
                 by_key[key].append(DraftSentence(text, cited))
         gaps = tuple(" ".join(str(g).split())[:300] for g in data.get("gaps") or [] if str(g).strip())[:12]
-        return ReportDraft(tuple((k, t, tuple(by_key[k])) for k, t in SECTIONS), gaps, dropped, self._model.model_id)
+        # Default order, or the order the physician's model produced; sections not emitted follow.
+        order = (order if style.strip() else []) + [k for k, _ in SECTIONS if k not in order or not style.strip()]
+        return ReportDraft(tuple((k, titles[k], tuple(by_key[k])) for k in order), gaps, dropped, self._model.model_id)

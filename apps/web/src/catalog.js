@@ -15,7 +15,7 @@ export function catalogPage(client){
   head.append(box('h2','card-title','Modelos de cirurgia'),
     box('p','muted','Cada modelo reúne o procedimento com códigos da tabela TUSS oficial da ANS, o kit de OPME com quantidades, três fornecedores de fabricantes diferentes (CFM 1.956/2010, art. 5º) e os pacotes das redes. Códigos e materiais vêm da tabela oficial; nada é inventado.'));
   const add=button('Novo modelo');const actions=box('div','actions');actions.append(add);const status=box('div','status-area');head.append(actions,status);
-  const list=box('div','page-grid');root.append(head,list);
+  const list=box('div','page-grid');root.append(styleCard(client),head,list);
   const reload=async()=>{
     try{const r=await client.catalog();list.replaceChildren();
       if(r.tuss_version)status.replaceChildren(box('span','muted','Tabela TUSS oficial: versão '+r.tuss_version));
@@ -137,6 +137,32 @@ function supplierBox(client,t,s,sn,rerender){
       }catch(err){say(results,err instanceof Error?err.message:'Falha.');}});
   });
   const a=box('div','actions');a.append(rm);wrap.append(a);return wrap;
+}
+
+/** The physician's own report model: de-identified on upload, reviewed, then used as format only. @param {import('./evidence.js').EvidenceClient} client */
+function styleCard(client){
+  const card=box('section','card');
+  card.append(box('h2','card-title','Meu modelo de relatório'),
+    box('p','muted','Envie um relatório seu (PDF com texto ou .txt). Nome, CPF, carteirinha e outros dados são removidos aqui, sem IA; confira o texto, apague o que ainda identificar alguém e salve. O Claude passa a seguir a ordem, os títulos e o seu estilo, mas nunca usa os dados clínicos do modelo.'));
+  const file=document.createElement('input');file.type='file';file.accept='.pdf,.txt,application/pdf,text/plain';
+  const text=textarea('O modelo sem identificação aparece aqui.');text.rows=12;
+  const ok=document.createElement('input');ok.type='checkbox';const okLabel=box('label','chip');okLabel.append(ok,el('span','Conferi: o modelo não tem dados de paciente'));
+  const save=button('Salvar modelo'),remove=button('Excluir modelo','ghost');const status=box('div','status-area');const a=box('div','actions');a.append(save,remove);
+  card.append(field('Arquivo do modelo',file),field('Texto do modelo',text),okLabel,a,status);
+  client.styleGet().then((/** @type {any} */ r)=>{if(r.text){text.value=r.text;say(status,'Modelo salvo: os próximos relatórios seguem este formato.','ok');}}).catch(()=>{say(status,'Modelo de relatório indisponível neste servidor.','info');});
+  file.onchange=async()=>{const f=file.files?.[0];if(!f)return;
+    if(f.size>700000){say(status,'Arquivo acima de 700 KB.');return;}
+    try{const bytes=new Uint8Array(await f.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+      const r=await client.stylePreview({name:f.name,content_base64:btoa(bin)});text.value=r.text;ok.checked=false;file.value='';
+      const counts=Object.entries(r.removed||{}).map(([k,v])=>`${v} ${String(k).toLowerCase()}`).join(', ');
+      say(status,'Identificação removida'+(counts?` (${counts})`:'')+'. Confira o texto, apague o que ainda identificar alguém e salve.','info');
+    }catch(e){say(status,e instanceof Error?e.message:'Falha ao ler o arquivo.');}};
+  save.onclick=()=>busy(save,async()=>{
+    if(!ok.checked){say(status,'Marque que conferiu que o modelo não tem dados de paciente.');return;}
+    try{const r=await client.styleSave(text.value);text.value=r.text;say(status,'Modelo salvo: os próximos relatórios seguem este formato.','ok');}
+    catch(e){say(status,e instanceof Error?e.message:'Falha ao salvar.');}});
+  remove.onclick=()=>busy(remove,async()=>{try{await client.styleDelete();text.value='';ok.checked=false;say(status,'Modelo excluído. Os relatórios voltam ao formato padrão.','info');}catch(e){say(status,e instanceof Error?e.message:'Falha.');}});
+  return card;
 }
 
 /** Template picker for the medical request. @param {import('./evidence.js').EvidenceClient} client @param {(t:Template|null)=>void} onPick */

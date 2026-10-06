@@ -42,6 +42,7 @@ class RequestDetails:
     regime: str = ""
     # Alternatives per CFM 1.956/2010 art. 5: (supplier label, ((item, qty, official term, manufacturer, anvisa, tuss), ...))
     brands: tuple = ()
+    schedule: tuple[tuple[str, str], ...] = ()       # hospital scheduling (label, value), stated by the physician
 
     def __post_init__(self):
         if any(not re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", c) for c in self.icd10):
@@ -75,8 +76,9 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
            "<div class=\"draft\">RASCUNHO — exige revisão e assinatura do médico responsável antes do envio</div>",
            "<p class=\"noprint muted\">Use Imprimir &gt; Salvar como PDF no navegador.</p>",
            "<h2>Identificação</h2><table class=\"ident\">"]
-    for key, label in (("paciente", "Paciente"), ("carteirinha", "Carteirinha / nº do beneficiário"),
-                       ("operadora", "Operadora / plano"), ("data", "Data")):
+    for key, label in (("paciente", "Paciente"), ("nascimento", "Data de nascimento"), ("cpf", "CPF"),
+                       ("carteirinha", "Carteirinha / nº do beneficiário"), ("operadora", "Operadora / plano"),
+                       ("data", "Data")):
         out.append(f"<tr><td>{label}:</td><td><span class=\"fill\" data-ident=\"{key}\"></span></td></tr>")
     out.append(f"<tr><td>Médico assistente:</td><td>{escape(context.prescriber_registration) or '<span class=\"fill\"></span>'}</td></tr></table>")
     out.append(f"<h2>Procedimento solicitado</h2><p><strong>{escape(context.procedure)}</strong></p>")
@@ -107,6 +109,10 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
                 out += [f"<tr><td>{escape(i)}</td><td>{escape(c)} — {escape(t)}</td><td>{escape(m)}</td><td>{escape(a)}</td>"
                         f"<td>{q}</td></tr>" for i, q, t, m, a, c in materials]
                 out.append("</table>")
+        if request.schedule:
+            out.append("<h3>Agendamento cirúrgico</h3><table class=\"ident\">")
+            out += [f"<tr><td>{escape(label)}:</td><td>{escape(value)}</td></tr>" for label, value in request.schedule]
+            out.append("</table>")
     out.append("<h2>Justificativa clínica</h2>")
     if clinical_summary.strip():
         out.append(_p(clinical_summary))

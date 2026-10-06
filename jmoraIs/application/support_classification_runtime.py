@@ -133,3 +133,20 @@ def build_report_service(model_id: str = DEFAULT_MODEL, transport=None):
     gateway = CanonicalLLMGateway(prompts, audit, InMemoryInvocationRepository(),
                                   InMemoryLLMInvocationContextRepository(), (AnthropicProviderAdapter(transport),), clock=clock)
     return ReportDraftingService(gateway, prompt_version_id=version.prompt_version_id, model=model, clock=clock)
+
+
+def build_request_service(model_id: str = DEFAULT_MODEL, transport=None):
+    """Dictated surgery request -> structured request and scheduling, behind the Canonical LLM Gateway."""
+    from jmoraIs.application.request_intake import OUTPUT_JSON_SCHEMA as I_SCHEMA, RequestIntakeService, request_prompt
+    clock = lambda: datetime.now(timezone.utc)
+    prompts, audit = InMemoryPromptRepository(), InMemoryPromptAuditRepository()
+    version = PromptGovernanceService(prompts, audit, clock=clock).register(request_prompt(), created_by="jmorais")
+    input_price, output_price = MODEL_PRICES.get(model_id, (0.0, 0.0))
+    model = LLMModel(LLMProvider.ANTHROPIC, model_id, model_id, input_price, output_price, True, "MIP-10.1")
+    if transport is None:
+        from jmoraIs.llm_gateway.anthropic_transport import AnthropicMessagesTransport  # optional SDK
+        env_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        transport = AnthropicMessagesTransport(json_schema=I_SCHEMA, effort="low", api_key=None if env_key else keychain_api_key())
+    gateway = CanonicalLLMGateway(prompts, audit, InMemoryInvocationRepository(),
+                                  InMemoryLLMInvocationContextRepository(), (AnthropicProviderAdapter(transport),), clock=clock)
+    return RequestIntakeService(gateway, prompt_version_id=version.prompt_version_id, model=model, clock=clock)

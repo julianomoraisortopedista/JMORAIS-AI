@@ -34,6 +34,8 @@ from jmoraIs.application.case_intake import (
 from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify, detect_identifiers
 from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.report_drafting import ReportDraftRejected
+from jmoraIs.application.report_style import ReportStyleRejected, ReportStyleStore, deidentify_model
+from jmoraIs.application.request_intake import RequestIntakeRejected
 from jmoraIs.application.surgical_catalog import (
     CatalogRejected, CatalogStore, ProcedureTemplate, supplier_warnings, validate_against_tuss,
 )
@@ -93,6 +95,27 @@ class DecideIn(BaseModel):
     reviewer: str = Field(min_length=3, max_length=60)
 
 
+class StyleIn(BaseModel):
+    text: str = Field(min_length=40, max_length=8000)
+    confirmed: bool
+
+
+class RequestTextIn(BaseModel):
+    text: str = Field(min_length=3, max_length=2000)
+
+
+class ScheduleIn(BaseModel):
+    hospital: str = Field("", max_length=160)
+    date: str = Field("", max_length=10)
+    time: str = Field("", max_length=5)
+    duration_minutes: int = Field(0, ge=0, le=1440)
+    anesthesia: str = Field("", max_length=120)
+    icu: Optional[bool] = None
+    blood_reserve: Optional[bool] = None
+    supplier: str = Field("", max_length=120)
+    notes: str = Field("", max_length=500)
+
+
 class QuestionIn(BaseModel):
     question: str = Field("", max_length=2000)
     template_id: Optional[str] = Field(None, max_length=40)
@@ -128,6 +151,7 @@ class DocumentIn(BaseModel):
     icd10: list[str] = Field(default_factory=list, max_length=8)
     laterality: str = Field("", max_length=40)
     regime: str = Field("", max_length=60)
+    schedule: Optional[ScheduleIn] = None
 
 
 class WorkbenchAuthError(Exception):
@@ -200,7 +224,9 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                resolve_case_extractor: Optional[Callable[[], Optional[Callable]]] = None,
                tuss_index=None, catalog: Optional[CatalogStore] = None,
                resolve_question_translator: Optional[Callable[[], Optional[Callable]]] = None,
-               resolve_report_writer: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
+               resolve_report_writer: Optional[Callable[[], Optional[Callable]]] = None,
+               report_style: Optional[ReportStyleStore] = None,
+               resolve_request_parser: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -450,7 +476,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         def run():
             try:
                 with TenantContextBinder().bind_tenant(tenant(principal)):
-                    draft = factory().draft(list(confirmed["facts"]), context)
+                    draft = factory().draft(list(confirmed["facts"]), context, (report_style.load() if report_style else None) or "")
                 case["report"] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "model": draft.model_id,
                                   "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, fact_ids=list(x.fact_ids)) for x in ss])
                                                for k, t, ss in draft.sections]}
@@ -488,6 +514,59 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         if catalog is None:
             bad("Base de modelos indisponível neste servidor.", 503)
         return catalog
+
+    def need_style() -> ReportStyleStore:
+        if report_style is None:
+            bad("Modelo de relatório indisponível neste servidor.", 503)
+        return report_style
+
+    @app.get("/api/report-style")
+    def style_get():
+        return {"text": need_style().load()}
+
+    @app.post("/api/report-style/preview")
+    def style_preview(body: ScanIn):
+        """De-identify an uploaded report model for review. Nothing is stored and no AI is called."""
+        import base64
+        need_style()
+        try:
+            text = extract_text(body.name, base64.b64decode(body.content_base64, validate=True))
+            cleaned = deidentify_model(text[:MAX_DOCUMENT_CHARS])
+        except (ValueError, CaseIntakeRejected, DeidentificationRejected, ReportStyleRejected) as exc:
+            bad(str(exc) if isinstance(exc, (CaseIntakeRejected, ReportStyleRejected)) else "Não foi possível ler este arquivo.")
+        return {"text": cleaned.text, "removed": cleaned.removed}
+
+    @app.put("/api/report-style")
+    def style_save(body: StyleIn):
+        if not body.confirmed:
+            bad("Confirme que o modelo não tem dados de paciente.")
+        try:
+            return {"text": need_style().save(body.text)}
+        except (ReportStyleRejected, DeidentificationRejected) as exc:
+            bad(str(exc))
+
+    @app.delete("/api/report-style")
+    def style_delete():
+        need_style().delete()
+        return {"text": None}
+
+    @app.post("/api/request/parse")
+    def request_parse(body: RequestTextIn, request: Request):
+        factory = resolve_request_parser() if resolve_request_parser else None
+        if factory is None:
+            bad("Modelo de IA não configurado. Preencha o pedido manualmente.", 503)
+        templates = need_catalog().load() if catalog is not None else []
+        suppliers = sorted({s.label for t in templates for s in t.suppliers})
+        try:
+            with TenantContextBinder().bind_tenant(tenant(getattr(request.state, "principal", "local"))):
+                draft = factory().parse(body.text, [(t.template_id, t.name) for t in templates], suppliers)
+        except RequestIntakeRejected as exc:
+            bad(str(exc))
+        except Exception as exc:  # provider failure: no provider text exposed
+            bad(f"Falha ao consultar o modelo ({type(exc).__name__}).", 502)
+        out = {k: getattr(draft, k) for k in draft.__dataclass_fields__ if k != "model_id"}
+        out["template_name"] = next((t.name for t in templates if t.template_id == draft.template_id), "")
+        return dict(out, model=draft.model_id)
 
     @app.get("/api/catalog")
     def catalog_list():
@@ -657,10 +736,11 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                            for s in template.suppliers if s.materials)
             regime = regime or template.regime
         try:
-            details = RequestDetails(tuple(codes), tuple(tuss), tuple(opme), body.laterality.strip(), regime, brands)
+            details = RequestDetails(tuple(codes), tuple(tuss), tuple(opme), body.laterality.strip(), regime, brands,
+                                     schedule_rows(body.schedule))
         except ValueError as exc:
             bad(str(exc))
-        has_details = bool(codes or tuss or opme or body.laterality or regime)
+        has_details = bool(codes or tuss or opme or body.laterality or regime or details.schedule)
         return {"html": render_coverage_html(draft, legal, context, body.clinical_summary,
                                              details if has_details else None, facts),
                 "markdown": render_markdown(draft) + "\n" + render_legal_markdown(legal),
@@ -688,6 +768,35 @@ def default_question_translator_factory(environ=os.environ, keychain=None) -> Op
         build_question_service, credentials_configured, keychain_api_key,
     )
     return build_question_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
+
+
+def schedule_rows(schedule: Optional[ScheduleIn]) -> tuple[tuple[str, str], ...]:
+    """Hospital scheduling as stated by the physician, as (label, value) rows."""
+    if schedule is None:
+        return ()
+    yes_no = lambda v: "" if v is None else ("Sim" if v else "Não")  # noqa: E731
+    when = ""
+    if schedule.date:
+        try:
+            when = datetime.strptime(schedule.date, "%Y-%m-%d").strftime("%d/%m/%Y")
+        except ValueError:
+            raise HTTPException(400, "Data do agendamento inválida.") from None
+    if schedule.time:
+        import re as _re
+        if not _re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", schedule.time):
+            raise HTTPException(400, "Horário do agendamento inválido.")
+        when = (when + " às " + schedule.time).strip()
+    rows = (("Hospital", schedule.hospital.strip()), ("Data e horário", when),
+            ("Duração prevista", f"{schedule.duration_minutes} min" if schedule.duration_minutes else ""),
+            ("Anestesia", schedule.anesthesia.strip()), ("Reserva de UTI", yes_no(schedule.icu)),
+            ("Reserva de sangue", yes_no(schedule.blood_reserve)),
+            ("Fornecedor preferencial", schedule.supplier.strip()), ("Observações ao hospital", schedule.notes.strip()))
+    return tuple((label, value) for label, value in rows if value)
+
+
+def default_request_parser_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
+    from jmoraIs.application.support_classification_runtime import build_request_service, credentials_configured, keychain_api_key
+    return build_request_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
 
 
 def default_report_writer_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
