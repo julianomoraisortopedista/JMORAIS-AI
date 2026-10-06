@@ -103,3 +103,4 @@ ol.timeline{list-style:none;padding:0;display:grid;gap:12px}ol.timeline li{borde
   .viewer{grid-template-columns:1fr}dl{grid-template-columns:1fr}
 }
 @media print{.sidebar,.topbar{display:none}.layout{grid-template-columns:1fr}}
+details{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:8px}details summary{cursor:pointer;font-weight:600}

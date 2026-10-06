@@ -3,6 +3,7 @@ import {WorkspaceClient,launchReference,ApiError} from './client.js';
 import {el,labels,navigation,renderView} from './view.js';
 import {EvidenceClient,EvidenceError,box,button,documentPage,evidencePage,pill,session} from './evidence.js';
 import {icon} from './icons.js';
+import {casePage,clearCase} from './case.js';
 /** @typedef {import('./client.js').Viewer} Viewer */
 const app=document.querySelector('main');
 if(!app)throw new Error('Application shell missing');
@@ -10,7 +11,7 @@ const root=app;
 /** @type {BrowserAuth|undefined} */ let auth;
 /** @type {AbortController|undefined} */ let pending;
 let generation=0;
-function reset(){generation++;pending?.abort();auth?.logout();session.claim='';session.decisions=[];root.replaceChildren();document.body.className='';}
+function reset(){generation++;pending?.abort();auth?.logout();session.claim='';session.decisions=[];clearCase();root.replaceChildren();document.body.className='';}
 /** @param {string} message */
 function notice(message){const p=el('p',message);p.setAttribute('role','status');return p;}
 
@@ -46,7 +47,7 @@ async function shell(){
  const side=box('aside','sidebar');side.append(brand());
  const menu=el('nav');menu.setAttribute('aria-label','Seções da plataforma');menu.className='menu';
  /** @type {[string,string,string][]} */
- const pages=[['overview','Visão geral','home'],['patients','Pacientes','user'],['evidence','Evidências','search'],['document','Documento ao convênio','file']];
+ const pages=[['overview','Visão geral','home'],['case','Pedido médico','clipboard'],['patients','Pacientes','user'],['evidence','Evidências','search'],['document','Documento ao convênio','file']];
  /** @type {Record<string,HTMLButtonElement>} */ const items={};
  for(const [key,label,ic] of pages){const b=button('','quiet');b.className='menu-item';b.dataset.page=key;b.setAttribute('aria-label',label);b.append(icon(ic),el('span',label));items[key]=b;menu.append(b);}
  const who=box('div','side-foot');who.append(box('strong','',context.caller_id),box('span','muted',context.organization_id+' · '+(ROLE[context.role]||context.role)));
@@ -68,6 +69,7 @@ async function shell(){
    if(key==='overview')content.replaceChildren(overview(context,counts.decisions,go));
    else if(key==='patients'){patientsView=patientsView||patients(client);content.replaceChildren(patientsView);}
    else if(key==='evidence')content.replaceChildren(evidencePage(evidence,n=>{counts.decisions=n;}));
+   else if(key==='case')content.replaceChildren(casePage(evidence));
    else content.replaceChildren(documentPage(evidence));
  };
  for(const [k,b] of Object.entries(items))b.onclick=()=>go(k);
@@ -86,7 +88,7 @@ function overview(context,decisions,go){
  stats.append(stat('Decisões confirmadas',String(decisions),'nesta sessão'),stat('Assistente de IA',session.model?'Claude':'Manual',session.model?'sugestões com confirmação médica':'classificação pelo médico'),stat('Escopo de acesso',ROLE[context.role]||context.role,ROLE[context.purpose]||context.purpose));
  const steps=box('div','steps');
  /** @type {[string,string,string,string][]} */
- const flow=[['1','Pacientes','Abra o contexto autorizado e consulte os visualizadores.','patients'],['2','Evidências','Busque, leia e confirme os artigos.','evidence'],['3','Documento','Gere a fundamentação técnico-jurídica.','document']];
+ const flow=[['1','Pedido médico','Envie laudos e história; a IA extrai os fatos sem identificar o paciente.','case'],['2','Evidências','Busque, leia e confirme os artigos.','evidence'],['3','Documento','Gere a fundamentação técnico-jurídica.','document']];
  for(const [n,t,d,k] of flow){
    const s=box('button','step');s.setAttribute('type','button');s.setAttribute('aria-label',`Passo ${n}: ${t}`);s.append(box('span','step-n',n),box('strong','',t),box('span','muted',d));s.onclick=()=>go(k);steps.append(s);
  }

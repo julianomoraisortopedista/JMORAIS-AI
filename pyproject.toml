@@ -31,6 +31,10 @@ anthropic = [
   "anthropic>=1,<2",
 ]
 
+documents = [
+  "pypdf>=6,<7",
+]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

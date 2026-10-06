@@ -5,6 +5,7 @@ const PATHS = /** @type {Record<string,string[]>} */ ({
   search: ['M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14Z', 'm20 20-4-4'],
   file: ['M14 3H6v18h12V7Z', 'M14 3v4h4', 'M9 12h6', 'M9 16h6'],
   upload: ['M12 16V4', 'm7 9 5-5 5 5', 'M4 20h16'],
+  clipboard: ['M9 4h6v3H9Z', 'M7 5H5v16h14V5h-2', 'M8 12h8', 'M8 16h5'],
 });
 
 /** @param {string} name @returns {SVGSVGElement} */

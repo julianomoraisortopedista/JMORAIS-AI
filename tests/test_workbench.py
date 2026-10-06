@@ -50,7 +50,7 @@ def test_foreign_host_and_missing_token_are_rejected():
     assert c.get("/", headers={"Host": "evil.example"}).status_code == 403
     assert c.get("/api/status").status_code == 403
     assert c.get("/api/status", headers={"X-Workbench-Token": "wrong"}).status_code == 403
-    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0, "can_save_key": False}
+    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0, "case_ai": False, "can_save_key": False}
 
 
 def test_search_builds_pico_query_and_lists_candidates():
@@ -118,7 +118,7 @@ def test_key_can_be_saved_from_the_page_and_is_never_echoed():
                      resolve_classifier=lambda: (lambda: None) if saved else None,
                      save_key=lambda key: saved.append(key) or key.startswith("sk-ant-"))
     c = TestClient(app, base_url="http://127.0.0.1:8770")
-    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0, "can_save_key": True}
+    assert c.get("/api/status", headers=H).json() == {"model_configured": False, "decisions": 0, "case_ai": False, "can_save_key": True}
     bad = c.post("/api/settings/anthropic-key", headers=H, json={"key": "nope"})
     assert bad.status_code == 400 and "nope" not in bad.text
     good = c.post("/api/settings/anthropic-key", headers=H, json={"key": "sk-ant-secret-value"})

@@ -42,3 +42,12 @@ test('external services are links only and identifiers go to the verifying impor
   await client.importIds('26488691');
   assert.deepEqual(calls,[['/internal/evidence/api/import',{identifiers:'26488691'}]]);
 });
+
+test('patient identification only goes to the de-identifying routes, never to the document request',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const src=await readFile('src/case.js','utf8');
+  const documentCall=src.slice(src.indexOf('client.document({'),src.indexOf('});',src.indexOf('client.document({')));
+  assert.ok(documentCall.length>20 && !/identifiers|patient\./.test(documentCall));
+  assert.equal((src.match(/identifiers:identifiers\(\)/g)||[]).length,2); // case create + each upload (for removal only)
+  assert.ok(src.includes("doc.querySelectorAll('[data-ident]')"));
+});

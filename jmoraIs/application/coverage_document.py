@@ -7,7 +7,9 @@ dynamic value is HTML-escaped; no script is emitted. Print to PDF from the brows
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from html import escape
+import re
 
 from jmoraIs.application.legal_basis import STATUS_PT, LegalSection, LEGAL_SOURCES_CHECKED_ON, CoverageContext
 from jmoraIs.application.scientific_justification import SECTION_TITLES, JustificationDraft
@@ -30,8 +32,40 @@ def _p(text: str) -> str:
     return "".join(f"<p>{escape(part)}</p>" for part in text.strip().split("\n\n") if part.strip())
 
 
+@dataclass(frozen=True)
+class RequestDetails:
+    """Codes and materials stated by the physician (never generated)."""
+    icd10: tuple[str, ...] = ()
+    tuss: tuple[tuple[str, str], ...] = ()            # (code, description)
+    opme: tuple[tuple[str, str, int], ...] = ()       # (description, anvisa registration, quantity)
+    laterality: str = ""
+    regime: str = ""
+
+    def __post_init__(self):
+        if any(not re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", c) for c in self.icd10):
+            raise ValueError("CID-10 inválido")
+        if any(not re.fullmatch(r"\d{8}", code) for code, _ in self.tuss):
+            raise ValueError("Código TUSS deve ter 8 dígitos")
+        if any(q < 1 or q > 50 for _, _, q in self.opme):
+            raise ValueError("Quantidade de OPME inválida")
+
+
+def _facts_html(facts) -> str:
+    groups: dict[str, list] = {}
+    for fact in facts:
+        groups.setdefault(fact["category_label"], []).append(fact)
+    out = []
+    for label, items in groups.items():
+        out.append(f"<h3>{escape(label)}</h3><ul>")
+        for f in items:
+            out.append(f"<li>{escape(f['statement'])} <span class=\"muted\">({escape(f['source'])}: “{escape(f['quote'])}”)</span></li>")
+        out.append("</ul>")
+    return "".join(out)
+
+
 def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context: CoverageContext,
-                         clinical_summary: str = "") -> str:
+                         clinical_summary: str = "", request: "RequestDetails | None" = None,
+                         clinical_facts: tuple = ()) -> str:
     out = ["<!doctype html><html lang=\"pt-BR\"><head><meta charset=\"utf-8\">",
            "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
            f"<title>Solicitação de cobertura — {escape(context.procedure)}</title><style>{CSS}</style></head><body>",
@@ -39,15 +73,37 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
            "<div class=\"draft\">RASCUNHO — exige revisão e assinatura do médico responsável antes do envio</div>",
            "<p class=\"noprint muted\">Use Imprimir &gt; Salvar como PDF no navegador.</p>",
            "<h2>Identificação</h2><table class=\"ident\">"]
-    for label in ("Paciente", "Carteirinha / nº do beneficiário", "Operadora / plano", "Data"):
-        out.append(f"<tr><td>{label}:</td><td><span class=\"fill\"></span></td></tr>")
+    for key, label in (("paciente", "Paciente"), ("carteirinha", "Carteirinha / nº do beneficiário"),
+                       ("operadora", "Operadora / plano"), ("data", "Data")):
+        out.append(f"<tr><td>{label}:</td><td><span class=\"fill\" data-ident=\"{key}\"></span></td></tr>")
     out.append(f"<tr><td>Médico assistente:</td><td>{escape(context.prescriber_registration) or '<span class=\"fill\"></span>'}</td></tr></table>")
     out.append(f"<h2>Procedimento solicitado</h2><p><strong>{escape(context.procedure)}</strong></p>")
     if context.anvisa_registration.strip():
         out.append(f"<p>Registro Anvisa informado: {escape(context.anvisa_registration)}</p>")
+    if request is not None:
+        out.append("<table class=\"ident\">")
+        if request.tuss:
+            out.append("<tr><td>TUSS:</td><td>" + "<br>".join(f"{escape(c)} — {escape(d)}" for c, d in request.tuss) + "</td></tr>")
+        if request.icd10:
+            out.append(f"<tr><td>CID-10:</td><td>{escape(', '.join(request.icd10))}</td></tr>")
+        if request.laterality:
+            out.append(f"<tr><td>Lateralidade:</td><td>{escape(request.laterality)}</td></tr>")
+        if request.regime:
+            out.append(f"<tr><td>Regime:</td><td>{escape(request.regime)}</td></tr>")
+        out.append("</table>")
+        if request.opme:
+            out.append("<h3>OPME solicitado</h3><table class=\"ident\"><tr><td><strong>Material</strong></td>"
+                       "<td><strong>Registro Anvisa</strong></td><td><strong>Qtd.</strong></td></tr>")
+            out += [f"<tr><td>{escape(d)}</td><td>{escape(a)}</td><td>{q}</td></tr>" for d, a, q in request.opme]
+            out.append("</table>")
     out.append("<h2>Justificativa clínica</h2>")
-    out.append(_p(clinical_summary) if clinical_summary.strip()
-               else "<p class=\"muted\">[A ser redigida pelo médico assistente com os dados clínicos do caso.]</p>")
+    if clinical_summary.strip():
+        out.append(_p(clinical_summary))
+    if clinical_facts:
+        out.append("<p class=\"muted\">Fatos clínicos confirmados pelo médico, com o trecho do documento de origem.</p>")
+        out.append(_facts_html(clinical_facts))
+    if not clinical_summary.strip() and not clinical_facts:
+        out.append("<p class=\"muted\">[A ser redigida pelo médico assistente com os dados clínicos do caso.]</p>")
     out.append("<h2>Fundamentação científica</h2>")
     out.append(f"<p><strong>Afirmação avaliada:</strong> {escape(draft.claim)}</p>")
     out.append("<p class=\"muted\">Somente artigos com metadados verificados no PubMed e no Crossref, classificados "

@@ -10,6 +10,9 @@ Open http://localhost/ and sign in (local test users and passwords are in
 Sections after login:
 
 - **Visão geral** — caller context, session counters, guided steps.
+- **Pedido médico** — patient documents and history, de-identified before AI, quote-grounded
+  fact extraction, physician confirmation, CID/TUSS/OPME and the printable request; see
+  `docs/CASE_INTAKE.md`.
 - **Pacientes** — import the owner-issued launch reference and read the seven exact
   viewers (unchanged S004/S005 behaviour).
 - **Evidências** — PICO search (PubMed + Crossref, MeSH shown), abstract reading,

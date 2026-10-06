@@ -79,10 +79,11 @@ def create():
     # Evidence workbench behind the same OIDC bearer + IAM (CLINICAL_REVIEW, human reviewer).
     from jmoraIs.connect.crossref import CrossrefConnector
     from jmoraIs.connect.pubmed import PubMedConnector
-    from jmoraIs.workbench.app import create_app as create_workbench, default_classifier_factory
+    from jmoraIs.workbench.app import create_app as create_workbench, default_case_extractor_factory, default_classifier_factory
     from jmoraIs.workbench.platform_auth import iam_authenticator
     # 10 most relevant results keep a live search inside the API's 30 s request budget.
     app.mount('/internal/evidence', create_workbench(pubmed=PubMedConnector(search_limit=10), crossref=CrossrefConnector(),
         resolve_classifier=lambda: default_classifier_factory(os.environ, keychain=lambda: None),
+        resolve_case_extractor=lambda: default_case_extractor_factory(os.environ, keychain=lambda: None),
         authenticate=iam_authenticator(canonical.operational_services)))
     return app

@@ -31,6 +31,12 @@ export class EvidenceClient {
   decisions(){return this.call('decisions');}
   /** @param {string} pmid */ remove(pmid){return this.call('decisions/'+encodeURIComponent(pmid),undefined,'DELETE');}
   /** @param {Record<string,unknown>} body */ document(body){return this.call('document',body);}
+  /** @param {Record<string,unknown>} body */ caseCreate(body){return this.call('case',body);}
+  /** @param {string} id @param {Record<string,unknown>} body */ caseDocument(id,body){return this.call('case/'+encodeURIComponent(id)+'/document',body);}
+  /** @param {string} id */ caseExtract(id){return this.call('case/'+encodeURIComponent(id)+'/extract',{});}
+  /** @param {string} id */ caseGet(id){return this.call('case/'+encodeURIComponent(id));}
+  /** @param {string} id @param {Record<string,unknown>} body */ caseConfirm(id,body){return this.call('case/'+encodeURIComponent(id)+'/confirm',body);}
+  /** @param {string} id */ caseDelete(id){return this.call('case/'+encodeURIComponent(id),undefined,'DELETE');}
 }
 
 /** @param {string} tag @param {string} cls @param {string} [text] */

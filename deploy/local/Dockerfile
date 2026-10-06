@@ -5,7 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY requirements-production.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements-production.lock
 # Optional Claude SDK for the local evidence workbench (pinned; not in the production lock).
-RUN pip install --no-cache-dir anthropic==1.11.0 && pip check
+RUN pip install --no-cache-dir anthropic==1.11.0 pypdf==6.19.0 && pip check
 COPY pyproject.toml README.md ./
 COPY jmoraIs ./jmoraIs
 COPY evaluation ./evaluation

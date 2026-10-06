@@ -20,7 +20,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, SecretStr
 
-from jmoraIs.application.coverage_document import render_coverage_html
+from jmoraIs.application.coverage_document import RequestDetails, render_coverage_html
 from jmoraIs.application.evidence_packages import ScientificEvidencePackagePort
 from jmoraIs.application.evidence_query import EvidenceQueryRejected, PICOQuestion, build_pubmed_query
 from jmoraIs.application.legal_basis import (
@@ -28,6 +28,10 @@ from jmoraIs.application.legal_basis import (
 )
 from jmoraIs.application.scientific_justification import JustificationRejected, build_justification, render_markdown
 from jmoraIs.application.scientific_verification import AuthoritativeReconciliationPipeline, ScientificVerificationInput
+from jmoraIs.application.case_intake import (
+    CATEGORY_PT, MAX_DOCUMENT_CHARS, CaseDocument, CaseIntakeRejected, extract_text, prepare_documents,
+)
+from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify
 from jmoraIs.application.support_classification import (
     AbstractUnavailable, PhysicianDecisionType, SupportClassificationRejected, decide_proposal, decision_record,
     manual_proposal,
@@ -39,6 +43,8 @@ from jmoraIs.tenancy.domain import TenantContext
 
 PAGE = Path(__file__).with_name("index.html")
 ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+MAX_DOCUMENT_B64 = 1_000_000 - 4096  # one file per request, inside the API's 1 MB body limit
+MAX_CASE_DOCUMENTS = 8
 MAX_IMPORT = 10  # keeps verification inside the platform's 30 s request budget
 
 
@@ -81,6 +87,17 @@ class DecideIn(BaseModel):
     reviewer: str = Field(min_length=3, max_length=60)
 
 
+class TussIn(BaseModel):
+    code: str = Field(pattern=r"^\d{8}$")
+    description: str = Field("", max_length=200)
+
+
+class OpmeIn(BaseModel):
+    description: str = Field(min_length=2, max_length=200)
+    anvisa: str = Field("", max_length=40)
+    quantity: int = Field(1, ge=1, le=50)
+
+
 class DocumentIn(BaseModel):
     claim: str = Field(min_length=10, max_length=600)
     procedure: str = Field(min_length=3, max_length=300)
@@ -93,6 +110,12 @@ class DocumentIn(BaseModel):
     prior_request: Optional[bool] = None
     autogestao: Optional[bool] = None
     clinical_summary: str = Field("", max_length=8000)
+    case_id: Optional[str] = Field(None, max_length=40)
+    tuss: list[TussIn] = Field(default_factory=list, max_length=10)
+    opme: list[OpmeIn] = Field(default_factory=list, max_length=20)
+    icd10: list[str] = Field(default_factory=list, max_length=8)
+    laterality: str = Field("", max_length=40)
+    regime: str = Field("", max_length=60)
 
 
 class WorkbenchAuthError(Exception):
@@ -103,12 +126,42 @@ class WorkbenchAuthError(Exception):
         self.status = status
 
 
+class IdentifiersIn(BaseModel):
+    name: str = Field("", max_length=200)
+    cpf: str = Field("", max_length=20)
+    rg: str = Field("", max_length=20)
+    card_number: str = Field("", max_length=40)
+    birth_date: str = Field("", max_length=12)
+    phone: str = Field("", max_length=20)
+    email: str = Field("", max_length=120)
+    address: str = Field("", max_length=300)
+
+
+class CaseIn(BaseModel):
+    history: str = Field("", max_length=20000)
+    identifiers: IdentifiersIn
+    consent: bool
+
+
+class CaseDocumentIn(BaseModel):
+    name: str = Field(max_length=200)
+    content_base64: str = Field(max_length=MAX_DOCUMENT_B64)
+    identifiers: IdentifiersIn
+
+
+class CaseConfirmIn(BaseModel):
+    fact_ids: list[str] = Field(default_factory=list, max_length=80)
+    edits: dict[str, str] = Field(default_factory=dict)
+    icd10: list[str] = Field(default_factory=list, max_length=8)
+
+
 class WorkbenchState:
-    """Mutable per-process session (not a domain object)."""
+    """Mutable per-process session (not a domain object). Holds de-identified text only."""
 
     def __init__(self) -> None:
         self.proposals: dict = {}   # proposal_id -> SupportClassificationProposal
         self.decisions: dict = {}   # pmid -> decision record (latest physician decision)
+        self.cases: dict = {}       # case_id -> dict (de-identified texts, extraction job, confirmed facts)
 
 
 def _split(value: str) -> tuple[str, ...]:
@@ -119,7 +172,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc), token: Optional[str] = None,
                resolve_classifier: Optional[Callable[[], Optional[Callable]]] = None,
                save_key: Optional[Callable[[str], bool]] = None,
-               authenticate: Optional[Callable[[Request], str]] = None) -> FastAPI:
+               authenticate: Optional[Callable[[Request], str]] = None,
+               resolve_case_extractor: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -185,6 +239,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
     @app.get("/api/status")
     def status(request: Request):
         return {"model_configured": current_classifier() is not None, "decisions": len(state_of(request).decisions),
+                "case_ai": bool(resolve_case_extractor and resolve_case_extractor()),
                 "can_save_key": save_key is not None}
 
     @app.post("/api/search")
@@ -209,6 +264,112 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         if not save_key(body.key.get_secret_value()):
             bad("Chave não aceita. Copie de novo em platform.claude.com (começa com sk-ant-).")
         return {"model_configured": current_classifier() is not None}
+
+    def case_of(request: Request, case_id: str) -> dict:
+        case = state_of(request).cases.get(case_id)
+        if case is None:
+            bad("Caso não encontrado; comece de novo.", 404)
+        return case
+
+    def identifiers(body: IdentifiersIn) -> PatientIdentifiers:
+        return PatientIdentifiers(**body.model_dump())
+
+    def case_view(case_id: str, case: dict) -> dict:
+        job = case["job"]
+        return {"case_id": case_id, "history": case["history"].text, "history_removed": case["history"].removed,
+                "documents": [dict(label=d.label, name=d_name, text=d.text, removed=d.removed)
+                              for d, d_name in case["documents"]],
+                "status": job["status"], "error": job.get("error"),
+                "facts": [dict(fact_id=f.fact_id, category=f.category.value, category_label=CATEGORY_PT[f.category],
+                               statement=f.statement, quote=f.quote, source=f.source) for f in job.get("facts", ())],
+                "discarded": job.get("discarded", 0), "icd10_suggestions": list(job.get("icd10", ())),
+                "model": job.get("model"), "confirmed": case.get("confirmed")}
+
+    @app.post("/api/case")
+    def case_create(body: CaseIn, request: Request):
+        if not body.consent:
+            bad("Registre o consentimento do paciente antes de enviar documentos à IA.")
+        try:
+            history, _ = prepare_documents([], body.history, identifiers(body.identifiers))
+        except (CaseIntakeRejected, DeidentificationRejected) as exc:
+            bad(str(exc))
+        case_id = "case-" + secrets.token_hex(8)
+        state_of(request).cases[case_id] = {"history": history, "documents": [], "job": {"status": "NEW"}}
+        return case_view(case_id, state_of(request).cases[case_id])
+
+    @app.post("/api/case/{case_id}/document")
+    def case_document(case_id: str, body: CaseDocumentIn, request: Request):
+        import base64
+        case = case_of(request, case_id)
+        if len(case["documents"]) >= MAX_CASE_DOCUMENTS:
+            bad(f"Máximo de {MAX_CASE_DOCUMENTS} documentos por caso.")
+        try:
+            content = base64.b64decode(body.content_base64, validate=True)
+        except ValueError:
+            bad("Arquivo inválido.")
+        try:
+            text = extract_text(body.name, content)[:MAX_DOCUMENT_CHARS]
+            cleaned = deidentify(text, identifiers(body.identifiers))
+        except (CaseIntakeRejected, DeidentificationRejected) as exc:
+            bad(str(exc))
+        label = f"Documento {len(case['documents']) + 1}"
+        case["documents"].append((CaseDocument(label, cleaned.text, cleaned.removed), body.name[:120]))
+        case["job"] = {"status": "NEW"}
+        return case_view(case_id, case)
+
+    @app.post("/api/case/{case_id}/extract")
+    def case_extract(case_id: str, request: Request):
+        case = case_of(request, case_id)
+        factory = resolve_case_extractor() if resolve_case_extractor else None
+        if factory is None:
+            bad("Modelo de IA não configurado.", 503)
+        if case["job"]["status"] == "RUNNING":
+            return case_view(case_id, case)
+        case["job"] = {"status": "RUNNING"}
+        principal = getattr(request.state, "principal", "local")
+
+        def run():
+            try:
+                with TenantContextBinder().bind_tenant(tenant(principal)):
+                    result = factory().extract(case["history"], tuple(d for d, _ in case["documents"]))
+                case["job"] = {"status": result.status, "facts": result.facts, "discarded": result.discarded,
+                               "icd10": result.icd10_suggestions, "model": result.model_id}
+            except CaseIntakeRejected as exc:
+                case["job"] = {"status": "ERROR", "error": str(exc)}
+            except Exception as exc:  # provider failure: no provider text is exposed
+                case["job"] = {"status": "ERROR", "error": f"Falha ao consultar o modelo ({type(exc).__name__})."}
+        __import__("threading").Thread(target=run, daemon=True).start()
+        return case_view(case_id, case)
+
+    @app.get("/api/case/{case_id}")
+    def case_get(case_id: str, request: Request):
+        return case_view(case_id, case_of(request, case_id))
+
+    @app.post("/api/case/{case_id}/confirm")
+    def case_confirm(case_id: str, body: CaseConfirmIn, request: Request):
+        import re as _re
+        case = case_of(request, case_id)
+        facts = {f.fact_id: f for f in case["job"].get("facts", ())}
+        unknown = [f for f in body.fact_ids if f not in facts]
+        if unknown or not body.fact_ids:
+            bad("Selecione fatos válidos extraídos deste caso.")
+        codes = [c.strip().upper() for c in body.icd10]
+        if any(not _re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", c) for c in codes):
+            bad("CID-10 inválido.")
+        confirmed = []
+        for fid in body.fact_ids:
+            fact, edit = facts[fid], " ".join(str(body.edits.get(fid, "")).split())[:400]
+            confirmed.append(dict(category=fact.category.value, category_label=CATEGORY_PT[fact.category],
+                                  statement=edit or fact.statement, edited=bool(edit and edit != fact.statement),
+                                  quote=fact.quote, source=fact.source))
+        case["confirmed"] = {"facts": confirmed, "icd10": codes,
+                             "reviewer": getattr(request.state, "principal", "local"), "at": clock().isoformat()}
+        return case_view(case_id, case)
+
+    @app.delete("/api/case/{case_id}")
+    def case_delete(case_id: str, request: Request):
+        state_of(request).cases.pop(case_id, None)
+        return {"deleted": case_id}
 
     @app.post("/api/import")
     def import_identifiers(body: ImportIn):
@@ -311,7 +472,22 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             legal = build_legal_section(context, draft)
         except (JustificationRejected, ValueError) as exc:
             bad(str(exc))
-        return {"html": render_coverage_html(draft, legal, context, body.clinical_summary),
+        facts, codes = (), [c.strip().upper() for c in body.icd10]
+        if body.case_id:
+            confirmed = (case_of(request, body.case_id).get("confirmed") or {})
+            if not confirmed:
+                bad("Confirme os fatos clínicos do caso antes de gerar o pedido.")
+            facts = tuple(confirmed["facts"])
+            codes = list(dict.fromkeys(confirmed["icd10"] + codes))
+        try:
+            details = RequestDetails(tuple(codes), tuple((t.code, t.description) for t in body.tuss),
+                                     tuple((o.description, o.anvisa, o.quantity) for o in body.opme),
+                                     body.laterality.strip(), body.regime.strip())
+        except ValueError as exc:
+            bad(str(exc))
+        has_details = bool(codes or body.tuss or body.opme or body.laterality or body.regime)
+        return {"html": render_coverage_html(draft, legal, context, body.clinical_summary,
+                                             details if has_details else None, facts),
                 "markdown": render_markdown(draft) + "\n" + render_legal_markdown(legal),
                 "included": len(draft.references), "excluded": [dict(pmid=e.pmid, reason=e.reason) for e in draft.excluded],
                 "warnings": list(legal.warnings),
@@ -323,3 +499,10 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
 def default_classifier_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
     from jmoraIs.application.support_classification_runtime import build_service, credentials_configured, keychain_api_key
     return build_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
+
+
+def default_case_extractor_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
+    from jmoraIs.application.support_classification_runtime import (
+        build_case_extraction_service, credentials_configured, keychain_api_key,
+    )
+    return build_case_extraction_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
