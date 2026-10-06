@@ -19,7 +19,7 @@ export function launchReference(raw) {
 }
 export class WorkspaceClient {
   /** @param {()=>string} bearer @param {typeof fetch} request */
-  constructor(bearer,request=fetch){this.bearer=bearer;this.request=request;}
+  constructor(bearer,request=(/** @type {RequestInfo|URL} */ input,/** @type {RequestInit|undefined} */ init)=>fetch(input,init)){this.bearer=bearer;this.request=request;}
   /** @param {string} path @param {unknown} body @param {AbortSignal|undefined} signal */
   async read(path,body=undefined,signal=undefined){
     const r=await this.request('/internal/api/v1/workspace/'+path,{method:body===undefined?'GET':'POST',

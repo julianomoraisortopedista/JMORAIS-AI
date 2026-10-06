@@ -27,7 +27,7 @@ export class BrowserAuth {
   /** @type {string|null} */ #token = null;
   #expires = 0;
   /** @param {AuthConfig} config @param {Storage} storage @param {typeof fetch} request */
-  constructor(config, storage, request = fetch) { this.config=config; this.storage=storage; this.request=request; }
+  constructor(config, storage, request = (/** @type {RequestInfo|URL} */ input, /** @type {RequestInit|undefined} */ init) => fetch(input, init)) { this.config=config; this.storage=storage; this.request=request; }
   async discovery() {
     const r=await this.request(this.config.issuer.replace(/\/$/,'')+'/.well-known/openid-configuration',{cache:'no-store',credentials:'omit',redirect:'error'});
     if(!r.ok) throw new AuthError();

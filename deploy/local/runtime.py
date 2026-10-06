@@ -76,4 +76,13 @@ def create():
         runtime_security=RuntimeSecurityPolicy(tls_termination_required=False,database_tls_required=False),
         lifespan=lifespan,workspace=canonical.workspace,remaining_workspace=canonical.remaining_workspace,
         launch_service=canonical.launch_service)
+    # Evidence workbench behind the same OIDC bearer + IAM (CLINICAL_REVIEW, human reviewer).
+    from jmoraIs.connect.crossref import CrossrefConnector
+    from jmoraIs.connect.pubmed import PubMedConnector
+    from jmoraIs.workbench.app import create_app as create_workbench, default_classifier_factory
+    from jmoraIs.workbench.platform_auth import iam_authenticator
+    # 10 most relevant results keep a live search inside the API's 30 s request budget.
+    app.mount('/internal/evidence', create_workbench(pubmed=PubMedConnector(search_limit=10), crossref=CrossrefConnector(),
+        resolve_classifier=lambda: default_classifier_factory(os.environ, keychain=lambda: None),
+        authenticate=iam_authenticator(canonical.operational_services)))
     return app

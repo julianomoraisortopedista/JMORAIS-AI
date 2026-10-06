@@ -61,6 +61,11 @@ def main():
         (public/'config.json').write_text(json.dumps({'cliPluginsExtraDirs':['/Applications/Docker.app/Contents/Resources/cli-plugins']}))
         process_env={**os.environ,'DOCKER_CONFIG':str(public),
             'DOCKER_HOST':'unix://'+str(Path.home()/'.docker/run/docker.sock')}
+        if args.action=='up' and not process_env.get('ANTHROPIC_API_KEY'):
+            # Optional Claude key for the evidence workbench, from the Keychain; process env only.
+            from jmoraIs.application.support_classification_runtime import keychain_api_key
+            key=keychain_api_key()
+            if key:process_env['ANTHROPIC_API_KEY']=key
 
         base=['docker','compose','--env-file',str(env),'-f',str(ROOT/'deploy/local/compose.yml')]
         if args.action=='up':command=base+['up','--build','-d','--wait','--wait-timeout','300']

@@ -17,6 +17,7 @@ from typing import Callable, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, SecretStr
 
 from jmoraIs.application.coverage_document import render_coverage_html
@@ -88,6 +89,14 @@ class DocumentIn(BaseModel):
     clinical_summary: str = Field("", max_length=8000)
 
 
+class WorkbenchAuthError(Exception):
+    """Raised by a platform authenticator; status is 401 or 403."""
+
+    def __init__(self, status: int = 401):
+        super().__init__("authentication rejected")
+        self.status = status
+
+
 class WorkbenchState:
     """Mutable per-process session (not a domain object)."""
 
@@ -103,14 +112,21 @@ def _split(value: str) -> tuple[str, ...]:
 def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = None,
                clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc), token: Optional[str] = None,
                resolve_classifier: Optional[Callable[[], Optional[Callable]]] = None,
-               save_key: Optional[Callable[[str], bool]] = None) -> FastAPI:
+               save_key: Optional[Callable[[str], bool]] = None,
+               authenticate: Optional[Callable[[Request], str]] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
-    is picked up); `save_key` stores a pasted key in the macOS Keychain."""
+    is picked up); `save_key` stores a pasted key in the macOS Keychain.
+    `authenticate` (platform mode) replaces the per-process token: it must validate the
+    caller's OIDC bearer through the platform IAM and return the principal id; work
+    state is then kept per principal and the standalone page is not served."""
     def current_classifier():
         return resolve_classifier() if resolve_classifier else classifier_factory
     token = token or secrets.token_urlsafe(32)
-    state = WorkbenchState()
+    states: dict[str, WorkbenchState] = {}
+
+    def state_of(request: Request) -> WorkbenchState:
+        return states.setdefault(getattr(request.state, "principal", "local"), WorkbenchState())
     app = FastAPI(title="JMORAIS Workbench", docs_url=None, redoc_url=None, openapi_url=None)
     app.state.token = token
 
@@ -119,9 +135,15 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
         if host not in ALLOWED_HOSTS:
             return JSONResponse({"detail": "host rejected"}, status_code=403)
-        if request.url.path.startswith("/api/") and not secrets.compare_digest(
-                request.headers.get("x-workbench-token", ""), token):
-            return JSONResponse({"detail": "token required"}, status_code=403)
+        relative = request.url.path[len(request.scope.get("root_path", "")):]
+        if relative.startswith("/api/"):
+            if authenticate is not None:
+                try:
+                    request.state.principal = await run_in_threadpool(authenticate, request)
+                except WorkbenchAuthError as exc:
+                    return JSONResponse({"detail": "Sessão inválida ou sem permissão."}, status_code=exc.status)
+            elif not secrets.compare_digest(request.headers.get("x-workbench-token", ""), token):
+                return JSONResponse({"detail": "token required"}, status_code=403)
         response = await call_next(request)
         response.headers["Cache-Control"] = "no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -138,6 +160,10 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         return TenantContext("local-physician", "local-org", reviewer, "CLINICIAN", "CLINICAL_DOCUMENTATION",
                              "ST-02", "corr-workbench-" + secrets.token_hex(8))
 
+    def reviewer_of(request: Request, crm: str) -> str:
+        principal = getattr(request.state, "principal", None)
+        return f"{crm.strip()} · {principal}" if principal else crm
+
     def fetch(pmid: str):
         try:
             return pubmed.fetch_abstract(pmid)
@@ -146,11 +172,13 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
 
     @app.get("/", response_class=HTMLResponse)
     def index():
+        if authenticate is not None:
+            bad("Use a plataforma.", 404)
         return PAGE.read_text(encoding="utf-8").replace("__WORKBENCH_TOKEN__", token)
 
     @app.get("/api/status")
-    def status():
-        return {"model_configured": current_classifier() is not None, "decisions": len(state.decisions),
+    def status(request: Request):
+        return {"model_configured": current_classifier() is not None, "decisions": len(state_of(request).decisions),
                 "can_save_key": save_key is not None}
 
     @app.post("/api/search")
@@ -180,14 +208,14 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         value = fetch(body.pmid)
         return {"pmid": value.pmid, "title": value.title, "text": value.text, "url": value.source_locator}
 
-    def proposal_out(proposal):
-        state.proposals[proposal.proposal_id] = proposal
+    def proposal_out(request, proposal):
+        state_of(request).proposals[proposal.proposal_id] = proposal
         return {"proposal_id": proposal.proposal_id, "pmid": proposal.pmid, "status": proposal.status.value,
                 "direction": proposal.proposed_direction.value if proposal.proposed_direction else None,
                 "quote": proposal.quote, "rationale": proposal.rationale, "model": proposal.model_id}
 
     @app.post("/api/propose")
-    def propose(body: ProposeIn):
+    def propose(body: ProposeIn, request: Request):
         factory = current_classifier()
         if factory is None:
             bad("Modelo de IA não configurado (ANTHROPIC_API_KEY). Use a classificação manual.", 503)
@@ -195,53 +223,53 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         service = factory()
         try:
             with TenantContextBinder().bind_tenant(tenant("workbench")):
-                return proposal_out(service.propose(body.claim, value))
+                return proposal_out(request, service.propose(body.claim, value))
         except SupportClassificationRejected as exc:
             bad(str(exc))
         except Exception as exc:  # provider failures: no provider text is exposed
             bad(f"Falha ao consultar o modelo ({type(exc).__name__}). Tente de novo ou classifique manualmente.", 502)
 
     @app.post("/api/manual")
-    def manual(body: ManualIn):
+    def manual(body: ManualIn, request: Request):
         value = fetch(body.pmid)
         try:
             proposal = manual_proposal(body.claim, value, body.direction, body.quote, clock=clock)
-            decision = decide_proposal(proposal, reviewer_id=body.reviewer, decision=PhysicianDecisionType.ACCEPT,
-                                       clock=clock)
+            decision = decide_proposal(proposal, reviewer_id=reviewer_of(request, body.reviewer),
+                                       decision=PhysicianDecisionType.ACCEPT, clock=clock)
         except SupportClassificationRejected as exc:
             bad("O trecho precisa ser copiado literalmente do resumo (mínimo de 20 caracteres)."
                 if "verbatim" in str(exc) else str(exc))
         record = decision_record(decision)
-        state.decisions[body.pmid] = record
+        state_of(request).decisions[body.pmid] = record
         return record
 
     @app.post("/api/decide")
-    def decide(body: DecideIn):
-        proposal = state.proposals.get(body.proposal_id)
+    def decide(body: DecideIn, request: Request):
+        proposal = state_of(request).proposals.get(body.proposal_id)
         if proposal is None:
             bad("Sugestão não encontrada; gere de novo.", 404)
         try:
-            decision = decide_proposal(proposal, reviewer_id=body.reviewer, decision=body.decision,
+            decision = decide_proposal(proposal, reviewer_id=reviewer_of(request, body.reviewer), decision=body.decision,
                                        final_direction=body.final_direction, note=body.note, clock=clock)
         except SupportClassificationRejected as exc:
             bad(str(exc))
         record = decision_record(decision)
-        state.decisions[proposal.pmid] = record
+        state_of(request).decisions[proposal.pmid] = record
         return record
 
     @app.get("/api/decisions")
-    def decisions():
-        return list(state.decisions.values())
+    def decisions(request: Request):
+        return list(state_of(request).decisions.values())
 
     @app.delete("/api/decisions/{pmid}")
-    def remove(pmid: str):
-        state.decisions.pop(pmid, None)
+    def remove(pmid: str, request: Request):
+        state_of(request).decisions.pop(pmid, None)
         return {"removed": pmid}
 
     @app.post("/api/document")
-    def document(body: DocumentIn):
+    def document(body: DocumentIn, request: Request):
         claim = " ".join(body.claim.split())
-        records = [r for r in state.decisions.values() if " ".join(r["claim"].split()) == claim]
+        records = [r for r in state_of(request).decisions.values() if " ".join(r["claim"].split()) == claim]
         packages = ScientificEvidencePackagePort(catalog=InMemoryPackageCatalogRepository(), clock=clock)
         pipeline = AuthoritativeReconciliationPipeline(pubmed=pubmed, crossref=crossref, packages=packages, clock=clock)
         try:

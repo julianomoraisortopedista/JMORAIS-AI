@@ -60,6 +60,13 @@ LIVE INTERNAL PILOT READY = PENDING — EXTERNAL DEPLOYMENT CONFIGURATION
 - Operator instructions: `INTERNAL_PILOT_RUNBOOK.md`; configuration names: `config/internal-pilot.env.example`. Manual CI workflow invokes the same gate; remote CI was not executed.
 - Existing S001–S005 accepted evidence retained. No historical full-suite rerun, new feature sprint, commit, push or merge.
 
+### Unified platform — 2026-10-06
+
+- Single web platform at http://localhost/ (apps/web): premium login + sidebar shell with Visão geral, Pacientes (unchanged launch/seven viewers), Evidências and Documento ao convênio.
+- Evidence workbench mounted in the backend at /internal/evidence behind the existing IAM (OIDC bearer, CLINICAL_REVIEW, HUMAN CLINICAL_REVIEWER, no caller tenant/role headers); per-principal state; 30 s request budget kept (10 results per search).
+- Fixed pre-existing defect: browser OIDC login failed with "Illegal invocation" (unbound fetch). Real-browser login verified.
+- Evidence: release-candidate gate 19/19 PASS; local-pilot-proof LOCAL_PASS; 1134 passed with PostgreSQL; frontend 10 tests + typecheck + lint + build PASS; authenticated end-to-end search → Claude proposal → physician decision → document through the platform.
+
 ### Local synthetic pilot proof — 2026-10-05
 
 - `make local-pilot-up` + `make local-pilot-proof` PASS: real Keycloak code+PKCE, 3 synthetic launches x 7 viewers, readiness, authorization denials, cryptographic replay VALID, runtime role NOBYPASSRLS. Synthetic data only; secrets live in `~/.local/share/jmorais-local-pilot` (0600), never in the repository.

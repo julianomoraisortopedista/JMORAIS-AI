@@ -44,6 +44,8 @@ services:
       LOCAL_RUNTIME_PASSWORD: ${LOCAL_RUNTIME_PASSWORD:?local env required}
       LOCAL_DRAFT_KEY: ${LOCAL_DRAFT_KEY:?local env required}
       LOCAL_PSEUDO_KEY: ${LOCAL_PSEUDO_KEY:?local env required}
+      # Optional: injected at `make local-pilot-up` from the macOS Keychain; never written to disk.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output:ro']
     depends_on:
       seed: {condition: service_completed_successfully}

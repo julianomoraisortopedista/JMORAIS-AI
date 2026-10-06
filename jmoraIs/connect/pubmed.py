@@ -79,6 +79,7 @@ class PubMedConnector(BaseConnector):
         min_interval: float = NCBI_MIN_INTERVAL_SECONDS,
         monotonic: Callable[[], float] = time.monotonic,
         sleep: Callable[[float], None] = time.sleep,
+        search_limit: int = 20,
     ):
         self.http_client = http_client
         self.timeout = timeout
@@ -86,6 +87,7 @@ class PubMedConnector(BaseConnector):
         self._monotonic = monotonic
         self._sleep = sleep
         self._last_request_at: float | None = None
+        self._search_limit = max(1, min(int(search_limit), 100))
 
     def _get(self, url: str, **kwargs: Any) -> Any:
         if self._last_request_at is not None:
@@ -238,7 +240,8 @@ class PubMedConnector(BaseConnector):
         return tuple(headings)
 
     def search_by_title(self, title: str) -> list[IdentifierVerificationResult]:
-        ids_or_error = self._search_ids(title, requested_identifier=title, identifier_type=IdentifierType.PMID)
+        ids_or_error = self._search_ids(title, requested_identifier=title, identifier_type=IdentifierType.PMID,
+                                        max_results=self._search_limit)
         if isinstance(ids_or_error, IdentifierVerificationResult):
             return [ids_or_error]
         return [self.search_by_pmid(pmid) for pmid in ids_or_error]

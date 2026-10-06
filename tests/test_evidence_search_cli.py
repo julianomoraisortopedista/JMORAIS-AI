@@ -116,3 +116,11 @@ def test_identifiers_from_other_sources_are_verified_one_request_each():
 def test_identifier_mode_cannot_be_mixed_with_search(capsys):
     with pytest.raises(SystemExit):
         evidence_search.main(["knee", "--pmid", "26488691"])
+
+
+def test_pubmed_search_limit_is_configurable_and_bounded():
+    client = RecordingClient()
+    PubMedConnector(client, min_interval=0, search_limit=10).search_by_title("knee")
+    assert client.calls[0][1]["retmax"] == "10"
+    PubMedConnector(client, min_interval=0, search_limit=1000).search_by_title("knee")
+    assert client.calls[1][1]["retmax"] == "100"

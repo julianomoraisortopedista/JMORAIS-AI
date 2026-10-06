@@ -87,7 +87,10 @@ service) against PubMed/Crossref before relying on them:
 make evidence-search ARGS='--pmid 26488691 --doi 10.1056/NEJMoa1505467'
 ```
 
-**Browser workbench (recommended):** `make workbench`, then http://127.0.0.1:8770/ — see
+**Unified platform (recommended):** `make local-pilot-up`, then http://localhost/ — login,
+patients, evidence and insurer document in one premium UI; see `docs/PLATFORM.md`.
+
+**Standalone browser workbench:** `make workbench`, then http://127.0.0.1:8770/ — see
 `docs/WORKBENCH.md`.
 
 AI-proposed, physician-confirmed classification and the justification draft with
