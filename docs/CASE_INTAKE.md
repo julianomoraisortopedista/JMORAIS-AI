@@ -9,6 +9,10 @@ Platform page **Pedido médico** (http://localhost/ after login).
 2. **Documents**: text PDFs or .txt (one per request, <= 700 KB, inside the API's 1 MB
    body limit; up to 8). Images are never sent to AI; scanned PDFs without text are
    refused with guidance. History is free text.
+   **Dictation**: "🎤 Ditar" (history, Rol alternatives, extra clinical text) uses the
+   browser's built-in speech recognition in pt-BR (Chrome: Google's service; Safari:
+   Apple's). Without support, the page points to macOS Dictation (Fn twice). Dictated
+   text is de-identified like typed text; avoid saying identifiers aloud.
 3. **De-identification** (`jmoraIs/application/deidentification.py`): labelled lines
    (Paciente/Nome/Beneficiário, mother, card/matrícula, birth, address), generic
    patterns (CPF, CNS, RG, phone, e-mail, CEP) and the supplied identifiers

@@ -1,6 +1,7 @@
 /** Medical request from patient documents. Identification never leaves this page except to be removed. */
 import {el} from './view.js';
 import {box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
+import {dictation} from './dictation.js';
 
 const REQUIREMENT=/** @type {Record<string,string>} */ ({ATENDIDO:'Atendido',PENDENTE:'Pendente',NAO_ATENDIDO:'Não atendido'});
 /** Patient identification: memory only, cleared on logout/reload. */
@@ -42,7 +43,7 @@ function documentsCard(client,root){
   const consentLabel=box('label','chip');consentLabel.append(consent,el('span','Consentimento do paciente registrado para tratamento dos dados (LGPD)'));
   const go=button('Remover identificação e enviar');const status=box('div','status-area');const preview=box('div','');
   const actions=box('div','actions');actions.append(go);
-  card.append(field('História resumida',history),field('Laudos (PDF ou .txt, até 8)',files),consentLabel,actions,status,preview);
+  card.append(field('História resumida',history),dictation(history),field('Laudos (PDF ou .txt, até 8)',files),consentLabel,actions,status,preview);
   if(current)renderPreview(preview,current.view);
   go.onclick=()=>busy(go,async()=>{
     if(!patient.name.trim()){say(status,'Preencha ao menos o nome do paciente, para que ele seja removido dos textos.');return;}
@@ -149,7 +150,7 @@ function requestCard(client){
   const grid=box('div','form-grid');grid.append(field('Procedimento',procedure),field('Lateralidade',laterality),field('Regime',regime),field('Consta do Rol da ANS?',rol),field('Caráter',urgency),field('Situação na ANS',ans),field('Médico assistente (CRM)',crm),field('Pedido prévio à operadora',prior),field('Plano de autogestão',self));
   const tussBox=box('div','');const tuss=repeater(tussBox,['Código TUSS (8 dígitos)','Descrição']);
   const opmeBox=box('div','');const opme=repeater(opmeBox,['Material (OPME)','Registro Anvisa','Quantidade']);
-  card.append(field('Procedimento solicitado',procedure),grid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),field('Texto clínico adicional',summary));
+  card.append(field('Procedimento solicitado',procedure),grid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),dictation(alt),field('Texto clínico adicional',summary),dictation(summary));
   const go=button('Gerar pedido');const status=box('div','status-area');const result=box('div','');const actions=box('div','actions');actions.append(go);card.append(actions,status,result);
   /** @param {string} v */ const bool=v=>v===''?null:v==='true';
   go.onclick=()=>busy(go,async()=>{

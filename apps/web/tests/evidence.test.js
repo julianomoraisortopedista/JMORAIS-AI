@@ -51,3 +51,15 @@ test('patient identification only goes to the de-identifying routes, never to th
   assert.equal((src.match(/identifiers:identifiers\(\)/g)||[]).length,2); // case create + each upload (for removal only)
   assert.ok(src.includes("doc.querySelectorAll('[data-ident]')"));
 });
+
+test('dictation appends to the given field only, in pt-BR, and degrades without speech support',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const src=await readFile('src/dictation.js','utf8');
+  assert.ok(src.includes("r.lang='pt-BR'") && src.includes('target.value=base+committed+interim'));
+  assert.ok(!/fetch\(|XMLHttpRequest|WebSocket/.test(src));
+  const {dictation}=await import('../src/dictation.js');
+  const created=[];
+  globalThis.window={};globalThis.document={createElement:(tag)=>{const n={tagName:tag,className:'',textContent:'',children:[],attributes:{},append(...c){this.children.push(...c);},setAttribute(k,v){this.attributes[k]=v;}};created.push(n);return n;}};
+  const node=dictation({value:''});
+  assert.ok(JSON.stringify(node).includes('Fn duas vezes'));
+});
