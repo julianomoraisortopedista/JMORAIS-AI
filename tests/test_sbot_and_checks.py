@@ -206,3 +206,22 @@ def test_case_check_endpoint(tmp_path):
     assert out["sbot_entry"] == "9.1" and out["codes_confirmed"] is False and "21 dias úteis" in out["deadline"]
     assert any(f["topic"] == "Exames" and f["level"] == "OK" for f in out["checks"])
     assert c.post(f"/api/case/{case['case_id']}/check", headers=H, json={"template_id": "nope"}).status_code == 404
+
+
+def test_letterhead_logo_is_validated(tmp_path):
+    from jmoraIs.application.practice_documents import Letterhead
+    png = b"\x89PNG\r\n\x1a\n" + b"\0" * 64
+    store = PracticeStore(tmp_path / "practice.json")
+    saved = store.save_letterhead(Letterhead(logo_base64=base64.b64encode(png).decode(), header_lines=[" Dr. Teste ", "", "Ortopedia"],
+                                             footer="Rua  A, 1"))
+    assert saved.logo_type == "image/png" and saved.header_lines == ["Dr. Teste", "Ortopedia"] and saved.footer == "Rua A, 1"
+    assert store.letterhead().logo_type == "image/png"
+    with pytest.raises(PracticeRejected):
+        store.save_letterhead(Letterhead(logo_base64=base64.b64encode(b"<svg onload=x>").decode()))
+    with pytest.raises(PracticeRejected):
+        store.save_letterhead(Letterhead(logo_base64=base64.b64encode(png + b"\0" * 400_000).decode()))
+    c = TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), token=TOKEN, practice=store),
+                   base_url="http://127.0.0.1:8770")
+    assert c.get("/api/letterhead", headers=H).json()["header_lines"] == ["Dr. Teste", "Ortopedia"]
+    assert c.put("/api/letterhead", headers=H, json={"logo_base64": base64.b64encode(b"GIF89a").decode()}).status_code == 400
+    assert c.put("/api/letterhead", headers=H, json={"color": "red"}).status_code == 422

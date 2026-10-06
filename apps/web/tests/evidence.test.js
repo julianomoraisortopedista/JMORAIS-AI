@@ -76,3 +76,12 @@ test('portuguese question goes to the drafting route and fills the PICO fields b
   const src=await readFile('src/evidence.js','utf8');
   assert.ok(src.includes("population.value=d.population.join('; ')") && src.includes('go.click()'));
 });
+
+test('letterhead logo is limited to PNG/JPEG data and the prescription never calls the API with patient data',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const src=await readFile('src/letterhead.js','utf8');
+  assert.ok(src.includes("/^image\\/(png|jpeg)$/.test(lh.logo_type)"));
+  assert.ok(!/innerHTML|outerHTML\s*=|insertAdjacentHTML/.test(src));
+  const rx=src.slice(src.indexOf('export function prescriptionPage'));
+  assert.ok(!/client\.(case|document|request|question|propose)/.test(rx)); // only letterhead/profile are read
+});

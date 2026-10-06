@@ -3,7 +3,7 @@ import {WorkspaceClient,launchReference,ApiError} from './client.js';
 import {el,labels,navigation,renderView} from './view.js';
 import {EvidenceClient,EvidenceError,box,button,documentPage,evidencePage,pill,session} from './evidence.js';
 import {icon} from './icons.js';
-import {casePage,clearCase,quickPage} from './case.js';
+import {casePage,clearCase,prescription,quickPage} from './case.js';
 import {catalogPage} from './catalog.js';
 /** @typedef {import('./client.js').Viewer} Viewer */
 const app=document.querySelector('main');
@@ -48,7 +48,7 @@ async function shell(){
  const side=box('aside','sidebar');side.append(brand());
  const menu=el('nav');menu.setAttribute('aria-label','Seções da plataforma');menu.className='menu';
  /** @type {[string,string,string][]} */
- const pages=[['overview','Visão geral','home'],['quick','Pedido rápido','upload'],['case','Pedido médico','clipboard'],['catalog','Modelos de cirurgia','file'],['patients','Pacientes','user'],['evidence','Evidências','search'],['document','Documento ao convênio','file']];
+ const pages=[['overview','Visão geral','home'],['quick','Pedido rápido','upload'],['case','Pedido médico','clipboard'],['rx','Receituário','file'],['catalog','Modelos de cirurgia','file'],['patients','Pacientes','user'],['evidence','Evidências','search'],['document','Documento ao convênio','file']];
  /** @type {Record<string,HTMLButtonElement>} */ const items={};
  for(const [key,label,ic] of pages){const b=button('','quiet');b.className='menu-item';b.dataset.page=key;b.setAttribute('aria-label',label);b.append(icon(ic),el('span',label));items[key]=b;menu.append(b);}
  const who=box('div','side-foot');who.append(box('strong','',context.caller_id),box('span','muted',context.organization_id+' · '+(ROLE[context.role]||context.role)));
@@ -72,6 +72,7 @@ async function shell(){
    else if(key==='evidence')content.replaceChildren(evidencePage(evidence,n=>{counts.decisions=n;}));
    else if(key==='case')content.replaceChildren(casePage(evidence));
    else if(key==='quick')content.replaceChildren(quickPage(evidence));
+   else if(key==='rx')content.replaceChildren(prescription(evidence));
    else if(key==='catalog')content.replaceChildren(catalogPage(evidence));
    else content.replaceChildren(documentPage(evidence));
  };

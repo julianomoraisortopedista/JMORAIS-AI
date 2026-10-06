@@ -37,3 +37,12 @@ model (.docx/PDF/.txt with "(inserir ...)" placeholders). A model that contains 
 identifiers is refused. The consent form is filled in the browser with the patient's
 identification, the profile, the procedure, laterality, anesthesia, the template's definition
 and the physician-written complications; unfilled placeholders are highlighted.
+
+## Letterhead and prescription pad (`apps/web/src/letterhead.js`)
+
+"Meu papel timbrado" stores a PNG/JPEG logo (validated by magic bytes, <= 400 KB), header lines
+(default: name, specialty, CRM, RQE from the profile), footer and color. Every document built
+in the browser (prescription, report, report + request, insurer request, consent form) gets
+it according to the print mode: "Com logo e cabeçalho" or "Sem cabeçalho (papel timbrado)",
+which leaves the header space blank for pre-printed paper. The "Receituário" page fills and
+prints a prescription locally; nothing is sent to the AI or stored.

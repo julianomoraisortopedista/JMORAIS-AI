@@ -3,6 +3,7 @@ import {el} from './view.js';
 import {box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
 import {dictation} from './dictation.js';
 import {templatePicker} from './catalog.js';
+import {applyLetterhead,practice,prescriptionPage,printModeSelect} from './letterhead.js';
 
 const REQUIREMENT=/** @type {Record<string,string>} */ ({ATENDIDO:'Atendido',PENDENTE:'Pendente',NAO_ATENDIDO:'Não atendido'});
 /** Patient identification: memory only, cleared on logout/reload. */
@@ -203,10 +204,10 @@ function reportCard(client){
       areas.push(t);titles.push(sec.title);body.append(field(sec.title,t,src?'Fontes — '+src:(sec.sentences.length?'Baseado no procedimento/OPME informado':'Sem fatos para esta seção — preencha se houver')));
     }
     sync();
-    const open=button('Relatório final com dados do paciente'),save=button('Baixar relatório (.html)','ghost');const fa=box('div','actions');fa.append(open,save);
+    const open=button('Relatório final com dados do paciente'),save=button('Baixar relatório (.html)','ghost');const fa=box('div','actions');fa.append(printModeSelect(),open,save);
     body.append(box('p','muted','O relatório final é montado aqui no seu computador, com nome, nascimento, CPF e carteirinha da identificação acima. Esses dados não vão para a IA.'),fa);
-    open.onclick=()=>{const html=finalReport();const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))body.append(box('div','alert alert-info','Nova aba bloqueada. Use "Baixar relatório".'));setTimeout(()=>URL.revokeObjectURL(url),60000);};
-    save.onclick=()=>download('relatorio-medico.html',finalReport(),'text/html');
+    open.onclick=()=>busy(open,async()=>{const html=await finalReport(client);const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))body.append(box('div','alert alert-info','Nova aba bloqueada. Use "Baixar relatório".'));setTimeout(()=>URL.revokeObjectURL(url),60000);});
+    save.onclick=()=>busy(save,async()=>download('relatorio-medico.html',await finalReport(client),'text/html'));
   };
   const existing=current&&current.view.report;if(existing)render(existing);
   go.onclick=()=>busy(go,async()=>{draft.autoReport=false;
@@ -261,7 +262,7 @@ function requestCard(client){
     field('Reserva de sangue',yesNo(sch.blood_reserve,v=>{sch.blood_reserve=v;})),field('Fornecedor preferencial',typed('text',sch.supplier,v=>{sch.supplier=v;})),
     field('Observações ao hospital',typed('text',sch.notes,v=>{sch.notes=v;})));
   card.append(picker,field('Procedimento solicitado',procedure),grid,box('div','field-label','Agendamento no hospital'),sgrid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),dictation(alt),field('Texto clínico adicional',summary),dictation(summary));
-  const go=button('Gerar pedido');const status=box('div','status-area');const result=box('div','');const actions=box('div','actions');actions.append(go);card.append(actions,status,result);
+  const go=button('Gerar pedido');const status=box('div','status-area');const result=box('div','');const actions=box('div','actions');actions.append(printModeSelect(),go);card.append(actions,status,result);
   /** @param {string} v */ const bool=v=>v===''?null:v==='true';
   go.onclick=()=>busy(go,async()=>{
     if(!current){say(status,'Envie os documentos primeiro.');return;}
@@ -280,8 +281,9 @@ function requestCard(client){
       if(r.deadline)result.append(box('p','muted',r.deadline));
       for(const q of r.requirements){const row=box('div','row');const m=box('div','row-main');m.append(box('strong','',q.label),box('span','muted',q.basis));row.append(pill(REQUIREMENT[q.status]||q.status,q.status),m);result.append(row);}
       for(const w of r.warnings)result.append(box('div','alert alert-warn','Pendência: '+w));
-      const html=withIdentification(r.html);
-      const open=button('Abrir para imprimir / PDF'),save=button('Baixar pedido (.html)','ghost');const a=box('div','actions');a.append(open,save);result.append(a);
+      const {letterhead,profile}=await practice(client);
+      const html=withIdentification(r.html,(doc)=>applyLetterhead(doc,letterhead,profile));
+      const open=button('Abrir para imprimir / PDF'),save=button('Baixar pedido (.html)','ghost');const a=box('div','actions');a.append(open,save);result.append(box('p','muted','Modelo de impressão escolhido no momento de gerar: com logo e cabeçalho, ou sem cabeçalho.'),a);
       open.onclick=()=>{const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))result.append(box('div','alert alert-info','Nova aba bloqueada. Use "Baixar pedido".'));setTimeout(()=>URL.revokeObjectURL(url),60000);};
       save.onclick=()=>download('pedido-medico.html',html,'text/html');
       const tcle=button('Termo de consentimento com dados do paciente','ghost');a.append(tcle);
@@ -293,16 +295,19 @@ function requestCard(client){
   return card;
 }
 
-/** Fill identification locally (the server never receives it for the document). @param {string} html */
-function withIdentification(html){
+/** Fill identification locally (the server never receives it for the document). @param {string} html @param {(doc:Document)=>void} [decorate] */
+function withIdentification(html,decorate){
   const doc=new DOMParser().parseFromString(html,'text/html');
   /** @type {Record<string,string>} */ const values={paciente:patient.name,nascimento:patient.birth_date,cpf:patient.cpf,carteirinha:patient.card_number,operadora:patient.operadora,data:new Date().toLocaleDateString('pt-BR')};
   for(const span of doc.querySelectorAll('[data-ident]')){const v=values[span.getAttribute('data-ident')||''];if(v){span.textContent=v;span.classList.remove('fill');}}
+  if(decorate)decorate(doc);
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }
 
 /** Final medical report, assembled in the browser with the patient's identification (never sent to the AI). */
-function finalReport(){
+/** @param {import('./evidence.js').EvidenceClient} client */
+async function finalReport(client){
+  const {letterhead,profile}=await practice(client);
   const doc=document.implementation.createHTMLDocument('Relatório médico');
   const meta=doc.createElement('meta');meta.setAttribute('charset','utf-8');doc.head.prepend(meta);
   const style=doc.createElement('style');
@@ -321,14 +326,15 @@ function finalReport(){
   doc.body.append(table);
   for(const [title,text] of draft.reportSections){add('h2',title);for(const para of text.split(/\n+/))if(para.trim())add('p',para.trim());}
   add('p',new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'}));
-  const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),doc.createTextNode(session.reviewer||'Médico assistente — CRM'));
+  const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),doc.createTextNode(profile.name||'Médico assistente'),doc.createElement('br'),doc.createTextNode(profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:(session.reviewer||'CRM')));
+  applyLetterhead(doc,letterhead,profile);
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }
 
 /** Consent form from the physician's model, filled in the browser (patient data never leaves it).
  * @param {import('./evidence.js').EvidenceClient} client @param {string|null} templateId @param {string} procedure @param {string} side */
 async function consentForm(client,templateId,procedure,side){
-  const [model,profile,catalog]=await Promise.all([client.consentGet(),client.profileGet(),client.catalog()]);
+  const [model,{letterhead,profile},catalog]=await Promise.all([client.consentGet(),practice(client),client.catalog()]);
   if(!model.text)throw new Error('Envie o seu modelo de termo em "Modelos de cirurgia" > "Meu termo de consentimento".');
   const t=(catalog.templates||[]).find((/** @type {any} */ x)=>x.template_id===templateId)||{};
   const fold=(/** @type {string} */ v)=>v.normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase();
@@ -370,6 +376,7 @@ async function consentForm(client,templateId,procedure,side){
     p.append(doc.createTextNode(rest));
     if(/^termo de consentimento/.test(f)){const h=doc.createElement('h1');h.textContent=line;h.style.textAlign='center';h.style.fontSize='18px';doc.body.append(h);}else doc.body.append(p);
   }
+  applyLetterhead(doc,letterhead,profile);
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }
 
@@ -465,7 +472,7 @@ function quickResult(client,view,check){
     for(const f of check.checks||[])c.append(box('div','alert alert-'+(f.level==='BLOQUEIO'?'error':f.level==='OK'?'ok':'warn'),`${f.level==='BLOQUEIO'?'Corrigir':f.level==='OK'?'OK':'Atenção'} · ${f.topic}: ${f.message}`));
     if(check.deadline)c.append(box('p','muted',check.deadline));wrap.append(c);}
   const out=box('section','card');const open=button('Abrir relatório e solicitação'),save=button('Baixar (.html)','ghost'),tcle=button('Termo de consentimento','ghost');
-  const a=box('div','actions');a.append(open,save,tcle);const st=box('div','status-area');out.append(box('p','muted','O documento é montado aqui com os dados do paciente. Imprima ou salve em PDF pelo navegador.'),a,st);
+  const a=box('div','actions');a.append(printModeSelect(),open,save,tcle);const st=box('div','status-area');out.append(box('p','muted','O documento é montado aqui com os dados do paciente. Imprima ou salve em PDF pelo navegador.'),a,st);
   const build=async()=>combinedDocument(client,check);
   open.onclick=()=>busy(open,async()=>{const html=await build();const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('relatorio-e-solicitacao.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);});
   save.onclick=()=>busy(save,async()=>download('relatorio-e-solicitacao.html',await build(),'text/html'));
@@ -476,7 +483,7 @@ function quickResult(client,view,check){
 /** Medical report + surgery and material request, assembled in the browser.
  * @param {import('./evidence.js').EvidenceClient} client @param {any} check */
 async function combinedDocument(client,check){
-  const [profile,catalog]=await Promise.all([client.profileGet().catch(()=>({})),client.catalog().catch(()=>({templates:[]}))]);
+  const [{letterhead,profile},catalog]=await Promise.all([practice(client),client.catalog().catch(()=>({templates:[]}))]);
   const t=(catalog.templates||[]).find((/** @type {any} */ x)=>x.template_id===draft.templateId)||null;
   const doc=document.implementation.createHTMLDocument('Relatório médico e solicitação');
   const meta=doc.createElement('meta');meta.setAttribute('charset','utf-8');doc.head.prepend(meta);
@@ -489,10 +496,6 @@ async function combinedDocument(client,check){
   const table=(rows,headers,cls)=>{const tb=doc.createElement('table');if(cls)tb.className=cls;if(headers){const tr=doc.createElement('tr');for(const h of headers)add('th',h,tr);tb.append(tr);}
     for(const r of rows){const tr=doc.createElement('tr');for(const c of r)add('td',c,tr);tb.append(tr);}doc.body.append(tb);};
   add('div','RASCUNHO — revise e assine antes de enviar. Este aviso não aparece na impressão.').className='draft';
-  const head=add('div','');head.className='head';
-  add('strong',profile.name||'',head);head.append(doc.createElement('br'));
-  add('span',[profile.specialty,profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · '),head);
-  const contact=[profile.address,profile.phone,profile.email].filter(Boolean).join(' · ');if(contact){head.append(doc.createElement('br'));add('span',contact,head).className='small';}
   add('h1','RELATÓRIO MÉDICO E SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO');
   if(patient.operadora)add('p',`À ${patient.operadora} — Setor de Autorizações`);
   const confirmed=current&&current.view.confirmed||{};
@@ -517,6 +520,9 @@ async function combinedDocument(client,check){
   add('p',`${profile.city?profile.city+', ':''}${new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}.`);
   const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),
     doc.createTextNode(profile.name||'Médico assistente'),doc.createElement('br'),doc.createTextNode([profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'CRM',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · ')));
+  applyLetterhead(doc,letterhead,profile);
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }
 
+/** Prescription pad with the patient's name from this session. @param {import('./evidence.js').EvidenceClient} client */
+export function prescription(client){return prescriptionPage(client,patient,dictation,download);}

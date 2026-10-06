@@ -19,6 +19,8 @@ from pydantic import BaseModel, Field
 from jmoraIs.application.deidentification import detect_identifiers
 
 MAX_CONSENT_CHARS = 20000
+MAX_LOGO_BYTES = 400_000
+LOGO_TYPES = {b"\x89PNG\r\n\x1a\n": "image/png", b"\xff\xd8\xff": "image/jpeg"}
 
 
 class PracticeRejected(ValueError):
@@ -35,6 +37,24 @@ class Profile(BaseModel):
     phone: str = Field("", max_length=40)
     email: str = Field("", max_length=120)
     address: str = Field("", max_length=300)
+
+
+class Letterhead(BaseModel):
+    """Printed header/footer of the practice; the logo is a PNG/JPEG stored as base64."""
+    logo_base64: str = Field("", max_length=600_000)
+    logo_type: str = Field("", max_length=20)
+    header_lines: list[str] = Field(default_factory=list, max_length=6)
+    footer: str = Field("", max_length=300)
+    color: str = Field("#0f3d5e", pattern=r"^#[0-9a-fA-F]{6}$")
+
+
+def validate_logo(data: bytes) -> str:
+    if len(data) > MAX_LOGO_BYTES:
+        raise PracticeRejected("Logo acima de 400 KB. Reduza a imagem (PNG ou JPG).")
+    for magic, kind in LOGO_TYPES.items():
+        if data.startswith(magic):
+            return kind
+    raise PracticeRejected("O logo deve ser uma imagem PNG ou JPG.")
 
 
 class PracticeStore:
@@ -62,6 +82,27 @@ class PracticeStore:
             data["profile"] = profile.model_dump()
             self._write(data)
         return profile
+
+    def letterhead(self) -> Letterhead:
+        return Letterhead.model_validate(self._load().get("letterhead") or {})
+
+    def save_letterhead(self, letterhead: Letterhead) -> Letterhead:
+        import base64
+        if letterhead.logo_base64:
+            try:
+                raw = base64.b64decode(letterhead.logo_base64, validate=True)
+            except ValueError:
+                raise PracticeRejected("Logo inválido.") from None
+            letterhead = letterhead.model_copy(update={"logo_type": validate_logo(raw)})
+        else:
+            letterhead = letterhead.model_copy(update={"logo_type": ""})
+        lines = [" ".join(line.split())[:160] for line in letterhead.header_lines if line.strip()]
+        letterhead = letterhead.model_copy(update={"header_lines": lines, "footer": " ".join(letterhead.footer.split())})
+        with self._lock:
+            data = self._load()
+            data["letterhead"] = letterhead.model_dump()
+            self._write(data)
+        return letterhead
 
     def consent_model(self) -> Optional[str]:
         return self._load().get("consent_model")

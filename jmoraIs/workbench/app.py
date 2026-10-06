@@ -35,7 +35,7 @@ from jmoraIs.application.deidentification import DeidentificationRejected, Patie
 from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.report_drafting import ReportDraftRejected
 from jmoraIs.application.ans_deadlines import deadline_for
-from jmoraIs.application.practice_documents import PracticeRejected, PracticeStore, Profile
+from jmoraIs.application.practice_documents import Letterhead, PracticeRejected, PracticeStore, Profile
 from jmoraIs.application.request_check import check_request
 from jmoraIs.application.report_style import ReportStyleRejected, ReportStyleStore, deidentify_model
 from jmoraIs.application.request_intake import RequestIntakeRejected
@@ -646,6 +646,17 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
     @app.put("/api/profile")
     def profile_save(body: Profile):
         return need_practice().save_profile(body).model_dump()
+
+    @app.get("/api/letterhead")
+    def letterhead_get():
+        return need_practice().letterhead().model_dump()
+
+    @app.put("/api/letterhead")
+    def letterhead_save(body: Letterhead):
+        try:
+            return need_practice().save_letterhead(body).model_dump()
+        except PracticeRejected as exc:
+            bad(str(exc))
 
     @app.get("/api/consent-model")
     def consent_get():

@@ -1,6 +1,7 @@
 /** Surgical templates: official TUSS procedures, OPME kit, three suppliers, hospital packages. */
 import {el} from './view.js';
 import {box,button,busy,field,input,pill,say,select,session,textarea} from './evidence.js';
+import {letterheadCard} from './letterhead.js';
 
 /** @typedef {{description:string,quantity:number}} Item */
 /** @typedef {{item_index:number,tuss_code:string,term?:string,manufacturer?:string,anvisa?:string}} Material */
@@ -15,7 +16,7 @@ export function catalogPage(client){
   head.append(box('h2','card-title','Modelos de cirurgia'),
     box('p','muted','Cada modelo reúne o procedimento com códigos da tabela TUSS oficial da ANS, o kit de OPME com quantidades, três fornecedores de fabricantes diferentes (CFM 1.956/2010, art. 5º) e os pacotes das redes. Códigos e materiais vêm da tabela oficial; nada é inventado.'));
   const add=button('Novo modelo');const actions=box('div','actions');actions.append(add);const status=box('div','status-area');head.append(actions,status);
-  const list=box('div','page-grid');root.append(profileCard(client),sbotCard(client,()=>reload()),head,list,styleCard(client),consentCard(client));
+  const list=box('div','page-grid');root.append(profileCard(client),letterheadCard(client),sbotCard(client,()=>reload()),head,list,styleCard(client),consentCard(client));
   const reload=async()=>{
     try{const r=await client.catalog();list.replaceChildren();
       if(r.tuss_version)status.replaceChildren(box('span','muted','Tabela TUSS oficial: versão '+r.tuss_version));

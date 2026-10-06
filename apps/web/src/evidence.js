@@ -52,6 +52,8 @@ export class EvidenceClient {
   /** @param {string} id */ catalogFromSbot(id){return this.call('catalog/from-sbot',{entry_id:id});}
   profileGet(){return this.call('profile');}
   /** @param {Record<string,unknown>} p */ profileSave(p){return this.call('profile',p,'PUT');}
+  letterheadGet(){return this.call('letterhead');}
+  /** @param {Record<string,unknown>} l */ letterheadSave(l){return this.call('letterhead',l,'PUT');}
   consentGet(){return this.call('consent-model');}
   /** @param {Record<string,unknown>} body */ consentUpload(body){return this.call('consent-model',body);}
   consentDelete(){return this.call('consent-model',undefined,'DELETE');}
