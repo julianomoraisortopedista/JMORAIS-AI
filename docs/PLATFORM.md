@@ -17,6 +17,12 @@ Sections after login:
   from the official TUSS 19 table and hospital packages; see `docs/SURGICAL_CATALOG.md`.
 - **Pacientes** — import the owner-issued launch reference and read the seven exact
   viewers (unchanged S004/S005 behaviour).
+- **Evidências / Pergunta em português** — type or dictate the question (or pick a surgery
+  template: TUSS procedure + OPME kit); Claude drafts the English claim and PICO terms
+  (`jmoraIs/application/question_translation.py`; terms pass the same injection rules; generic
+  identifier patterns removed), the fields are filled for review and the PubMed search runs.
+  When fewer than 5 records match, the search drops the outcome, then the comparison (counted
+  with `esearch` before fetching) and says so.
 - **Evidências** — PICO search (PubMed + Crossref, MeSH shown), abstract reading,
   Claude proposals with physician confirm/override/reject, or manual classification
   with a verbatim quote.

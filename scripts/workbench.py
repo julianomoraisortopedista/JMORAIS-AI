@@ -9,7 +9,9 @@ import uvicorn
 from jmoraIs.application.support_classification_runtime import save_keychain_api_key
 from jmoraIs.connect.crossref import CrossrefConnector
 from jmoraIs.connect.pubmed import PubMedConnector
-from jmoraIs.workbench.app import create_app, default_case_extractor_factory, default_classifier_factory
+from jmoraIs.workbench.app import (
+    create_app, default_case_extractor_factory, default_classifier_factory, default_question_translator_factory,
+)
 
 
 STATE = __import__("pathlib").Path.home() / ".local/share/jmorais-local-pilot"
@@ -36,7 +38,8 @@ def main(argv=None) -> int:
     print(f"JMORAIS workbench: http://127.0.0.1:{args.port}/  (IA: {'Claude' if factory else 'não configurada — modo manual'})")
     app = create_app(pubmed=PubMedConnector(), crossref=CrossrefConnector(),
                      resolve_classifier=default_classifier_factory, save_key=save_keychain_api_key,
-                     resolve_case_extractor=default_case_extractor_factory, tuss_index=tuss_index(), catalog=catalog())
+                     resolve_case_extractor=default_case_extractor_factory, tuss_index=tuss_index(), catalog=catalog(),
+                     resolve_question_translator=default_question_translator_factory)
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning",
                 server_header=False, access_log=False)
     return 0

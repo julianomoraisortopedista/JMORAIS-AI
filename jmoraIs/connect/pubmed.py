@@ -6,7 +6,7 @@ from hashlib import sha256
 import re
 import time
 from xml.etree import ElementTree
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 import requests
 
@@ -217,8 +217,28 @@ class PubMedConnector(BaseConnector):
             raise AbstractUnavailable("PubMed unavailable") from exc
         return parse_pubmed_abstract(pmid, response.text, utc_now())
 
+    def count(self, query: str) -> Optional[int]:
+        """Number of PubMed records for a query (no records fetched); None on failure."""
+        try:
+            response = self._get(PUBMED_SEARCH_URL, params={"db": "pubmed", "term": query, "retmode": "json", "retmax": "0"},
+                                 timeout=self.timeout)
+            response.raise_for_status()
+            return int(response.json()["esearchresult"]["count"])
+        except (requests.RequestException, KeyError, TypeError, ValueError):
+            return None
+
     def mesh_headings_for(self, phrase: str) -> tuple[str, ...]:
-        """MeSH headings PubMed maps to the whole phrase; empty on any failure."""
+        """MeSH headings PubMed maps to the whole phrase; empty on any failure (cached per connector)."""
+        key = " ".join((phrase or "").casefold().split())
+        cache = self.__dict__.setdefault("_mesh_cache", {})
+        if key in cache:
+            return cache[key]
+        cache[key] = self._mesh_headings_uncached(phrase)
+        if len(cache) > 2000:
+            cache.pop(next(iter(cache)))
+        return cache[key]
+
+    def _mesh_headings_uncached(self, phrase: str) -> tuple[str, ...]:
         try:
             response = self._get(
                 PUBMED_SEARCH_URL,

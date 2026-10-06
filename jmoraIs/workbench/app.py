@@ -32,6 +32,7 @@ from jmoraIs.application.case_intake import (
     CATEGORY_PT, MAX_DOCUMENT_CHARS, CaseDocument, CaseIntakeRejected, extract_text, prepare_documents,
 )
 from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify
+from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.surgical_catalog import (
     CatalogRejected, CatalogStore, ProcedureTemplate, supplier_warnings, validate_against_tuss,
 )
@@ -48,6 +49,7 @@ PAGE = Path(__file__).with_name("index.html")
 ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 MAX_DOCUMENT_B64 = 1_000_000 - 4096  # one file per request, inside the API's 1 MB body limit
 MAX_CASE_DOCUMENTS = 8
+MIN_RESULTS = 5  # widen the PICO search below this many PubMed records
 MAX_IMPORT = 10  # keeps verification inside the platform's 30 s request budget
 
 
@@ -88,6 +90,11 @@ class DecideIn(BaseModel):
     final_direction: Optional[SupportDirection] = None
     note: str = Field("", max_length=1000)
     reviewer: str = Field(min_length=3, max_length=60)
+
+
+class QuestionIn(BaseModel):
+    question: str = Field("", max_length=2000)
+    template_id: Optional[str] = Field(None, max_length=40)
 
 
 class TussIn(BaseModel):
@@ -178,7 +185,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                save_key: Optional[Callable[[str], bool]] = None,
                authenticate: Optional[Callable[[Request], str]] = None,
                resolve_case_extractor: Optional[Callable[[], Optional[Callable]]] = None,
-               tuss_index=None, catalog: Optional[CatalogStore] = None) -> FastAPI:
+               tuss_index=None, catalog: Optional[CatalogStore] = None,
+               resolve_question_translator: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -255,10 +263,25 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                                     _split(body.outcome), tuple(body.designs), from_year)
         except EvidenceQueryRejected as exc:
             bad(f"Pergunta inválida: {exc}")
-        built = build_pubmed_query(question, pubmed.mesh_headings_for)
+        # Progressive widening: drop outcome, then comparison, until at least MIN_RESULTS records exist.
+        from dataclasses import replace as _replace
+        attempts = [(question, [])]
+        if question.outcome:
+            attempts.append((_replace(question, outcome=()), ["desfecho"]))
+        if question.comparison:
+            attempts.append((_replace(question, outcome=(), comparison=()), ["desfecho", "comparação"]))
+        built, relaxed = build_pubmed_query(question, pubmed.mesh_headings_for), []
+        counter = getattr(pubmed, "count", None)
+        if counter is not None:
+            for candidate, dropped in attempts:
+                candidate_built = build_pubmed_query(candidate, pubmed.mesh_headings_for)
+                total = counter(candidate_built.query)
+                built, relaxed = candidate_built, dropped
+                if total is None or total >= MIN_RESULTS:
+                    break
         result = AuthoritativeReconciliationPipeline(pubmed=pubmed, crossref=crossref).discover(
             ScientificVerificationInput(query=built.query))
-        return {"query": built.query,
+        return {"query": built.query, "relaxed": relaxed,
                 "mesh": [dict(element=e.element, synonym=e.synonym, heading=e.mesh_heading) for e in built.expansions],
                 "candidates": [dict(pmid=a.pmid, doi=a.doi, title=a.title) for a in result.articles if a.pmid]}
 
@@ -417,6 +440,31 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         need_catalog().delete(template_id)
         return {"deleted": template_id}
 
+    @app.post("/api/question")
+    def question(body: QuestionIn, request: Request):
+        factory = resolve_question_translator() if resolve_question_translator else None
+        if factory is None:
+            bad("Modelo de IA não configurado. Preencha os campos PICO em inglês.", 503)
+        context = ""
+        if body.template_id:
+            template = next((t for t in need_catalog().load() if t.template_id == body.template_id), None)
+            if template is None:
+                bad("Modelo não encontrado.", 404)
+            materials = sorted({m.term for s in template.suppliers for m in s.materials})
+            context = (f"Procedimento: {template.name}. TUSS: " + "; ".join(f"{c} {template.tuss_terms.get(c, '')}" for c in template.tuss_codes)
+                       + (". OPME: " + ", ".join(f"{i.quantity}x {i.description}" for i in template.opme) if template.opme else "")
+                       + (". Materiais: " + "; ".join(materials[:6]) if materials else ""))
+        try:
+            with TenantContextBinder().bind_tenant(tenant(getattr(request.state, "principal", "local"))):
+                draft = factory().translate(body.question, context)
+        except QuestionTranslationRejected as exc:
+            bad(str(exc))
+        except Exception as exc:  # provider failure: no provider text exposed
+            bad(f"Falha ao consultar o modelo ({type(exc).__name__}).", 502)
+        return {"claim": draft.claim, "population": list(draft.population), "intervention": list(draft.intervention),
+                "comparison": list(draft.comparison), "outcome": list(draft.outcome), "designs": list(draft.designs),
+                "model": draft.model_id, "context": context}
+
     @app.post("/api/import")
     def import_identifiers(body: ImportIn):
         """PMIDs/DOIs the physician found elsewhere (e.g. read in a subscription service)."""
@@ -566,3 +614,10 @@ def default_case_extractor_factory(environ=os.environ, keychain=None) -> Optiona
         build_case_extraction_service, credentials_configured, keychain_api_key,
     )
     return build_case_extraction_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
+
+
+def default_question_translator_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
+    from jmoraIs.application.support_classification_runtime import (
+        build_question_service, credentials_configured, keychain_api_key,
+    )
+    return build_question_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None

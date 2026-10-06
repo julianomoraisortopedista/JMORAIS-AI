@@ -148,3 +148,17 @@ def test_search_recency_and_identifier_import():
     assert [x["pmid"] for x in imported["candidates"]] == ["26488691"] and imported["invalid"] == ["xyz"]
     too_many = ", ".join(str(10000000 + i) for i in range(11))
     assert c.post("/api/import", headers=H, json={"identifiers": too_many}).status_code == 400
+
+
+
+def test_search_widens_progressively_when_too_few_records():
+    class Counting(SearchablePubMed):
+        def count(self, query):
+            self.counted = getattr(self, "counted", []) + [query]
+            return 2 if '"pain"[tiab]' in query or '"nonoperative"[tiab]' in query else 40
+
+    pubmed = Counting()
+    r = client(pubmed=pubmed).post("/api/search", headers=H, json={
+        "population": "knee osteoarthritis", "intervention": "tka", "comparison": "nonoperative", "outcome": "pain"}).json()
+    assert r["relaxed"] == ["desfecho", "comparação"] and len(pubmed.counted) == 3
+    assert '"pain"' not in r["query"] and '"nonoperative"' not in r["query"] and pubmed.last_query == r["query"]

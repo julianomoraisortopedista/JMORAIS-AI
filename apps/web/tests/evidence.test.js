@@ -63,3 +63,13 @@ test('dictation appends to the given field only, in pt-BR, and degrades without 
   const node=dictation({value:''});
   assert.ok(JSON.stringify(node).includes('Fn duas vezes'));
 });
+
+test('portuguese question goes to the drafting route and fills the PICO fields before searching',async()=>{
+  const calls=[];
+  const client=new EvidenceClient(()=>'t',async(url,init)=>{calls.push([url,JSON.parse(init.body)]);return respond(200,{});});
+  await client.question('A ATJ melhora a dor?',null);
+  assert.deepEqual(calls,[['/internal/evidence/api/question',{question:'A ATJ melhora a dor?',template_id:null}]]);
+  const {readFile}=await import('node:fs/promises');
+  const src=await readFile('src/evidence.js','utf8');
+  assert.ok(src.includes("population.value=d.population.join('; ')") && src.includes('go.click()'));
+});

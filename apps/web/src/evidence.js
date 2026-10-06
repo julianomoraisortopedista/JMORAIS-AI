@@ -1,5 +1,6 @@
 /** Evidence workbench inside the platform: same bearer, server-side rules, text-only DOM. */
 import {el} from './view.js';
+import {dictation} from './dictation.js';
 
 export const DIRECTIONS = /** @type {const} */ ({SUPPORTING:'A favor',OPPOSING:'Contra',NEUTRAL:'Neutro',INCONCLUSIVE:'Inconclusivo'});
 const REQUIREMENT = /** @type {Record<string,string>} */ ({ATENDIDO:'Atendido',PENDENTE:'Pendente',NAO_ATENDIDO:'Não atendido'});
@@ -24,6 +25,7 @@ export class EvidenceClient {
   status(){return this.call('status');}
   /** @param {Record<string,unknown>} q */ search(q){return this.call('search',q);}
   /** @param {string} identifiers */ importIds(identifiers){return this.call('import',{identifiers});}
+  /** @param {string} question @param {string|null} templateId */ question(question,templateId){return this.call('question',{question,template_id:templateId});}
   /** @param {string} pmid */ abstract(pmid){return this.call('abstract',{pmid});}
   /** @param {string} claim @param {string} pmid */ propose(claim,pmid){return this.call('propose',{claim,pmid});}
   /** @param {Record<string,unknown>} body */ manual(body){return this.call('manual',body);}
@@ -97,9 +99,29 @@ export function evidencePage(client,onDecisions){
     field('Seu registro profissional (CRM)',reviewer,'assina as decisões'));
   const go=button('Buscar evidências');const status=box('div','status-area');const query=box('p','query mono');
   form.append(box('div','actions'),status,query);/** @type {HTMLElement} */(form.querySelector('.actions')).append(go);
+  // Portuguese question (typed or dictated), optionally from a surgery template -> Claude drafts the PICO search.
+  const pt=box('section','card');
+  pt.append(box('h2','card-title','Pergunta em português'),box('p','muted','Escreva ou dite a pergunta, ou escolha um modelo de cirurgia (procedimento TUSS + OPME). O Claude monta a busca em inglês, você confere os campos abaixo e a busca roda no PubMed. Não inclua dados do paciente.'));
+  const ask=textarea('Ex.: A artroplastia total do joelho melhora dor e função em artrose avançada após falha do tratamento conservador?');ask.rows=3;
+  const tpl=select([['','Sem modelo de cirurgia']]);
+  client.catalog().then((/** @type {any} */ r)=>{for(const t of r.templates){const o=el('option',t.name);o.setAttribute('value',t.template_id);tpl.append(o);}}).catch(()=>{});
+  const build=button(session.model?'Montar busca com o Claude e buscar':'IA não configurada');build.disabled=!session.model;
+  const ptStatus=box('div','status-area');const ptActions=box('div','actions');ptActions.append(build);
+  pt.append(field('Sua pergunta',ask),dictation(ask),field('Ou a partir de um modelo de cirurgia',tpl,'busca evidências para o procedimento e o OPME do modelo'),ptActions,ptStatus);
+  build.onclick=()=>busy(build,async()=>{
+    say(ptStatus,'O Claude está montando a busca…','info');
+    try{
+      const d=await client.question(ask.value,tpl.value||null);
+      claim.value=d.claim;session.claim=d.claim;population.value=d.population.join('; ');intervention.value=d.intervention.join('; ');
+      comparison.value=d.comparison.join('; ');outcome.value=d.outcome.join('; ');
+      for(const b of boxes)b.checked=d.designs.includes(b.value);
+      say(ptStatus,'Busca montada (confira os campos abaixo). Pesquisando no PubMed…','ok');
+      go.click();
+    }catch(e){say(ptStatus,e instanceof Error?e.message:'Falha.');}
+  });
   const results=box('section','card');results.append(box('h2','card-title','Artigos encontrados'),box('p','muted','Faça a busca para listar os candidatos. Nada é usado sem a sua confirmação.'));
   const confirmed=box('section','card');confirmed.append(box('h2','card-title','Decisões confirmadas'));const table=box('div','decisions');confirmed.append(table);
-  root.append(form,externalSources(client,results,()=>refresh()),results,confirmed);
+  root.append(pt,form,externalSources(client,results,()=>refresh()),results,confirmed);
 
   const refresh=async()=>{const list=await client.decisions();session.decisions=list;onDecisions(list.length);renderDecisions(client,table,list,refresh);};
   go.onclick=()=>busy(go,async()=>{
@@ -107,7 +129,8 @@ export function evidencePage(client,onDecisions){
     try{
       const r=await client.search({population:population.value,intervention:intervention.value,comparison:comparison.value,outcome:outcome.value,
         designs:boxes.filter(b=>b.checked).map(b=>b.value),since_years:since.value?Number(since.value):null});
-      status.replaceChildren();query.textContent='Consulta: '+r.query+(r.mesh.length?'  ·  MeSH: '+r.mesh.map((/** @type {any} */m)=>m.synonym+' → '+m.heading).join('; '):'');
+      status.replaceChildren();if(r.relaxed&&r.relaxed.length)say(status,'Poucos artigos com todos os critérios; a busca foi ampliada sem: '+r.relaxed.join(' e ')+'.','info');
+      query.textContent='Consulta: '+r.query+(r.mesh.length?'  ·  MeSH: '+r.mesh.map((/** @type {any} */m)=>m.synonym+' → '+m.heading).join('; '):'');
       results.replaceChildren(box('h2','card-title',`${r.candidates.length} artigo(s) candidato(s)`));
       if(!r.candidates.length)results.append(box('p','muted','Nenhum artigo. Ajuste a pergunta.'));
       for(const c of r.candidates)results.append(articleCard(client,c,refresh));
