@@ -12,6 +12,22 @@ from jmoraIs.connect.pubmed import PubMedConnector
 from jmoraIs.workbench.app import create_app, default_case_extractor_factory, default_classifier_factory
 
 
+STATE = __import__("pathlib").Path.home() / ".local/share/jmorais-local-pilot"
+
+
+def tuss_index():
+    from jmoraIs.reference.tuss import TussIndex
+    path = STATE / "reference/tuss.sqlite"
+    return TussIndex(path) if path.exists() else None
+
+
+def catalog():
+    from jmoraIs.application.surgical_catalog import CatalogStore, starter_templates
+    store = CatalogStore(STATE / "catalog/procedures.json")
+    store.seed(starter_templates(), tuss_index())
+    return store
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=8770)
@@ -20,7 +36,7 @@ def main(argv=None) -> int:
     print(f"JMORAIS workbench: http://127.0.0.1:{args.port}/  (IA: {'Claude' if factory else 'não configurada — modo manual'})")
     app = create_app(pubmed=PubMedConnector(), crossref=CrossrefConnector(),
                      resolve_classifier=default_classifier_factory, save_key=save_keychain_api_key,
-                     resolve_case_extractor=default_case_extractor_factory)
+                     resolve_case_extractor=default_case_extractor_factory, tuss_index=tuss_index(), catalog=catalog())
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning",
                 server_header=False, access_log=False)
     return 0

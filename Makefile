@@ -95,3 +95,8 @@ workbench: verify-python
 # Copy the new key at platform.claude.com, then run this. Stores it in the macOS Keychain.
 set-anthropic-key:
 	@zsh scripts/set_anthropic_key.sh
+
+.PHONY: tuss-index
+# Download the latest official ANS TUSS package and build the local index (or ZIP=path to reuse a download).
+tuss-index: verify-python
+	@"$(VENV_PYTHON)" scripts/build_tuss_index.py $(if $(ZIP),--zip "$(ZIP)")

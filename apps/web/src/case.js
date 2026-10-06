@@ -2,6 +2,7 @@
 import {el} from './view.js';
 import {box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
 import {dictation} from './dictation.js';
+import {templatePicker} from './catalog.js';
 
 const REQUIREMENT=/** @type {Record<string,string>} */ ({ATENDIDO:'Atendido',PENDENTE:'Pendente',NAO_ATENDIDO:'Não atendido'});
 /** Patient identification: memory only, cleared on logout/reload. */
@@ -150,7 +151,9 @@ function requestCard(client){
   const grid=box('div','form-grid');grid.append(field('Procedimento',procedure),field('Lateralidade',laterality),field('Regime',regime),field('Consta do Rol da ANS?',rol),field('Caráter',urgency),field('Situação na ANS',ans),field('Médico assistente (CRM)',crm),field('Pedido prévio à operadora',prior),field('Plano de autogestão',self));
   const tussBox=box('div','');const tuss=repeater(tussBox,['Código TUSS (8 dígitos)','Descrição']);
   const opmeBox=box('div','');const opme=repeater(opmeBox,['Material (OPME)','Registro Anvisa','Quantidade']);
-  card.append(field('Procedimento solicitado',procedure),grid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),dictation(alt),field('Texto clínico adicional',summary),dictation(summary));
+  /** @type {string|null} */ let templateId=null;
+  const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;if(t){procedure.value=t.name;regime.value=t.regime||regime.value;}});
+  card.append(picker,field('Procedimento solicitado',procedure),grid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),dictation(alt),field('Texto clínico adicional',summary),dictation(summary));
   const go=button('Gerar pedido');const status=box('div','status-area');const result=box('div','');const actions=box('div','actions');actions.append(go);card.append(actions,status,result);
   /** @param {string} v */ const bool=v=>v===''?null:v==='true';
   go.onclick=()=>busy(go,async()=>{
@@ -161,7 +164,7 @@ function requestCard(client){
     try{
       const r=await client.document({claim,procedure:procedure.value,rol:rol.value,urgency:urgency.value,ans_analysis:ans.value,no_rol_alternative:alt.value,
         crm:crm.value,prior_request:bool(prior.value),autogestao:bool(self.value),clinical_summary:summary.value,case_id:current.id,
-        laterality:laterality.value,regime:regime.value,tuss:tuss().map(([code,description])=>({code,description})),
+        laterality:laterality.value,regime:regime.value,template_id:templateId,tuss:tuss().map(([code,description])=>({code,description})),
         opme:opme().map(([description,anvisa,quantity])=>({description,anvisa,quantity:Number(quantity)||1}))});
       say(status,`Pedido gerado com ${r.included} referência(s) científica(s).`,'ok');
       result.replaceChildren();

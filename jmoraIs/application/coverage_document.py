@@ -40,6 +40,8 @@ class RequestDetails:
     opme: tuple[tuple[str, str, int], ...] = ()       # (description, anvisa registration, quantity)
     laterality: str = ""
     regime: str = ""
+    # Alternatives per CFM 1.956/2010 art. 5: (supplier label, ((item, qty, official term, manufacturer, anvisa, tuss), ...))
+    brands: tuple = ()
 
     def __post_init__(self):
         if any(not re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", c) for c in self.icd10):
@@ -96,6 +98,15 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
                        "<td><strong>Registro Anvisa</strong></td><td><strong>Qtd.</strong></td></tr>")
             out += [f"<tr><td>{escape(d)}</td><td>{escape(a)}</td><td>{q}</td></tr>" for d, a, q in request.opme]
             out.append("</table>")
+        if request.brands:
+            out.append("<h3>Marcas indicadas (fabricantes diferentes, registro Anvisa — CFM 1.956/2010, art. 5º)</h3>")
+            for label, materials in request.brands:
+                out.append(f"<p><strong>{escape(label)}</strong></p><table class=\"ident\"><tr><td><strong>Item</strong></td>"
+                           "<td><strong>Material (TUSS 19)</strong></td><td><strong>Fabricante</strong></td>"
+                           "<td><strong>Anvisa</strong></td><td><strong>Qtd.</strong></td></tr>")
+                out += [f"<tr><td>{escape(i)}</td><td>{escape(c)} — {escape(t)}</td><td>{escape(m)}</td><td>{escape(a)}</td>"
+                        f"<td>{q}</td></tr>" for i, q, t, m, a, c in materials]
+                out.append("</table>")
     out.append("<h2>Justificativa clínica</h2>")
     if clinical_summary.strip():
         out.append(_p(clinical_summary))

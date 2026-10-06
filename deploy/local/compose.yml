@@ -46,7 +46,7 @@ services:
       LOCAL_PSEUDO_KEY: ${LOCAL_PSEUDO_KEY:?local env required}
       # Optional: injected at `make local-pilot-up` from the macOS Keychain; never written to disk.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output:ro']
+    volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output:ro', '${LOCAL_PILOT_DIR}/reference:/reference:ro', '${LOCAL_PILOT_DIR}/catalog:/catalog']
     depends_on:
       seed: {condition: service_completed_successfully}
     healthcheck:

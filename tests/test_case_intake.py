@@ -137,10 +137,10 @@ def test_case_endpoints_full_flow_without_storing_identifiers():
     doc = c.post("/api/document", headers=H, json={
         "claim": "Total knee replacement improves pain versus nonsurgical care", "procedure": "Artroplastia total do joelho",
         "rol": "SIM", "case_id": case["case_id"], "laterality": "Direito", "regime": "Internação",
-        "tuss": [{"code": "30724228", "description": "Artroplastia total de joelho"}],
+        "tuss": [{"code": "30726034", "description": "Artroplastia total de joelho"}],
         "opme": [{"description": "Prótese total de joelho", "anvisa": "80000000000", "quantity": 1}]})
     html = doc.json()["html"]
-    assert doc.status_code == 200 and "30724228" in html and "M17.1" in html and "Prótese total de joelho" in html
+    assert doc.status_code == 200 and "30726034" in html and "M17.1" in html and "Prótese total de joelho" in html
     assert "Condropatia grau IV medial (RM)" in html and 'data-ident="paciente"' in html and "José" not in html
     bad_tuss = c.post("/api/document", headers=H, json={"claim": "Total knee replacement improves pain", "procedure": "ATJ",
                                                         "tuss": [{"code": "123"}]})

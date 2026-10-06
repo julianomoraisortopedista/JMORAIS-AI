@@ -15,7 +15,7 @@ from pathlib import Path
 import secrets
 from typing import Callable, Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, SecretStr
@@ -32,6 +32,9 @@ from jmoraIs.application.case_intake import (
     CATEGORY_PT, MAX_DOCUMENT_CHARS, CaseDocument, CaseIntakeRejected, extract_text, prepare_documents,
 )
 from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify
+from jmoraIs.application.surgical_catalog import (
+    CatalogRejected, CatalogStore, ProcedureTemplate, supplier_warnings, validate_against_tuss,
+)
 from jmoraIs.application.support_classification import (
     AbstractUnavailable, PhysicianDecisionType, SupportClassificationRejected, decide_proposal, decision_record,
     manual_proposal,
@@ -111,6 +114,7 @@ class DocumentIn(BaseModel):
     autogestao: Optional[bool] = None
     clinical_summary: str = Field("", max_length=8000)
     case_id: Optional[str] = Field(None, max_length=40)
+    template_id: Optional[str] = Field(None, max_length=40)
     tuss: list[TussIn] = Field(default_factory=list, max_length=10)
     opme: list[OpmeIn] = Field(default_factory=list, max_length=20)
     icd10: list[str] = Field(default_factory=list, max_length=8)
@@ -173,7 +177,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                resolve_classifier: Optional[Callable[[], Optional[Callable]]] = None,
                save_key: Optional[Callable[[str], bool]] = None,
                authenticate: Optional[Callable[[Request], str]] = None,
-               resolve_case_extractor: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
+               resolve_case_extractor: Optional[Callable[[], Optional[Callable]]] = None,
+               tuss_index=None, catalog: Optional[CatalogStore] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -371,6 +376,47 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         state_of(request).cases.pop(case_id, None)
         return {"deleted": case_id}
 
+    def entry(e) -> dict:
+        return dict(code=e.code, term=e.term, active=e.active, model=e.model, manufacturer=e.manufacturer,
+                    anvisa=e.anvisa, risk_class=e.risk_class, technical_name=e.technical_name)
+
+    def need_index():
+        if tuss_index is None:
+            bad("Tabela TUSS oficial não instalada neste servidor (make tuss-index).", 503)
+        return tuss_index
+
+    @app.get("/api/tuss/procedures")
+    def tuss_procedures(q: str = Query(min_length=2, max_length=120)):
+        return {"version": need_index().version(), "results": [entry(e) for e in need_index().procedures(q, 25)]}
+
+    @app.get("/api/tuss/materials")
+    def tuss_materials(q: str = Query(min_length=2, max_length=120), manufacturer: str = Query("", max_length=80)):
+        return {"version": need_index().version(),
+                "results": [entry(e) for e in need_index().materials(q, manufacturer, 40)]}
+
+    def need_catalog() -> CatalogStore:
+        if catalog is None:
+            bad("Base de modelos indisponível neste servidor.", 503)
+        return catalog
+
+    @app.get("/api/catalog")
+    def catalog_list():
+        return {"templates": [dict(t.model_dump(), warnings=supplier_warnings(t)) for t in need_catalog().load()],
+                "tuss_version": tuss_index.version() if tuss_index else None}
+
+    @app.put("/api/catalog")
+    def catalog_save(body: ProcedureTemplate):
+        try:
+            saved = need_catalog().save(validate_against_tuss(body, need_index()))
+        except CatalogRejected as exc:
+            bad(str(exc))
+        return dict(saved.model_dump(), warnings=supplier_warnings(saved))
+
+    @app.delete("/api/catalog/{template_id}")
+    def catalog_delete(template_id: str):
+        need_catalog().delete(template_id)
+        return {"deleted": template_id}
+
     @app.post("/api/import")
     def import_identifiers(body: ImportIn):
         """PMIDs/DOIs the physician found elsewhere (e.g. read in a subscription service)."""
@@ -468,7 +514,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         try:
             draft = build_justification(claim, records, pubmed=pubmed, pipeline=pipeline, packages=packages, clock=clock)
             context = CoverageContext(body.procedure, body.rol, body.urgency, body.ans_analysis, body.no_rol_alternative,
-                                      body.anvisa, body.crm, body.prior_request, body.autogestao)
+                                      body.anvisa, body.crm, body.prior_request, body.autogestao,
+                                      bool(body.opme or body.template_id))
             legal = build_legal_section(context, draft)
         except (JustificationRejected, ValueError) as exc:
             bad(str(exc))
@@ -479,13 +526,26 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 bad("Confirme os fatos clínicos do caso antes de gerar o pedido.")
             facts = tuple(confirmed["facts"])
             codes = list(dict.fromkeys(confirmed["icd10"] + codes))
+        tuss = [(t.code, t.description) for t in body.tuss]
+        opme = [(o.description, o.anvisa, o.quantity) for o in body.opme]
+        brands, regime = (), body.regime.strip()
+        if body.template_id:
+            template = next((t for t in need_catalog().load() if t.template_id == body.template_id), None)
+            if template is None:
+                bad("Modelo não encontrado.", 404)
+            if not template.codes_confirmed:
+                bad("Confirme os códigos TUSS do modelo antes de usá-lo num pedido.")
+            tuss = [(c, template.tuss_terms.get(c, "")) for c in template.tuss_codes] + [t for t in tuss if t[0] not in template.tuss_codes]
+            opme = [(i.description, "ver marcas indicadas", i.quantity) for i in template.opme] + opme
+            brands = tuple((s.label, tuple((template.opme[m.item_index].description, template.opme[m.item_index].quantity,
+                                            m.term, m.manufacturer, m.anvisa, m.tuss_code) for m in s.materials))
+                           for s in template.suppliers if s.materials)
+            regime = regime or template.regime
         try:
-            details = RequestDetails(tuple(codes), tuple((t.code, t.description) for t in body.tuss),
-                                     tuple((o.description, o.anvisa, o.quantity) for o in body.opme),
-                                     body.laterality.strip(), body.regime.strip())
+            details = RequestDetails(tuple(codes), tuple(tuss), tuple(opme), body.laterality.strip(), regime, brands)
         except ValueError as exc:
             bad(str(exc))
-        has_details = bool(codes or body.tuss or body.opme or body.laterality or body.regime)
+        has_details = bool(codes or tuss or opme or body.laterality or regime)
         return {"html": render_coverage_html(draft, legal, context, body.clinical_summary,
                                              details if has_details else None, facts),
                 "markdown": render_markdown(draft) + "\n" + render_legal_markdown(legal),

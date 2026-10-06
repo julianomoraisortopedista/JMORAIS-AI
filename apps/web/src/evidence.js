@@ -37,6 +37,11 @@ export class EvidenceClient {
   /** @param {string} id */ caseGet(id){return this.call('case/'+encodeURIComponent(id));}
   /** @param {string} id @param {Record<string,unknown>} body */ caseConfirm(id,body){return this.call('case/'+encodeURIComponent(id)+'/confirm',body);}
   /** @param {string} id */ caseDelete(id){return this.call('case/'+encodeURIComponent(id),undefined,'DELETE');}
+  catalog(){return this.call('catalog');}
+  /** @param {Record<string,unknown>} t */ catalogSave(t){return this.call('catalog',t,'PUT');}
+  /** @param {string} id */ catalogDelete(id){return this.call('catalog/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {string} q */ tussProcedures(q){return this.call('tuss/procedures?q='+encodeURIComponent(q));}
+  /** @param {string} q @param {string} m */ tussMaterials(q,m){return this.call('tuss/materials?q='+encodeURIComponent(q)+'&manufacturer='+encodeURIComponent(m));}
 }
 
 /** @param {string} tag @param {string} cls @param {string} [text] */

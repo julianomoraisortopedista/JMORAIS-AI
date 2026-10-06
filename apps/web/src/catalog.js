@@ -1,0 +1,151 @@
+/** Surgical templates: official TUSS procedures, OPME kit, three suppliers, hospital packages. */
+import {el} from './view.js';
+import {box,button,busy,field,input,pill,say,select,textarea} from './evidence.js';
+
+/** @typedef {{description:string,quantity:number}} Item */
+/** @typedef {{item_index:number,tuss_code:string,term?:string,manufacturer?:string,anvisa?:string}} Material */
+/** @typedef {{label:string,materials:Material[]}} Supplier */
+/** @typedef {{network:string,package_code:string,description:string,includes_opme:boolean|null,notes:string}} Package */
+/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[]}} Template */
+
+/** @param {import('./evidence.js').EvidenceClient} client */
+export function catalogPage(client){
+  const root=box('div','page-grid');
+  const head=box('section','card');
+  head.append(box('h2','card-title','Modelos de cirurgia'),
+    box('p','muted','Cada modelo reúne o procedimento com códigos da tabela TUSS oficial da ANS, o kit de OPME com quantidades, três fornecedores de fabricantes diferentes (CFM 1.956/2010, art. 5º) e os pacotes das redes. Códigos e materiais vêm da tabela oficial; nada é inventado.'));
+  const add=button('Novo modelo');const actions=box('div','actions');actions.append(add);const status=box('div','status-area');head.append(actions,status);
+  const list=box('div','page-grid');root.append(head,list);
+  const reload=async()=>{
+    try{const r=await client.catalog();list.replaceChildren();
+      if(r.tuss_version)status.replaceChildren(box('span','muted','Tabela TUSS oficial: versão '+r.tuss_version));
+      for(const t of r.templates)list.append(templateCard(client,t,reload,list));
+    }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
+  };
+  add.onclick=()=>list.prepend(editor(client,blank(),reload));
+  reload();return root;
+}
+
+/** @returns {Template} */
+function blank(){return {template_id:'',name:'',region:'',tuss_codes:[],tuss_terms:{},codes_confirmed:false,regime:'Internação',opme:[],suppliers:[],packages:[],notes:''};}
+
+/** @param {import('./evidence.js').EvidenceClient} client @param {Template} t @param {()=>Promise<void>} reload @param {HTMLElement} list */
+function templateCard(client,t,reload,list){
+  const card=box('section','card');
+  const head=box('div','article-head');head.append(box('h3','article-title',t.name),box('span','muted',[t.region,t.regime].filter(Boolean).join(' · ')));
+  card.append(head);
+  for(const code of t.tuss_codes)card.append(box('p','', `TUSS ${code} — ${t.tuss_terms[code]||''}`));
+  if(!t.codes_confirmed)card.append(pill('Códigos a confirmar','PENDENTE'));
+  if(t.opme.length)card.append(box('p','muted','OPME: '+t.opme.map(i=>`${i.quantity}× ${i.description}`).join(', ')));
+  for(const s of t.suppliers){
+    const line=box('p','muted',`${s.label}: `+(s.materials.length?s.materials.map(m=>`${t.opme[m.item_index]?.description||''} → ${m.term} (Anvisa ${m.anvisa})`).join('; '):'materiais ainda não escolhidos'));
+    card.append(line);
+  }
+  for(const p of t.packages)card.append(box('p','muted',`Pacote ${p.network}${p.package_code?' '+p.package_code:''}: ${p.description}`));
+  for(const w of t.warnings||[])card.append(box('div','alert alert-warn',w));
+  if(t.notes)card.append(box('p','muted',t.notes));
+  const edit=button('Editar','ghost'),del=button('Excluir','quiet');const a=box('div','actions');a.append(edit,del);card.append(a);
+  edit.onclick=()=>card.replaceWith(editor(client,structuredClone(t),reload));
+  del.onclick=()=>busy(del,async()=>{await client.catalogDelete(t.template_id);await reload();});
+  void list;return card;
+}
+
+/** @param {import('./evidence.js').EvidenceClient} client @param {Template} t @param {()=>Promise<void>} reload */
+function editor(client,t,reload){
+  const card=box('section','card');card.append(box('h2','card-title',t.template_id?'Editar modelo':'Novo modelo'));
+  const name=input('Ex.: Artroplastia total do joelho com implantes',t.name);const region=input('Joelho',t.region);
+  const regime=select([['Internação','Internação'],['Ambulatorial','Ambulatorial'],['Hospital-dia','Hospital-dia']]);regime.value=t.regime||'Internação';
+  const grid=box('div','form-grid');grid.append(field('Nome',name),field('Região',region),field('Regime',regime));card.append(grid);
+
+  // TUSS procedures from the official table.
+  card.append(box('h3','section-title','Procedimentos (TUSS 22 oficial)'));
+  const codes=box('div','rows');const renderCodes=()=>{codes.replaceChildren();for(const c of t.tuss_codes){const row=box('div','row');const rm=button('Remover','quiet');
+    rm.onclick=()=>{t.tuss_codes=t.tuss_codes.filter(x=>x!==c);renderCodes();};const m=box('div','row-main');m.append(box('strong','',c),box('span','muted',t.tuss_terms[c]||''));row.append(m,rm);codes.append(row);}};
+  renderCodes();
+  const q=input('Buscar procedimento: ex. artroplastia joelho');const results=box('div','rows');const find=button('Buscar','ghost');
+  const searchRow=box('div','actions');searchRow.append(find);
+  find.onclick=()=>busy(find,async()=>{try{const r=await client.tussProcedures(q.value);results.replaceChildren();
+    for(const e of r.results){const row=box('div','row');const add=button('Adicionar','ghost');add.disabled=!e.active;
+      add.onclick=()=>{if(!t.tuss_codes.includes(e.code)){t.tuss_codes.push(e.code);t.tuss_terms[e.code]=e.term;t.codes_confirmed=false;confirm.checked=false;renderCodes();}};
+      const m=box('div','row-main');m.append(box('strong','',e.code+(e.active?'':' (encerrado)')),box('span','muted',e.term));row.append(m,add);results.append(row);}
+    if(!r.results.length)results.append(box('p','muted','Nada encontrado na tabela oficial.'));}catch(err){say(results,err instanceof Error?err.message:'Falha.');}});
+  const confirm=document.createElement('input');confirm.type='checkbox';confirm.checked=t.codes_confirmed;
+  const confirmLabel=box('label','chip');confirmLabel.append(confirm,el('span','Confirmo que estes códigos TUSS correspondem ao procedimento'));
+  card.append(codes,field('Buscar na TUSS',q),searchRow,results,confirmLabel);
+
+  // OPME kit.
+  card.append(box('h3','section-title','Kit de OPME (itens e quantidades)'));
+  const kit=box('div','rows');
+  const renderKit=()=>{kit.replaceChildren();t.opme.forEach((item,n)=>{const row=box('div','form-grid');const d=input('Item',item.description);const qy=input('Qtd',String(item.quantity));
+    d.oninput=()=>{item.description=d.value;};qy.oninput=()=>{item.quantity=Math.max(1,Number(qy.value)||1);};
+    const rm=button('Remover','quiet');rm.onclick=()=>{t.opme.splice(n,1);for(const s of t.suppliers)s.materials=s.materials.filter(m=>m.item_index!==n).map(m=>({...m,item_index:m.item_index>n?m.item_index-1:m.item_index}));renderKit();renderSuppliers();};
+    row.append(d,qy,rm);kit.append(row);});};
+  const addItem=button('+ Item','quiet');addItem.onclick=()=>{t.opme.push({description:'',quantity:1});renderKit();renderSuppliers();};
+  renderKit();card.append(kit,addItem);
+
+  // Suppliers: official TUSS 19 material per kit item.
+  card.append(box('h3','section-title','Fornecedores (3 fabricantes diferentes)'),box('p','muted','Para cada fornecedor, escolha na tabela TUSS 19 o material de cada item. O fabricante e o registro Anvisa vêm da tabela oficial.'));
+  const suppliers=box('div','page-grid');
+  const renderSuppliers=()=>{suppliers.replaceChildren();t.suppliers.forEach((s,sn)=>suppliers.append(supplierBox(client,t,s,sn,renderSuppliers)));};
+  const addSupplier=button('+ Fornecedor','quiet');addSupplier.onclick=()=>{t.suppliers.push({label:'',materials:[]});renderSuppliers();};
+  renderSuppliers();card.append(suppliers,addSupplier);
+
+  // Hospital network packages.
+  card.append(box('h3','section-title','Pacotes de redes hospitalares'));
+  const pkgs=box('div','rows');
+  const renderPkgs=()=>{pkgs.replaceChildren();t.packages.forEach((p,n)=>{const row=box('div','form-grid');
+    const net=input('Rede',p.network),code=input('Código do pacote',p.package_code),desc=input('Descrição',p.description),notes=input('Observações',p.notes);
+    const inc=select([['','OPME no pacote?'],['true','Inclui OPME'],['false','Não inclui OPME']]);inc.value=p.includes_opme===null?'':String(p.includes_opme);
+    net.oninput=()=>{p.network=net.value;};code.oninput=()=>{p.package_code=code.value;};desc.oninput=()=>{p.description=desc.value;};notes.oninput=()=>{p.notes=notes.value;};
+    inc.onchange=()=>{p.includes_opme=inc.value===''?null:inc.value==='true';};
+    const rm=button('Remover','quiet');rm.onclick=()=>{t.packages.splice(n,1);renderPkgs();};row.append(net,code,desc,inc,notes,rm);pkgs.append(row);});};
+  const addPkg=button('+ Pacote','quiet');addPkg.onclick=()=>{t.packages.push({network:'',package_code:'',description:'',includes_opme:null,notes:''});renderPkgs();};
+  renderPkgs();
+  const notes=textarea('Observações do modelo');notes.value=t.notes;
+  card.append(pkgs,addPkg,field('Observações',notes));
+
+  const save=button('Salvar modelo'),cancel=button('Cancelar','quiet');const status=box('div','status-area');const a=box('div','actions');a.append(save,cancel);card.append(a,status);
+  cancel.onclick=()=>reload();
+  save.onclick=()=>busy(save,async()=>{
+    t.name=name.value;t.region=region.value;t.regime=regime.value;t.notes=notes.value;t.codes_confirmed=confirm.checked;
+    t.suppliers=t.suppliers.filter(s=>s.label.trim());t.packages=t.packages.filter(p=>p.network.trim());t.opme=t.opme.filter(i=>i.description.trim());
+    try{const {warnings,...body}=t;void warnings;await client.catalogSave(body);await reload();}
+    catch(e){say(status,e instanceof Error?e.message:'Falha ao salvar.');}
+  });
+  return card;
+}
+
+/** @param {import('./evidence.js').EvidenceClient} client @param {Template} t @param {Supplier} s @param {number} sn @param {()=>void} rerender */
+function supplierBox(client,t,s,sn,rerender){
+  const wrap=box('div','card');const label=input('Fornecedor / fabricante (ex.: Zimmer Biomet)',s.label);label.oninput=()=>{s.label=label.value;};
+  const rm=button('Remover fornecedor','quiet');rm.onclick=()=>{t.suppliers.splice(sn,1);rerender();};
+  wrap.append(field(`Fornecedor ${sn+1}`,label));
+  t.opme.forEach((item,n)=>{
+    const current=s.materials.find(m=>m.item_index===n);
+    const row=box('div','row');const m=box('div','row-main');m.append(box('strong','',item.description||`Item ${n+1}`),
+      box('span','muted',current?`${current.tuss_code} — ${current.term||''} · ${current.manufacturer||''} · Anvisa ${current.anvisa||''}`:'nenhum material escolhido'));
+    const pick=button('Escolher na TUSS 19','ghost');const term=input('Termo de busca',item.description);
+    const any=document.createElement('input');any.type='checkbox';const anyLabel=box('label','chip');anyLabel.append(any,el('span','Qualquer fabricante (ex.: pulse lavage)'));
+    row.append(m,pick);wrap.append(row,field('Buscar material',term,'use o nome do sistema/modelo para refinar (ex.: Attune, Persona, Vanguard)'),anyLabel);
+    const results=box('div','rows');wrap.append(results);
+    pick.onclick=()=>busy(pick,async()=>{
+      try{const r=await client.tussMaterials(term.value||item.description||'protese',any.checked?'':s.label);results.replaceChildren();
+        for(const e of r.results.filter((/** @type {any} */ x)=>x.active).slice(0,15)){const opt=box('div','row');const use=button('Usar','ghost');
+          use.onclick=()=>{s.materials=s.materials.filter(x=>x.item_index!==n);s.materials.push({item_index:n,tuss_code:e.code,term:e.term,manufacturer:e.manufacturer,anvisa:e.anvisa});rerender();};
+          const mm=box('div','row-main');mm.append(box('strong','',e.code+' — '+e.term),box('span','muted',`${e.manufacturer} · Anvisa ${e.anvisa} · ${e.technical_name}`));opt.append(mm,use);results.append(opt);}
+        if(!results.children.length)results.append(box('p','muted','Nada encontrado. Ajuste o nome do item ou do fornecedor (como aparece na tabela oficial).'));
+      }catch(err){say(results,err instanceof Error?err.message:'Falha.');}});
+  });
+  const a=box('div','actions');a.append(rm);wrap.append(a);return wrap;
+}
+
+/** Template picker for the medical request. @param {import('./evidence.js').EvidenceClient} client @param {(t:Template|null)=>void} onPick */
+export function templatePicker(client,onPick){
+  const pick=select([['','Sem modelo']]);const info=box('div','status-area');
+  /** @type {Template[]} */
+  let templates=[];
+  client.catalog().then((/** @type {any} */ r)=>{templates=r.templates;for(const t of templates){const o=el('option',t.name+(t.codes_confirmed?'':' (códigos a confirmar)'));o.setAttribute('value',t.template_id);pick.append(o);}}).catch(()=>{info.replaceChildren(box('span','muted','Base de modelos indisponível.'));});
+  pick.onchange=()=>{const t=templates.find(x=>x.template_id===pick.value)||null;onPick(t);
+    info.replaceChildren();if(t)for(const w of t.warnings||[])info.append(box('div','alert alert-warn',w));};
+  const wrap=box('div','');wrap.append(field('Modelo de cirurgia',pick,'preenche procedimento, TUSS, OPME e as três marcas'),info);return wrap;
+}

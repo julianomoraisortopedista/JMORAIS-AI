@@ -85,5 +85,19 @@ def create():
     app.mount('/internal/evidence', create_workbench(pubmed=PubMedConnector(search_limit=10), crossref=CrossrefConnector(),
         resolve_classifier=lambda: default_classifier_factory(os.environ, keychain=lambda: None),
         resolve_case_extractor=lambda: default_case_extractor_factory(os.environ, keychain=lambda: None),
+        tuss_index=_tuss_index(), catalog=_catalog(),
         authenticate=iam_authenticator(canonical.operational_services)))
     return app
+
+
+def _tuss_index():
+    from jmoraIs.reference.tuss import TussIndex
+    path=Path('/reference/tuss.sqlite')
+    return TussIndex(path) if path.exists() else None
+
+
+def _catalog():
+    from jmoraIs.application.surgical_catalog import CatalogStore, starter_templates
+    store=CatalogStore(Path('/catalog/procedures.json'))
+    store.seed(starter_templates(),_tuss_index())
+    return store

@@ -34,17 +34,20 @@ def context(**changes):
 
 
 # Excerpts were checked verbatim against the official sources on 2026-10-05
-# (Planalto, CNJ guide on ADI 7.265, STJ). Re-verify there before changing any text.
+# (Planalto, CNJ guide on ADI 7.265, STJ, CFM PDF of Res. 1.956/2010). Re-verify there before changing any text.
 PINNED = {
     "lei9656-art10-p12": "c8aad90b", "lei9656-art10-p13": "30a60ccc", "lei9656-art35c": "4b251613",
     "stf-adi7265": "c3a9f4e4", "stj-sumula608": "69ed5d16", "cdc-art47": "24348632",
+    "cfm1956-art1": "be8d5b30", "cfm1956-art3": "1ae89a16", "cfm1956-art4": "a5b1cdb5", "cfm1956-art5": "24715312",
 }
 
 
 def test_legal_excerpts_are_pinned_to_the_verified_text():
     actual = {k: sha256(s.excerpt.encode()).hexdigest()[:8] for k, s in LEGAL_SOURCES.items()}
     assert actual == PINNED
-    assert all(s.url.startswith("https://www.") for s in LEGAL_SOURCES.values())
+    from urllib.parse import urlsplit
+    official = ("planalto.gov.br", "stj.jus.br", "cnj.jus.br", "cfm.org.br")
+    assert all(s.url.startswith("https://") and urlsplit(s.url).hostname.endswith(official) for s in LEGAL_SOURCES.values())
 
 
 def test_outside_rol_all_requirements_met_lists_five_checks():

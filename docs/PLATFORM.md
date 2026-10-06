@@ -13,6 +13,8 @@ Sections after login:
 - **Pedido médico** — patient documents and history, de-identified before AI, quote-grounded
   fact extraction, physician confirmation, CID/TUSS/OPME and the printable request; see
   `docs/CASE_INTAKE.md`.
+- **Modelos de cirurgia** — templates with official TUSS codes, OPME kit, three suppliers
+  from the official TUSS 19 table and hospital packages; see `docs/SURGICAL_CATALOG.md`.
 - **Pacientes** — import the owner-issued launch reference and read the seven exact
   viewers (unchanged S004/S005 behaviour).
 - **Evidências** — PICO search (PubMed + Crossref, MeSH shown), abstract reading,

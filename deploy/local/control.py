@@ -25,6 +25,7 @@ def prepare():
     values=dict(line.split('=',1) for line in env.read_text().splitlines() if line)
     if values.get('LOCAL_PILOT_DIR')!=str(STATE):raise RuntimeError('state location mismatch')
     output=STATE/'output';output.mkdir(exist_ok=True,mode=0o700)
+    for name in ('reference','catalog'):(STATE/name).mkdir(exist_ok=True,mode=0o700)
     realm=STATE/'realm.json'
     if not realm.exists():
         def mapper(name,claim,value,multi=False):
