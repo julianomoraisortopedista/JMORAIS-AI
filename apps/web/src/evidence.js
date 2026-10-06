@@ -39,6 +39,7 @@ export class EvidenceClient {
   /** @param {string} id */ caseGet(id){return this.call('case/'+encodeURIComponent(id));}
   /** @param {string} id @param {Record<string,unknown>} body */ caseConfirm(id,body){return this.call('case/'+encodeURIComponent(id)+'/confirm',body);}
   /** @param {string} id */ caseDelete(id){return this.call('case/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {string} id @param {Record<string,unknown>} body */ caseReport(id,body){return this.call('case/'+encodeURIComponent(id)+'/report',body);}
   catalog(){return this.call('catalog');}
   /** @param {Record<string,unknown>} t */ catalogSave(t){return this.call('catalog',t,'PUT');}
   /** @param {string} id */ catalogDelete(id){return this.call('catalog/'+encodeURIComponent(id),undefined,'DELETE');}

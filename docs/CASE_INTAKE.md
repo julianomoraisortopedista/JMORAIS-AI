@@ -25,7 +25,14 @@ Platform page **Pedido médico** (http://localhost/ after login).
    polled by the page. Each fact must include a verbatim quote found in its source;
    otherwise it is discarded. ICD-10 codes are suggestions only.
 6. **Confirmation**: the physician selects/edits facts and confirms ICD-10 codes.
-7. **Request**: procedure, laterality, regime, TUSS (8 digits) and OPME (Anvisa, qty)
+7. **Report draft** (`jmoraIs/application/report_drafting.py`): Claude writes the
+   professional report (history, conservative treatment, physical exam, imaging, surgical
+   indication, OPME justification) from the confirmed facts and the stated procedure/OPME
+   only. Every sentence must cite fact ids (or the procedure context) and every number in it
+   must appear in the cited sources; otherwise it is dropped and counted. Missing information
+   is returned as gaps (e.g. undocumented physical exam), never filled in. Sections are
+   editable; the edited text becomes the request's clinical text.
+8. **Request**: procedure, laterality, regime, TUSS (8 digits) and OPME (Anvisa, qty)
    entered by the physician, confirmed facts with source quotes, scientific and legal
    sections, signature block. Draft for physician review and signature.
 

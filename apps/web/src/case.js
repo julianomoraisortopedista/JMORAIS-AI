@@ -8,7 +8,9 @@ const REQUIREMENT=/** @type {Record<string,string>} */ ({ATENDIDO:'Atendido',PEN
 /** Patient identification: memory only, cleared on logout/reload. */
 const patient={name:'',cpf:'',rg:'',card_number:'',birth_date:'',phone:'',email:'',address:'',operadora:''};
 /** @type {{id:string,view:Record<string,any>}|null} */ let current=null;
-export function clearCase(){for(const k of Object.keys(patient))/** @type {Record<string,string>} */(patient)[k]='';current=null;}
+/** Request fields shared with the report card; the edited report text goes into the request. */
+const draft={procedure:'',laterality:'',templateId:/** @type {string|null} */(null),reportText:''};
+export function clearCase(){for(const k of Object.keys(patient))/** @type {Record<string,string>} */(patient)[k]='';current=null;draft.procedure='';draft.laterality='';draft.templateId=null;draft.reportText='';}
 function identifiers(){const {operadora,...ids}=patient;return ids;}
 
 /** @param {File} file @returns {Promise<string>} */
@@ -18,7 +20,7 @@ async function base64(file){const bytes=new Uint8Array(await file.arrayBuffer())
 export function casePage(client){
   const root=box('div','page-grid');
   root.append(identityCard(),documentsCard(client,root));
-  if(current)root.append(factsCard(client,root),requestCard(client));
+  if(current)root.append(factsCard(client,root),reportCard(client),requestCard(client));
   return root;
 }
 
@@ -128,6 +130,45 @@ function factsCard(client,root){
   void root;return card;
 }
 
+/** @param {import('./evidence.js').EvidenceClient} client */
+function reportCard(client){
+  const card=box('section','card');
+  card.append(box('h2','card-title','Relatório médico'),box('p','muted','O Claude redige o relatório usando só os fatos que você confirmou. Cada frase é ligada aos fatos de origem, números que não estão nos fatos são descartados e o que faltar vira lacuna — nada é inventado. Escolha o procedimento ou o modelo no quadro "Pedido médico" abaixo antes de redigir.'));
+  const go=button(session.model?'Redigir relatório com o Claude':'IA não configurada');go.disabled=!session.model;
+  const status=box('div','status-area');const body=box('div','');const a=box('div','actions');a.append(go);card.append(a,status,body);
+  /** @type {HTMLTextAreaElement[]} */
+  let areas=[];
+  /** @type {string[]} */
+  let titles=[];
+  const sync=()=>{draft.reportText=areas.map((t,i)=>t.value.trim()?`${titles[i]}: ${t.value.trim()}`:'').filter(Boolean).join('\n\n');};
+  const facts=()=>/** @type {Array<Record<string,any>>} */((current&&current.view.confirmed&&current.view.confirmed.facts)||[]);
+  const render=(/** @type {Record<string,any>} */ r)=>{
+    body.replaceChildren();areas=[];titles=[];
+    if(r.status==='RUNNING'){say(status,'O Claude está redigindo o relatório…','info');return;}
+    if(r.status==='ERROR'){say(status,r.error||'Falha.');return;}
+    say(status,'Relatório redigido. Revise e edite cada seção; o texto final entra no pedido.'+(r.dropped?` ${r.dropped} frase(s) sem respaldo foram descartadas.`:''),'ok');
+    for(const g of r.gaps||[])body.append(box('div','alert alert-warn','Lacuna: '+g));
+    for(const sec of r.sections){
+      const t=textarea('');t.rows=Math.max(3,Math.min(10,sec.sentences.length*2));t.value=sec.sentences.map((/** @type {any} */ x)=>x.text).join(' ');t.oninput=sync;
+      const ids=[...new Set(sec.sentences.flatMap((/** @type {any} */ x)=>x.fact_ids))].filter(i=>i!=='CTX');
+      const src=ids.map(i=>{const f=facts()[Number(i.slice(1))-1];return f?`${i}: ${f.statement} (${f.source})`:i;}).join(' · ');
+      areas.push(t);titles.push(sec.title);body.append(field(sec.title,t,src?'Fontes — '+src:(sec.sentences.length?'Baseado no procedimento/OPME informado':'Sem fatos para esta seção — preencha se houver')));
+    }
+    sync();
+  };
+  const existing=current&&current.view.report;if(existing)render(existing);
+  go.onclick=()=>busy(go,async()=>{
+    if(!current){return;}
+    if(!current.view.confirmed){say(status,'Confirme os fatos clínicos antes.');return;}
+    try{
+      let v=await client.caseReport(current.id,{procedure:draft.procedure,laterality:draft.laterality,template_id:draft.templateId});render(v.report);
+      for(let i=0;i<90&&v.report&&v.report.status==='RUNNING';i++){await new Promise(r=>setTimeout(r,2000));v=await client.caseGet(current.id);}
+      current.view=v;render(v.report);
+    }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
+  });
+  return card;
+}
+
 /** @param {HTMLElement} container @param {string[]} labels */
 function repeater(container,labels){
   /** @type {HTMLInputElement[][]} */ const rows=[];
@@ -152,7 +193,9 @@ function requestCard(client){
   const tussBox=box('div','');const tuss=repeater(tussBox,['Código TUSS (8 dígitos)','Descrição']);
   const opmeBox=box('div','');const opme=repeater(opmeBox,['Material (OPME)','Registro Anvisa','Quantidade']);
   /** @type {string|null} */ let templateId=null;
-  const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;if(t){procedure.value=t.name;regime.value=t.regime||regime.value;}});
+  const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;draft.templateId=templateId;if(t){procedure.value=t.name;draft.procedure=t.name;regime.value=t.regime||regime.value;}});
+  procedure.oninput=()=>{draft.procedure=procedure.value;};laterality.onchange=()=>{draft.laterality=laterality.value;};
+  if(draft.procedure)procedure.value=draft.procedure;
   card.append(picker,field('Procedimento solicitado',procedure),grid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),dictation(alt),field('Texto clínico adicional',summary),dictation(summary));
   const go=button('Gerar pedido');const status=box('div','status-area');const result=box('div','');const actions=box('div','actions');actions.append(go);card.append(actions,status,result);
   /** @param {string} v */ const bool=v=>v===''?null:v==='true';
@@ -163,7 +206,7 @@ function requestCard(client){
     say(status,'Montando o pedido e reverificando as evidências…','info');
     try{
       const r=await client.document({claim,procedure:procedure.value,rol:rol.value,urgency:urgency.value,ans_analysis:ans.value,no_rol_alternative:alt.value,
-        crm:crm.value,prior_request:bool(prior.value),autogestao:bool(self.value),clinical_summary:summary.value,case_id:current.id,
+        crm:crm.value,prior_request:bool(prior.value),autogestao:bool(self.value),clinical_summary:[draft.reportText,summary.value].filter(x=>x.trim()).join('\n\n'),case_id:current.id,
         laterality:laterality.value,regime:regime.value,template_id:templateId,tuss:tuss().map(([code,description])=>({code,description})),
         opme:opme().map(([description,anvisa,quantity])=>({description,anvisa,quantity:Number(quantity)||1}))});
       say(status,`Pedido gerado com ${r.included} referência(s) científica(s).`,'ok');

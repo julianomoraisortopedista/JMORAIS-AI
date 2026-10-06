@@ -33,6 +33,7 @@ from jmoraIs.application.case_intake import (
 )
 from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify
 from jmoraIs.application.question_translation import QuestionTranslationRejected
+from jmoraIs.application.report_drafting import ReportDraftRejected
 from jmoraIs.application.surgical_catalog import (
     CatalogRejected, CatalogStore, ProcedureTemplate, supplier_warnings, validate_against_tuss,
 )
@@ -160,6 +161,13 @@ class CaseDocumentIn(BaseModel):
     identifiers: IdentifiersIn
 
 
+class ReportIn(BaseModel):
+    procedure: str = Field("", max_length=300)
+    laterality: str = Field("", max_length=40)
+    template_id: Optional[str] = Field(None, max_length=40)
+    opme: list[str] = Field(default_factory=list, max_length=20)
+
+
 class CaseConfirmIn(BaseModel):
     fact_ids: list[str] = Field(default_factory=list, max_length=80)
     edits: dict[str, str] = Field(default_factory=dict)
@@ -186,7 +194,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                authenticate: Optional[Callable[[Request], str]] = None,
                resolve_case_extractor: Optional[Callable[[], Optional[Callable]]] = None,
                tuss_index=None, catalog: Optional[CatalogStore] = None,
-               resolve_question_translator: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
+               resolve_question_translator: Optional[Callable[[], Optional[Callable]]] = None,
+               resolve_report_writer: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -311,7 +320,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 "facts": [dict(fact_id=f.fact_id, category=f.category.value, category_label=CATEGORY_PT[f.category],
                                statement=f.statement, quote=f.quote, source=f.source) for f in job.get("facts", ())],
                 "discarded": job.get("discarded", 0), "icd10_suggestions": list(job.get("icd10", ())),
-                "model": job.get("model"), "confirmed": case.get("confirmed")}
+                "model": job.get("model"), "confirmed": case.get("confirmed"), "report": case.get("report")}
 
     @app.post("/api/case")
     def case_create(body: CaseIn, request: Request):
@@ -392,6 +401,48 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                                   quote=fact.quote, source=fact.source))
         case["confirmed"] = {"facts": confirmed, "icd10": codes,
                              "reviewer": getattr(request.state, "principal", "local"), "at": clock().isoformat()}
+        return case_view(case_id, case)
+
+    @app.post("/api/case/{case_id}/report")
+    def case_report(case_id: str, body: ReportIn, request: Request):
+        case = case_of(request, case_id)
+        confirmed = case.get("confirmed")
+        if not confirmed:
+            bad("Confirme os fatos clínicos antes de redigir o relatório.")
+        factory = resolve_report_writer() if resolve_report_writer else None
+        if factory is None:
+            bad("Modelo de IA não configurado.", 503)
+        parts = [f"Procedimento: {body.procedure.strip()}" if body.procedure.strip() else ""]
+        if body.laterality.strip():
+            parts.append(f"Lateralidade: {body.laterality.strip()}")
+        if confirmed.get("icd10"):
+            parts.append("CID-10 confirmados: " + ", ".join(confirmed["icd10"]))
+        opme = [o.strip() for o in body.opme if o.strip()]
+        if body.template_id:
+            template = next((t for t in need_catalog().load() if t.template_id == body.template_id), None)
+            if template is not None:
+                parts.append("TUSS: " + "; ".join(f"{c} {template.tuss_terms.get(c, '')}" for c in template.tuss_codes))
+                opme = [f"{i.quantity}x {i.description}" for i in template.opme] + opme
+        if opme:
+            parts.append("OPME: " + ", ".join(opme))
+        context = ". ".join(p for p in parts if p)
+        if case.get("report", {}).get("status") == "RUNNING":
+            return case_view(case_id, case)
+        case["report"] = {"status": "RUNNING"}
+        principal = getattr(request.state, "principal", "local")
+
+        def run():
+            try:
+                with TenantContextBinder().bind_tenant(tenant(principal)):
+                    draft = factory().draft(list(confirmed["facts"]), context)
+                case["report"] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "model": draft.model_id,
+                                  "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, fact_ids=list(x.fact_ids)) for x in ss])
+                                               for k, t, ss in draft.sections]}
+            except ReportDraftRejected as exc:
+                case["report"] = {"status": "ERROR", "error": str(exc)}
+            except Exception as exc:  # provider failure: no provider text exposed
+                case["report"] = {"status": "ERROR", "error": f"Falha ao consultar o modelo ({type(exc).__name__})."}
+        __import__("threading").Thread(target=run, daemon=True).start()
         return case_view(case_id, case)
 
     @app.delete("/api/case/{case_id}")
@@ -621,3 +672,8 @@ def default_question_translator_factory(environ=os.environ, keychain=None) -> Op
         build_question_service, credentials_configured, keychain_api_key,
     )
     return build_question_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
+
+
+def default_report_writer_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
+    from jmoraIs.application.support_classification_runtime import build_report_service, credentials_configured, keychain_api_key
+    return build_report_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
