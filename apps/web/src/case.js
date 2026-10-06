@@ -72,7 +72,7 @@ function documentsCard(client,root){
   const picker=templatePicker(client,(t)=>{draft.templateId=t?t.template_id:null;if(t)draft.procedure=t.name;},draft.templateId||'');
   const side=select([['','—'],['Direito','Direito'],['Esquerdo','Esquerdo'],['Bilateral','Bilateral']]);side.value=draft.laterality;side.onchange=()=>{draft.laterality=side.value;};
   const history=textarea('História resumida: queixa, tempo de evolução, tratamentos realizados e por quanto tempo, exame físico, escalas (EVA, KOOS…), indicação.');history.rows=7;
-  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.pdf,.txt,application/pdf,text/plain';
+  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.pdf,.txt,.docx,application/pdf,text/plain';
   const consent=document.createElement('input');consent.type='checkbox';
   const consentLabel=box('label','chip');consentLabel.append(consent,el('span','Consentimento do paciente registrado para tratamento dos dados (LGPD)'));
   const go=button(session.model?'Remover identificação e ler com o Claude':'Remover identificação e enviar');const status=box('div','status-area');const preview=box('div','');
@@ -275,12 +275,19 @@ function requestCard(client){
         opme:opme().map(([description,anvisa,quantity])=>({description,anvisa,quantity:Number(quantity)||1})),schedule:draft.schedule});
       say(status,`Pedido gerado com ${r.included} referência(s) científica(s).`,'ok');
       result.replaceChildren();
+      if(r.checks&&r.checks.length){result.append(box('h3','section-title','Checagem anti-negativa (SBOT)'));
+        for(const c of r.checks)result.append(box('div','alert alert-'+(c.level==='BLOQUEIO'?'error':c.level==='OK'?'ok':'warn'),`${c.level==='BLOQUEIO'?'Corrigir':c.level==='OK'?'OK':'Atenção'} · ${c.topic}: ${c.message}`));}
+      if(r.deadline)result.append(box('p','muted',r.deadline));
       for(const q of r.requirements){const row=box('div','row');const m=box('div','row-main');m.append(box('strong','',q.label),box('span','muted',q.basis));row.append(pill(REQUIREMENT[q.status]||q.status,q.status),m);result.append(row);}
       for(const w of r.warnings)result.append(box('div','alert alert-warn','Pendência: '+w));
       const html=withIdentification(r.html);
       const open=button('Abrir para imprimir / PDF'),save=button('Baixar pedido (.html)','ghost');const a=box('div','actions');a.append(open,save);result.append(a);
       open.onclick=()=>{const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))result.append(box('div','alert alert-info','Nova aba bloqueada. Use "Baixar pedido".'));setTimeout(()=>URL.revokeObjectURL(url),60000);};
       save.onclick=()=>download('pedido-medico.html',html,'text/html');
+      const tcle=button('Termo de consentimento com dados do paciente','ghost');a.append(tcle);
+      tcle.onclick=()=>busy(tcle,async()=>{try{const doc=await consentForm(client,templateId,procedure.value,laterality.value);
+        const url=URL.createObjectURL(new Blob([doc],{type:'text/html'}));if(!window.open(url,'_blank'))download('termo-consentimento.html',doc,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);}
+        catch(e){result.append(box('div','alert alert-warn',e instanceof Error?e.message:'Falha ao montar o termo.'));}});
     }catch(e){say(status,e instanceof Error?e.message:'Falha ao gerar.');}
   });
   return card;
@@ -317,3 +324,52 @@ function finalReport(){
   const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),doc.createTextNode(session.reviewer||'Médico assistente — CRM'));
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }
+
+/** Consent form from the physician's model, filled in the browser (patient data never leaves it).
+ * @param {import('./evidence.js').EvidenceClient} client @param {string|null} templateId @param {string} procedure @param {string} side */
+async function consentForm(client,templateId,procedure,side){
+  const [model,profile,catalog]=await Promise.all([client.consentGet(),client.profileGet(),client.catalog()]);
+  if(!model.text)throw new Error('Envie o seu modelo de termo em "Modelos de cirurgia" > "Meu termo de consentimento".');
+  const t=(catalog.templates||[]).find((/** @type {any} */ x)=>x.template_id===templateId)||{};
+  const fold=(/** @type {string} */ v)=>v.normalize('NFKD').replace(/[̀-ͯ]/g,'').toLowerCase();
+  const name=[procedure||t.name||'',side?`(${side.toLowerCase()})`:''].filter(Boolean).join(' ');
+  const crm=profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'';
+  const anesthesia=draft.schedule.anesthesia||t.anesthesia||'';
+  const risks=/** @type {string[]} */(t.consent_risks||[]);
+  const today=new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'});
+  /** @param {string} inside @returns {string|null} */
+  const value=(inside)=>{const k=fold(inside);
+    if(k.includes('complicac'))return null;
+    if(k.includes('paciente'))return patient.name||null;
+    if(k.includes('nome e crm'))return [profile.name,crm].filter(Boolean).join(', ')||null;
+    if(k.includes('medico')||k.includes('profissional'))return profile.name||null;
+    if(k.includes('estado'))return profile.uf||null;
+    if(k.includes('crm'))return profile.crm||null;
+    if(k.includes('definic'))return t.consent_definition||null;
+    if(k.includes('procedimento'))return name||null;
+    if(k.includes('anestesia'))return anesthesia||null;
+    if(k.includes('local'))return profile.city||null;
+    if(k.includes('data'))return today;
+    return null;};
+  const doc=document.implementation.createHTMLDocument('Termo de consentimento');
+  const meta=doc.createElement('meta');meta.setAttribute('charset','utf-8');doc.head.prepend(meta);
+  const style=doc.createElement('style');style.textContent='body{font-family:Georgia,serif;max-width:760px;margin:32px auto;padding:0 16px;line-height:1.6;color:#111}p{margin:8px 0;text-align:justify}.fill{background:#fde68a}.draft{border:1px solid #b45309;color:#b45309;padding:6px 10px;font-size:13px}@media print{.draft{display:none}.fill{background:none}}';
+  doc.head.append(style);
+  const warn=doc.createElement('div');warn.className='draft';warn.textContent='Confira antes de imprimir. Campos em amarelo ficaram sem dado. Este aviso não aparece na impressão.';doc.body.append(warn);
+  let block='paciente';
+  /** @type {Record<string,string>} */ const own={'nome do paciente':patient.name,'endereco':patient.address,'cpf':patient.cpf,'telefones':patient.phone,'telefone':patient.phone};
+  for(const line of String(model.text).split('\n')){
+    const f=fold(line);if(/^(responsavel|testemunha)/.test(f))block='outro';
+    const p=doc.createElement('p');
+    if(/inserir,? em topicos,? as possiveis complicac/.test(f)&&risks.length){const ul=doc.createElement('ul');for(const r of risks){const li=doc.createElement('li');li.textContent=r;ul.append(li);}doc.body.append(ul);continue;}
+    const label=f.match(/^([a-z ]+):\s*_+\s*$/);
+    if(label&&block==='paciente'&&own[label[1].trim()]){p.textContent=line.replace(/_+\s*$/,'')+' '+own[label[1].trim()];doc.body.append(p);continue;}
+    let rest=line;const re=/\((inserir[^)]*)\)/i;let m;
+    while((m=re.exec(rest))){p.append(doc.createTextNode(rest.slice(0,m.index)));const v=value(m[1]);
+      const span=doc.createElement('span');if(v){span.textContent=v;}else{span.textContent='('+m[1]+')';span.className='fill';}p.append(span);rest=rest.slice(m.index+m[0].length);}
+    p.append(doc.createTextNode(rest));
+    if(/^termo de consentimento/.test(f)){const h=doc.createElement('h1');h.textContent=line;h.style.textAlign='center';h.style.fontSize='18px';doc.body.append(h);}else doc.body.append(p);
+  }
+  return '<!doctype html>\n'+doc.documentElement.outerHTML;
+}
+

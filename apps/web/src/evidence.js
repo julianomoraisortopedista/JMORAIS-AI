@@ -46,6 +46,14 @@ export class EvidenceClient {
   /** @param {string} text */ styleSave(text){return this.call('report-style',{text,confirmed:true},'PUT');}
   styleDelete(){return this.call('report-style',undefined,'DELETE');}
   /** @param {string} text */ requestParse(text){return this.call('request/parse',{text});}
+  /** @param {string} q */ sbotSearch(q){return this.call('sbot/search?q='+encodeURIComponent(q));}
+  /** @param {string} id */ sbotEntry(id){return this.call('sbot/entry/'+encodeURIComponent(id));}
+  /** @param {string} id */ catalogFromSbot(id){return this.call('catalog/from-sbot',{entry_id:id});}
+  profileGet(){return this.call('profile');}
+  /** @param {Record<string,unknown>} p */ profileSave(p){return this.call('profile',p,'PUT');}
+  consentGet(){return this.call('consent-model');}
+  /** @param {Record<string,unknown>} body */ consentUpload(body){return this.call('consent-model',body);}
+  consentDelete(){return this.call('consent-model',undefined,'DELETE');}
   catalog(){return this.call('catalog');}
   /** @param {Record<string,unknown>} t */ catalogSave(t){return this.call('catalog',t,'PUT');}
   /** @param {string} id */ catalogDelete(id){return this.call('catalog/'+encodeURIComponent(id),undefined,'DELETE');}

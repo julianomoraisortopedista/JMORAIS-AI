@@ -81,6 +81,7 @@ def create():
     from jmoraIs.connect.pubmed import PubMedConnector
     from jmoraIs.workbench.app import create_app as create_workbench, default_case_extractor_factory, default_classifier_factory, default_question_translator_factory, default_report_writer_factory, default_request_parser_factory
     from jmoraIs.application.report_style import ReportStyleStore
+    from jmoraIs.application.practice_documents import PracticeStore
     from jmoraIs.workbench.platform_auth import iam_authenticator
     # 10 most relevant results keep a live search inside the API's 30 s request budget.
     app.mount('/internal/evidence', create_workbench(pubmed=PubMedConnector(search_limit=10), crossref=CrossrefConnector(),
@@ -91,6 +92,7 @@ def create():
         resolve_report_writer=lambda: default_report_writer_factory(os.environ, keychain=lambda: None),
         resolve_request_parser=lambda: default_request_parser_factory(os.environ, keychain=lambda: None),
         report_style=ReportStyleStore(Path('/catalog/report_style.json')),
+        sbot_index=_sbot_index(), practice=PracticeStore(Path('/catalog/practice.json')),
         authenticate=iam_authenticator(canonical.operational_services)))
     return app
 
@@ -99,6 +101,12 @@ def _tuss_index():
     from jmoraIs.reference.tuss import TussIndex
     path=Path('/reference/tuss.sqlite')
     return TussIndex(path) if path.exists() else None
+
+
+def _sbot_index():
+    from jmoraIs.reference.sbot import SbotIndex
+    path=Path('/reference/sbot.json')
+    return SbotIndex(path) if path.exists() else None
 
 
 def _catalog():

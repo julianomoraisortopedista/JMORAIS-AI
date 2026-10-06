@@ -43,6 +43,8 @@ class RequestDetails:
     # Alternatives per CFM 1.956/2010 art. 5: (supplier label, ((item, qty, official term, manufacturer, anvisa, tuss), ...))
     brands: tuple = ()
     schedule: tuple[tuple[str, str], ...] = ()       # hospital scheduling (label, value), stated by the physician
+    deadline: str = ""                                # ANS maximum care deadline (RN 566/2022)
+    coding_reference: str = ""                        # SBOT coding manual entry the codes follow
 
     def __post_init__(self):
         if any(not re.fullmatch(r"[A-Z]\d{2}(\.\d{1,2})?", c) for c in self.icd10):
@@ -109,6 +111,10 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
                 out += [f"<tr><td>{escape(i)}</td><td>{escape(c)} — {escape(t)}</td><td>{escape(m)}</td><td>{escape(a)}</td>"
                         f"<td>{q}</td></tr>" for i, q, t, m, a, c in materials]
                 out.append("</table>")
+        if request.coding_reference:
+            out.append(f"<p class=\"muted\">Codificação conforme {escape(request.coding_reference)}.</p>")
+        if request.deadline:
+            out.append(f"<p class=\"muted\">{escape(request.deadline)}</p>")
         if request.schedule:
             out.append("<h3>Agendamento cirúrgico</h3><table class=\"ident\">")
             out += [f"<tr><td>{escape(label)}:</td><td>{escape(value)}</td></tr>" for label, value in request.schedule]

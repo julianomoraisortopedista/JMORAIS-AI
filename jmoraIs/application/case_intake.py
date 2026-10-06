@@ -26,7 +26,7 @@ SCHEMA_ID = "case-intake-input"
 PROMPT_ID = "case-intake-extraction-v1"
 MAX_OUTPUT_TOKENS = 12000
 MAX_DOCUMENT_CHARS = 40000
-TEXT_TYPES = (".pdf", ".txt")
+TEXT_TYPES = (".pdf", ".txt", ".docx")
 
 
 class CaseIntakeRejected(ValueError):
@@ -99,12 +99,36 @@ class CaseExtraction:
     status: str
 
 
+def docx_text(content: bytes) -> str:
+    """Paragraph text of a Word .docx (stdlib zip + XML; no macros or external parts)."""
+    import zipfile
+    from xml.etree.ElementTree import fromstring
+    w = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    try:
+        book = zipfile.ZipFile(io.BytesIO(content))
+        info = book.getinfo("word/document.xml")
+        if info.file_size > 20_000_000:
+            raise CaseIntakeRejected("Documento Word grande demais.")
+        root = fromstring(book.read(info))
+    except CaseIntakeRejected:
+        raise
+    except Exception as exc:
+        raise CaseIntakeRejected("Não foi possível ler o documento Word.") from exc
+    paragraphs = ["".join(t.text or "" for t in p.iter(w + "t")) for p in root.iter(w + "p")]
+    text = "\n".join(p for p in paragraphs if p.strip())
+    if len(text.strip()) < 40:
+        raise CaseIntakeRejected("Documento Word sem texto.")
+    return text
+
+
 def extract_text(filename: str, content: bytes) -> str:
     name = (filename or "").lower()
     if name.endswith(".txt"):
         return content.decode("utf-8", errors="replace")
+    if name.endswith(".docx"):
+        return docx_text(content)
     if not name.endswith(".pdf"):
-        raise CaseIntakeRejected("Apenas PDF de laudo ou texto. Imagens não são enviadas à IA.")
+        raise CaseIntakeRejected("Apenas PDF, Word (.docx) ou texto. Imagens não são enviadas à IA.")
     if not content.startswith(b"%PDF"):
         raise CaseIntakeRejected("Arquivo PDF inválido.")
     try:

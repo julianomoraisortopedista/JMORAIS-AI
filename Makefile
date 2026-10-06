@@ -96,6 +96,11 @@ workbench: verify-python
 set-anthropic-key:
 	@zsh scripts/set_anthropic_key.sh
 
+.PHONY: sbot-index
+# Build the local SBOT coding-manual index from the published PDF: make sbot-index PDF=path/to/Manual-SBOT.pdf
+sbot-index: verify-python
+	@"$(VENV_PYTHON)" scripts/build_sbot_index.py "$(PDF)"
+
 .PHONY: tuss-index
 # Download the latest official ANS TUSS package and build the local index (or ZIP=path to reuse a download).
 tuss-index: verify-python

@@ -63,6 +63,12 @@ class ProcedureTemplate(BaseModel):
     suppliers: list[Supplier] = Field(default_factory=list, max_length=5)
     packages: list[HospitalPackage] = Field(default_factory=list, max_length=20)
     notes: str = Field("", max_length=1000)
+    sbot_entry: str = Field("", max_length=10)                     # SBOT coding manual entry, e.g. 5.19
+    icu_days: Optional[int] = Field(None, ge=0, le=60)
+    ward_days: Optional[int] = Field(None, ge=0, le=120)
+    anesthesia: str = Field("", max_length=120)
+    consent_definition: str = Field("", max_length=3000)          # TCLE: what the procedure consists of
+    consent_risks: list[str] = Field(default_factory=list, max_length=40)  # TCLE: complications, physician-written
 
     @field_validator("tuss_codes")
     @classmethod
@@ -183,3 +189,34 @@ def starter_templates() -> list[ProcedureTemplate]:
         t("Bloqueio de nervos geniculares", ["31403026"], regime="Ambulatorial",
           notes="Alternativa oficial: 31602118 (bloqueios anestésicos de nervos)."),
     ]
+
+
+def template_from_sbot(entry, index) -> ProcedureTemplate:
+    """Starting template from an SBOT manual entry; every code is checked in the official TUSS 22.
+
+    The first CBHPM code found active in TUSS becomes the requested code; the others are
+    listed in the notes for the physician to add only when they apply (and never two codes
+    the manual marks as mutually exclusive). Nothing is confirmed automatically.
+    """
+    main, others, missing = [], [], []
+    for code in entry.codes:
+        found = index.procedures(code.digits) if index else []
+        if not found or not found[0].active:
+            missing.append(code.cbhpm)
+        elif not main:
+            main.append(code.digits)
+        else:
+            mark = f" [excludentes entre si: grupo {code.exclusive_group}]" if code.exclusive_group else ""
+            others.append(f"{code.digits} {code.description} (porte {code.porte}){mark}")
+    notes = [f"Base: SBOT, Manual de Diretrizes de Codificação, procedimento {entry.entry_id} (p. {entry.page})."]
+    if others:
+        notes.append("Códigos associados previstos (use só se realizados): " + "; ".join(others))
+    if missing:
+        notes.append("Não encontrados ativos na TUSS 22: " + ", ".join(missing))
+    regime = "Internação" if (entry.ward_days or 0) > 0 or (entry.icu_days or 0) > 0 else "Ambulatorial"
+    name = entry.name[:1] + entry.name[1:].lower()
+    return ProcedureTemplate(
+        name=name[:160], region="", tuss_codes=main, regime=regime, sbot_entry=entry.entry_id,
+        opme=[OpmeItem(description=o.description[:160], quantity=min(max(o.quantity, 1), 50)) for o in entry.opme[:50]],
+        icu_days=entry.icu_days, ward_days=entry.ward_days, consent_definition=entry.description[:3000],
+        notes=" ".join(notes)[:1000])

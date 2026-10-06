@@ -6,6 +6,7 @@ import argparse
 
 import uvicorn
 
+from jmoraIs.application.practice_documents import PracticeStore
 from jmoraIs.application.report_style import ReportStyleStore
 from jmoraIs.application.support_classification_runtime import save_keychain_api_key
 from jmoraIs.connect.crossref import CrossrefConnector
@@ -23,6 +24,12 @@ def tuss_index():
     from jmoraIs.reference.tuss import TussIndex
     path = STATE / "reference/tuss.sqlite"
     return TussIndex(path) if path.exists() else None
+
+
+def sbot_index():
+    from jmoraIs.reference.sbot import SbotIndex
+    path = STATE / "reference/sbot.json"
+    return SbotIndex(path) if path.exists() else None
 
 
 def catalog():
@@ -44,7 +51,8 @@ def main(argv=None) -> int:
                      resolve_question_translator=default_question_translator_factory,
                      resolve_report_writer=default_report_writer_factory,
                      resolve_request_parser=default_request_parser_factory,
-                     report_style=ReportStyleStore(STATE / "catalog/report_style.json"))
+                     report_style=ReportStyleStore(STATE / "catalog/report_style.json"),
+                     sbot_index=sbot_index(), practice=PracticeStore(STATE / "catalog/practice.json"))
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning",
                 server_header=False, access_log=False)
     return 0

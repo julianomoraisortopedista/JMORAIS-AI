@@ -1,12 +1,12 @@
 /** Surgical templates: official TUSS procedures, OPME kit, three suppliers, hospital packages. */
 import {el} from './view.js';
-import {box,button,busy,field,input,pill,say,select,textarea} from './evidence.js';
+import {box,button,busy,field,input,pill,say,select,session,textarea} from './evidence.js';
 
 /** @typedef {{description:string,quantity:number}} Item */
 /** @typedef {{item_index:number,tuss_code:string,term?:string,manufacturer?:string,anvisa?:string}} Material */
 /** @typedef {{label:string,materials:Material[]}} Supplier */
 /** @typedef {{network:string,package_code:string,description:string,includes_opme:boolean|null,notes:string}} Package */
-/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[]}} Template */
+/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[],sbot_entry?:string,icu_days?:number|null,ward_days?:number|null,anesthesia?:string,consent_definition?:string,consent_risks?:string[]}} Template */
 
 /** @param {import('./evidence.js').EvidenceClient} client */
 export function catalogPage(client){
@@ -15,7 +15,7 @@ export function catalogPage(client){
   head.append(box('h2','card-title','Modelos de cirurgia'),
     box('p','muted','Cada modelo reúne o procedimento com códigos da tabela TUSS oficial da ANS, o kit de OPME com quantidades, três fornecedores de fabricantes diferentes (CFM 1.956/2010, art. 5º) e os pacotes das redes. Códigos e materiais vêm da tabela oficial; nada é inventado.'));
   const add=button('Novo modelo');const actions=box('div','actions');actions.append(add);const status=box('div','status-area');head.append(actions,status);
-  const list=box('div','page-grid');root.append(styleCard(client),head,list);
+  const list=box('div','page-grid');root.append(profileCard(client),sbotCard(client,()=>reload()),head,list,styleCard(client),consentCard(client));
   const reload=async()=>{
     try{const r=await client.catalog();list.replaceChildren();
       if(r.tuss_version)status.replaceChildren(box('span','muted','Tabela TUSS oficial: versão '+r.tuss_version));
@@ -43,6 +43,9 @@ function templateCard(client,t,reload,list){
   }
   for(const p of t.packages)card.append(box('p','muted',`Pacote ${p.network}${p.package_code?' '+p.package_code:''}: ${p.description}`));
   for(const w of t.warnings||[])card.append(box('div','alert alert-warn',w));
+  if(t.icu_days!=null||t.ward_days!=null)card.append(box('p','muted',`Internação prevista (SBOT): UTI ${t.icu_days??'—'} dia(s), quarto ${t.ward_days??'—'} dia(s)`));
+  if(t.consent_risks&&t.consent_risks.length)card.append(box('p','muted',`Termo de consentimento: ${t.consent_risks.length} complicação(ões) descritas`));
+  else card.append(box('p','muted','Termo de consentimento: descreva as complicações em Editar.'));
   if(t.notes)card.append(box('p','muted',t.notes));
   const edit=button('Editar','ghost'),del=button('Excluir','quiet');const a=box('div','actions');a.append(edit,del);card.append(a);
   edit.onclick=()=>card.replaceWith(editor(client,structuredClone(t),reload));
@@ -104,10 +107,19 @@ function editor(client,t,reload){
   const notes=textarea('Observações do modelo');notes.value=t.notes;
   card.append(pkgs,addPkg,field('Observações',notes));
 
+  // Consent form (TCLE) content for this procedure, written by the physician.
+  card.append(box('h3','section-title','Termo de consentimento deste procedimento'),
+    box('p','muted','Usado para preencher o seu modelo de termo. A definição vem da SBOT quando o modelo foi criado a partir dela; revise. As complicações são escritas por você, uma por linha.'));
+  const anesthesia=input('Ex.: raquianestesia com sedação / anestesia geral',t.anesthesia||'');
+  const definition=textarea('O que é o procedimento, em linguagem clara para o paciente');definition.rows=4;definition.value=t.consent_definition||'';
+  const risks=textarea('Uma complicação por linha. Ex.: Infecção\nTrombose venosa profunda');risks.rows=6;risks.value=(t.consent_risks||[]).join('\n');
+  card.append(field('Anestesia',anesthesia),field('Definição do procedimento',definition),field('Riscos e complicações',risks));
+
   const save=button('Salvar modelo'),cancel=button('Cancelar','quiet');const status=box('div','status-area');const a=box('div','actions');a.append(save,cancel);card.append(a,status);
   cancel.onclick=()=>reload();
   save.onclick=()=>busy(save,async()=>{
     t.name=name.value;t.region=region.value;t.regime=regime.value;t.notes=notes.value;t.codes_confirmed=confirm.checked;
+    t.anesthesia=anesthesia.value;t.consent_definition=definition.value;t.consent_risks=risks.value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,40);
     t.suppliers=t.suppliers.filter(s=>s.label.trim());t.packages=t.packages.filter(p=>p.network.trim());t.opme=t.opme.filter(i=>i.description.trim());
     try{const {warnings,...body}=t;void warnings;await client.catalogSave(body);await reload();}
     catch(e){say(status,e instanceof Error?e.message:'Falha ao salvar.');}
@@ -137,6 +149,66 @@ function supplierBox(client,t,s,sn,rerender){
       }catch(err){say(results,err instanceof Error?err.message:'Falha.');}});
   });
   const a=box('div','actions');a.append(rm);wrap.append(a);return wrap;
+}
+
+/** Physician profile: fills headers, consent forms and signatures. @param {import('./evidence.js').EvidenceClient} client */
+function profileCard(client){
+  const card=box('section','card');
+  card.append(box('h2','card-title','Meu perfil'),box('p','muted','Seus dados profissionais para cabeçalhos, termos de consentimento e assinaturas.'));
+  /** @type {[string,string][]} */
+  const fields=[['name','Nome completo'],['crm','CRM (número)'],['uf','UF do CRM'],['rqe','RQE'],['specialty','Especialidade'],['city','Cidade'],['phone','Telefone do consultório'],['email','E-mail do consultório'],['address','Endereço do consultório']];
+  /** @type {Record<string,HTMLInputElement>} */ const inputs={};
+  const grid=box('div','form-grid');for(const [k,l] of fields){const i=input(l);inputs[k]=i;grid.append(field(l,i));}
+  const save=button('Salvar perfil');const status=box('div','status-area');const a=box('div','actions');a.append(save);card.append(grid,a,status);
+  client.profileGet().then((/** @type {any} */ p)=>{for(const [k] of fields)inputs[k].value=p[k]||'';if(p.crm)session.reviewer=`CRM-${p.uf} ${p.crm}`;}).catch(()=>{});
+  save.onclick=()=>busy(save,async()=>{
+    /** @type {Record<string,string>} */
+    const p={};
+    try{for(const [k] of fields)p[k]=inputs[k].value.trim();p.uf=p.uf.toUpperCase().slice(0,2);
+    await client.profileSave(p);if(p.crm)session.reviewer=`CRM-${p.uf} ${p.crm}`;say(status,'Perfil salvo.','ok');}catch(e){say(status,e instanceof Error?e.message:'Falha.');}});
+  return card;
+}
+
+/** SBOT coding manual: search, inspect and create a template from an entry. @param {import('./evidence.js').EvidenceClient} client @param {()=>void} reload */
+function sbotCard(client,reload){
+  const card=box('section','card');
+  card.append(box('h2','card-title','Base SBOT de codificação'),
+    box('p','muted','Manual de Diretrizes de Codificação da SBOT: CID, indicação, exames, códigos com porte, OPME e internação de cada cirurgia. Crie um modelo a partir dele; os códigos são conferidos na TUSS oficial e você confirma.'));
+  const q=input('Ex.: artroplastia total joelho, LCA, manguito');const find=button('Buscar','ghost');const a=box('div','actions');a.append(find);
+  const results=box('div','rows');const detail=box('div','');card.append(field('Procedimento',q),a,results,detail);
+  /** @param {string} id */
+  const show=async(id)=>{try{const e=await client.sbotEntry(id);detail.replaceChildren(box('h3','section-title',`${e.entry_id} — ${e.name} (p. ${e.page})`));
+      /** @param {string} k @param {string} v */ const line=(k,v)=>{if(v)detail.append(box('p','',`${k}: ${v}`));};
+      line('CID',e.icd10.join(', '));line('Caráter',e.character);line('Indicação',e.indication);line('Contraindicação',e.contraindication);line('Exames da indicação',e.exams);
+      line('Códigos',e.codes.map((/** @type {any} */ c)=>`${c.cbhpm} ${c.description} (${c.porte})${c.exclusive_group?' ['+c.exclusive_group+']':''}`).join('; '));
+      line('OPME',e.opme.map((/** @type {any} */ o)=>`${o.quantity}× ${o.description}`).join(', '));
+      if(e.icu_days!=null)line('Internação',`UTI ${e.icu_days} dia(s), quarto ${e.ward_days} dia(s)`);line('Comentários',e.comments);
+      const create=button('Criar modelo de cirurgia a partir deste');const st=box('div','status-area');const b=box('div','actions');b.append(create);detail.append(b,st);
+      create.onclick=()=>busy(create,async()=>{try{const t=await client.catalogFromSbot(e.entry_id);say(st,`Modelo "${t.name}" criado. Confira os códigos, escolha os materiais dos fornecedores e confirme.`,'ok');reload();}catch(err){say(st,err instanceof Error?err.message:'Falha.');}});
+    }catch(err){say(detail,err instanceof Error?err.message:'Falha.');}};
+  find.onclick=()=>busy(find,async()=>{try{const r=await client.sbotSearch(q.value);results.replaceChildren();detail.replaceChildren();
+    for(const e of r.results){const row=box('div','row');const open=button('Ver','ghost');open.onclick=()=>show(e.entry_id);
+      const m=box('div','row-main');m.append(box('strong','',`${e.entry_id} — ${e.name}`),box('span','muted',`${e.character} · ${e.codes.join(', ')}`));row.append(m,open);results.append(row);}
+    if(!r.results.length)results.append(box('p','muted','Nada encontrado na base SBOT.'));}catch(err){say(results,err instanceof Error?err.message:'Falha.');}});
+  return card;
+}
+
+/** The physician's consent-form model, filled with patient data only in the browser. @param {import('./evidence.js').EvidenceClient} client */
+function consentCard(client){
+  const card=box('section','card');
+  card.append(box('h2','card-title','Meu termo de consentimento'),
+    box('p','muted','Envie o seu modelo em branco (.docx, PDF com texto ou .txt), com os campos "(inserir ...)". No Pedido médico ele é preenchido no seu computador com os dados do paciente, do procedimento e as complicações do modelo de cirurgia.'));
+  const file=document.createElement('input');file.type='file';file.accept='.docx,.pdf,.txt';
+  const text=box('div','abstract','');const status=box('div','status-area');const remove=button('Excluir modelo de termo','ghost');const a=box('div','actions');a.append(remove);
+  card.append(field('Arquivo do termo',file),status,text,a);
+  /** @param {string|null} t */ const show=(t)=>{text.textContent=t?t.slice(0,1500)+(t.length>1500?'…':''):'Nenhum modelo de termo salvo.';};
+  client.consentGet().then((/** @type {any} */ r)=>show(r.text)).catch(()=>show(null));
+  file.onchange=async()=>{const f=file.files?.[0];if(!f)return;
+    try{const bytes=new Uint8Array(await f.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+      const r=await client.consentUpload({name:f.name,content_base64:btoa(bin)});show(r.text);file.value='';say(status,'Modelo de termo salvo.','ok');}
+    catch(e){file.value='';say(status,e instanceof Error?e.message:'Falha.');}};
+  remove.onclick=()=>busy(remove,async()=>{try{await client.consentDelete();show(null);say(status,'Modelo de termo excluído.','info');}catch(e){say(status,e instanceof Error?e.message:'Falha.');}});
+  return card;
 }
 
 /** The physician's own report model: de-identified on upload, reviewed, then used as format only. @param {import('./evidence.js').EvidenceClient} client */

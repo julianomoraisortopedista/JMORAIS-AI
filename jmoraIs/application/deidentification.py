@@ -153,7 +153,7 @@ def detect_identifiers(text: str) -> dict[str, str]:
                 continue
             if key == "cpf" and not _cpf_valid(value):
                 continue
-            if len(value) >= 3:
+            if len(value) >= 3 and re.search(r"[^\W_]", value):  # blank form lines ("____") are not values
                 found[key] = value[:200]
                 break
     for key, pattern in (("email", dict(_PATTERNS)["EMAIL"]), ("phone", dict(_PATTERNS)["TELEFONE"])):

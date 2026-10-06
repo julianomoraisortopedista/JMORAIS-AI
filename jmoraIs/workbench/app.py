@@ -34,8 +34,12 @@ from jmoraIs.application.case_intake import (
 from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify, detect_identifiers
 from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.report_drafting import ReportDraftRejected
+from jmoraIs.application.ans_deadlines import deadline_for
+from jmoraIs.application.practice_documents import PracticeRejected, PracticeStore, Profile
+from jmoraIs.application.request_check import check_request
 from jmoraIs.application.report_style import ReportStyleRejected, ReportStyleStore, deidentify_model
 from jmoraIs.application.request_intake import RequestIntakeRejected
+from jmoraIs.application.surgical_catalog import template_from_sbot
 from jmoraIs.application.surgical_catalog import (
     CatalogRejected, CatalogStore, ProcedureTemplate, supplier_warnings, validate_against_tuss,
 )
@@ -185,6 +189,10 @@ class CaseDocumentIn(BaseModel):
     identifiers: IdentifiersIn
 
 
+class SbotTemplateIn(BaseModel):
+    entry_id: str = Field(pattern=r"^\d{1,2}\.\d{1,3}$")
+
+
 class ScanIn(BaseModel):
     name: str = Field(max_length=200)
     content_base64: str = Field(max_length=MAX_DOCUMENT_B64)
@@ -226,7 +234,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                resolve_question_translator: Optional[Callable[[], Optional[Callable]]] = None,
                resolve_report_writer: Optional[Callable[[], Optional[Callable]]] = None,
                report_style: Optional[ReportStyleStore] = None,
-               resolve_request_parser: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
+               resolve_request_parser: Optional[Callable[[], Optional[Callable]]] = None,
+               sbot_index=None, practice: Optional[PracticeStore] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -568,6 +577,69 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         out["template_name"] = next((t.name for t in templates if t.template_id == draft.template_id), "")
         return dict(out, model=draft.model_id)
 
+    def need_sbot():
+        if sbot_index is None:
+            bad("Base SBOT não instalada neste computador (make sbot-index PDF=manual.pdf).", 503)
+        return sbot_index
+
+    def sbot_view(e) -> dict:
+        return dict(e.as_dict(), characters=list(e.characters))
+
+    @app.get("/api/sbot/search")
+    def sbot_search(q: str = Query(min_length=2, max_length=120)):
+        return {"version": need_sbot().version(),
+                "results": [dict(entry_id=e.entry_id, name=e.name, page=e.page, character=e.character,
+                                 codes=[c.cbhpm for c in e.codes][:4]) for e in need_sbot().search(q, 25)]}
+
+    @app.get("/api/sbot/entry/{entry_id}")
+    def sbot_entry(entry_id: str):
+        entry = need_sbot().get(entry_id)
+        if entry is None:
+            bad("Procedimento SBOT não encontrado.", 404)
+        return sbot_view(entry)
+
+    @app.post("/api/catalog/from-sbot")
+    def catalog_from_sbot(body: SbotTemplateIn):
+        entry = need_sbot().get(body.entry_id)
+        if entry is None:
+            bad("Procedimento SBOT não encontrado.", 404)
+        try:
+            saved = need_catalog().save(validate_against_tuss(template_from_sbot(entry, need_index()), need_index()))
+        except CatalogRejected as exc:
+            bad(str(exc))
+        return dict(saved.model_dump(), warnings=supplier_warnings(saved))
+
+    def need_practice() -> PracticeStore:
+        if practice is None:
+            bad("Dados do consultório indisponíveis neste servidor.", 503)
+        return practice
+
+    @app.get("/api/profile")
+    def profile_get():
+        return need_practice().profile().model_dump()
+
+    @app.put("/api/profile")
+    def profile_save(body: Profile):
+        return need_practice().save_profile(body).model_dump()
+
+    @app.get("/api/consent-model")
+    def consent_get():
+        return {"text": need_practice().consent_model()}
+
+    @app.post("/api/consent-model")
+    def consent_upload(body: ScanIn):
+        import base64
+        try:
+            text = extract_text(body.name, base64.b64decode(body.content_base64, validate=True))
+            return {"text": need_practice().save_consent_model(text)}
+        except (ValueError, CaseIntakeRejected, PracticeRejected) as exc:
+            bad(str(exc) if isinstance(exc, (CaseIntakeRejected, PracticeRejected)) else "Arquivo inválido.")
+
+    @app.delete("/api/consent-model")
+    def consent_delete():
+        need_practice().delete_consent_model()
+        return {"text": None}
+
     @app.get("/api/catalog")
     def catalog_list():
         return {"templates": [dict(t.model_dump(), warnings=supplier_warnings(t)) for t in need_catalog().load()],
@@ -713,16 +785,18 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             legal = build_legal_section(context, draft)
         except (JustificationRejected, ValueError) as exc:
             bad(str(exc))
-        facts, codes = (), [c.strip().upper() for c in body.icd10]
+        facts, codes, documents_text = (), [c.strip().upper() for c in body.icd10], ""
         if body.case_id:
-            confirmed = (case_of(request, body.case_id).get("confirmed") or {})
+            case = case_of(request, body.case_id)
+            documents_text = " ".join([case["history"].text] + [f"{n} {d.text}" for d, n in case["documents"]])
+            confirmed = (case.get("confirmed") or {})
             if not confirmed:
                 bad("Confirme os fatos clínicos do caso antes de gerar o pedido.")
             facts = tuple(confirmed["facts"])
             codes = list(dict.fromkeys(confirmed["icd10"] + codes))
         tuss = [(t.code, t.description) for t in body.tuss]
         opme = [(o.description, o.anvisa, o.quantity) for o in body.opme]
-        brands, regime = (), body.regime.strip()
+        brands, regime, template = (), body.regime.strip(), None
         if body.template_id:
             template = next((t for t in need_catalog().load() if t.template_id == body.template_id), None)
             if template is None:
@@ -735,18 +809,29 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                                             m.term, m.manufacturer, m.anvisa, m.tuss_code) for m in s.materials))
                            for s in template.suppliers if s.materials)
             regime = regime or template.regime
+        checks = []
+        if template is not None and template.sbot_entry and sbot_index is not None:
+            entry = sbot_index.get(template.sbot_entry)
+            if entry is not None:
+                checks = [dict(level=f.level, topic=f.topic, message=f.message) for f in check_request(
+                    entry, tuss_codes=[c for c, _ in tuss], icd10=list(codes),
+                    opme=[(d, q) for d, _, q in opme], urgency=body.urgency.value, documents_text=documents_text)]
+        deadline = deadline_for(regime, body.urgency.value, clock().date())
         try:
             details = RequestDetails(tuple(codes), tuple(tuss), tuple(opme), body.laterality.strip(), regime, brands,
-                                     schedule_rows(body.schedule))
+                                     schedule_rows(body.schedule), deadline.text() if deadline else "",
+                                     f"SBOT, Manual de Diretrizes de Codificação, procedimento {template.sbot_entry}"
+                                     if template is not None and template.sbot_entry else "")
         except ValueError as exc:
             bad(str(exc))
-        has_details = bool(codes or tuss or opme or body.laterality or regime or details.schedule)
+        has_details = bool(codes or tuss or opme or body.laterality or regime or details.schedule or details.deadline)
         return {"html": render_coverage_html(draft, legal, context, body.clinical_summary,
                                              details if has_details else None, facts),
                 "markdown": render_markdown(draft) + "\n" + render_legal_markdown(legal),
                 "included": len(draft.references), "excluded": [dict(pmid=e.pmid, reason=e.reason) for e in draft.excluded],
                 "warnings": list(legal.warnings),
-                "requirements": [dict(label=r.label, status=r.status.value, basis=r.basis) for r in legal.requirements]}
+                "requirements": [dict(label=r.label, status=r.status.value, basis=r.basis) for r in legal.requirements],
+                "checks": checks, "deadline": deadline.text() if deadline else ""}
 
     return app
 
