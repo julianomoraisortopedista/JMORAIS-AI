@@ -373,3 +373,150 @@ async function consentForm(client,templateId,procedure,side){
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }
 
+/** @param {number} ms */ const pause=(ms)=>new Promise(r=>setTimeout(r,ms));
+
+/** One-click flow: request + documents -> de-identified extraction -> report in the physician's model -> review.
+ * @param {import('./evidence.js').EvidenceClient} client */
+export function quickPage(client){
+  const root=box('div','page-grid');
+  const ask=box('section','card');
+  ask.append(box('h2','card-title','1. O que você quer solicitar'),
+    box('p','muted','Fale ou escreva: procedimento, lado, fornecedor, hospital, dia e horário. Ou escolha o modelo de cirurgia abaixo. Não diga o nome do paciente aqui.'));
+  const text=textarea('Ex.: Artroplastia total do joelho direito, Zimmer, Hospital Santa Cruz, dia 20/10 às 7h, raqui, reservar UTI');text.rows=3;
+  const picker=templatePicker(client,(t)=>{draft.templateId=t?t.template_id:null;if(t)draft.procedure=t.name;},draft.templateId||'');
+  const side=select([['','Lado —'],['Direito','Direito'],['Esquerdo','Esquerdo'],['Bilateral','Bilateral']]);side.value=draft.laterality;side.onchange=()=>{draft.laterality=side.value;};
+  ask.append(field('Pedido',text),dictation(text),picker,field('Lateralidade',side));
+  const docs=box('section','card');
+  docs.append(box('h2','card-title','2. Documentos do paciente'),
+    box('p','muted','Laudos, exames, relatórios e pedidos anteriores (PDF com texto, Word ou .txt). Nome, CPF e carteirinha são lidos e removidos aqui no seu computador, sem IA.'));
+  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.pdf,.txt,.docx,application/pdf,text/plain';
+  const history=textarea('Opcional: história, exame físico, tratamentos e tempo de evolução (pode ditar).');history.rows=5;
+  const consent=document.createElement('input');consent.type='checkbox';const cl=box('label','chip');cl.append(consent,el('span','Consentimento do paciente registrado para tratamento dos dados (LGPD)'));
+  docs.append(field('Arquivos (até 8)',files),field('História (opcional)',history),dictation(history),cl);
+  const go=button(session.model?'Gerar relatório e pedido':'IA não configurada');go.disabled=!session.model;go.classList.add('btn-wide');
+  const steps=box('ol','steps-list');const status=box('div','status-area');const result=box('div','page-grid');
+  const run=box('section','card');run.append(go,steps,status);
+  root.append(ask,docs,run,result);
+  /** @param {string} label */
+  const step=(label)=>{const li=el('li','… '+label);steps.append(li);return (/** @type {string} */ end='✓')=>{li.textContent=end+' '+label;};};
+  go.onclick=()=>busy(go,async()=>{
+    steps.replaceChildren();status.replaceChildren();result.replaceChildren();
+    try{
+      if(!consent.checked)throw new Error('Registre o consentimento do paciente (LGPD).');
+      const list=Array.from(files.files||[]);
+      if(!list.length&&history.value.trim().length<20)throw new Error('Anexe os documentos ou escreva a história.');
+      if(list.some(f=>f.size>700000))throw new Error('Cada arquivo deve ter até 700 KB.');
+      if(text.value.trim().length>=6){const done=step('Entendendo o pedido');
+        const r=await client.requestParse(text.value);
+        if(r.template_id){draft.templateId=r.template_id;draft.procedure=r.template_name;}else if(r.procedure)draft.procedure=r.procedure;
+        if(r.laterality)draft.laterality=r.laterality;if(r.regime)draft.regime=r.regime;
+        draft.schedule={hospital:r.hospital,date:r.date,time:r.time,duration_minutes:r.duration_minutes,anesthesia:r.anesthesia,icu:r.icu,blood_reserve:r.blood_reserve,supplier:r.supplier,notes:r.notes};
+        done();}
+      if(!draft.procedure&&!draft.templateId)throw new Error('Diga o procedimento ou escolha o modelo de cirurgia.');
+      let done=step('Lendo a identificação nos documentos (no seu computador)');
+      for(const f of list){try{const r=await client.caseScan({name:f.name,content_base64:await base64(f)});
+        for(const [k,v] of Object.entries(r.identifiers||{})){const rec=/** @type {Record<string,string>} */(patient);if(!rec[k]&&typeof v==='string')rec[k]=v;}}catch{/* reported on upload */}}
+      done();
+      if(!patient.name.trim())throw new Error('Não encontrei o nome do paciente nos documentos. Digite-o em "Pedido médico" > Identificação e tente de novo.');
+      done=step('Removendo a identificação e enviando');
+      if(current)await client.caseDelete(current.id).catch(()=>{});
+      let view=await client.caseCreate({history:history.value,identifiers:identifiers(),consent:true});const id=String(view.case_id);
+      for(const f of list)view=await client.caseDocument(id,{name:f.name,content_base64:await base64(f),identifiers:identifiers()});
+      current={id,view};done();
+      done=step('Claude lendo o texto sem identificação');
+      view=await client.caseExtract(id);for(let i=0;i<90&&view.status==='RUNNING';i++){await pause(2000);view=await client.caseGet(id);}
+      if(!view.facts||!view.facts.length)throw new Error(view.error||'Não encontrei fatos clínicos com trecho comprovado nos documentos.');
+      done();
+      done=step('Separando os fatos comprovados e o CID');
+      const icd=(view.icd10_suggestions||[]).map((/** @type {any} */ c)=>c.code).filter((/** @type {string} */ c)=>/^[A-Z]\d{2}(\.\d{1,2})?$/.test(c));
+      view=await client.caseConfirm(id,{fact_ids:view.facts.map((/** @type {any} */ f)=>f.fact_id),edits:{},icd10:icd});current.view=view;done();
+      done=step('Redigindo o relatório no formato do seu modelo');
+      view=await client.caseReport(id,{procedure:draft.procedure,laterality:draft.laterality,template_id:draft.templateId});
+      for(let i=0;i<90&&view.report&&view.report.status==='RUNNING';i++){await pause(2000);view=await client.caseGet(id);}
+      if(!view.report||view.report.status!=='READY')throw new Error((view.report&&view.report.error)||'Falha ao redigir o relatório.');
+      current.view=view;draft.reportSections=view.report.sections.map((/** @type {any} */ sec)=>[sec.title,sec.sentences.map((/** @type {any} */ x)=>x.text).join(' ')]).filter((/** @type {any} */ x)=>x[1]);
+      done();
+      /** @type {any} */ let check=null;
+      if(draft.templateId){done=step('Conferindo com a SBOT e o prazo da ANS');check=await client.caseCheck(id,{template_id:draft.templateId,regime:draft.regime}).catch(()=>null);done();}
+      say(status,'Pronto. Revise o relatório e a solicitação abaixo antes de imprimir.','ok');
+      result.replaceChildren(...quickResult(client,view,check).children);
+    }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
+  });
+  return root;
+}
+
+/** Review screen of the one-click flow. @param {import('./evidence.js').EvidenceClient} client @param {Record<string,any>} view @param {any} check */
+function quickResult(client,view,check){
+  const wrap=box('div','page-grid');
+  const review=box('section','card');
+  review.append(box('h2','card-title','3. Revise e imprima'),
+    box('div','alert alert-warn','Os fatos e o CID sugerido foram aceitos automaticamente para agilizar. Confira o texto abaixo; se algo estiver errado, corrija aqui ou ajuste os fatos em "Pedido médico".'));
+  const ids=box('div','form-grid');
+  /** @type {[keyof typeof patient,string][]} */
+  const idf=[['name','Paciente'],['birth_date','Nascimento'],['cpf','CPF'],['card_number','Carteirinha'],['operadora','Operadora']];
+  for(const [k,l] of idf){const i=input(l,patient[k]);i.oninput=()=>{patient[k]=i.value;};ids.append(field(l,i));}
+  review.append(box('h3','section-title','Identificação (só no seu computador)'),ids);
+  const confirmed=view.confirmed||{};review.append(box('p','muted',`CID-10: ${(confirmed.icd10||[]).join(', ')||'— (informe em Pedido médico)'} · Procedimento: ${[draft.procedure,draft.laterality].filter(Boolean).join(' — ')}`));
+  for(const g of view.report.gaps||[])review.append(box('div','alert alert-warn','Lacuna: '+g));
+  draft.reportSections.forEach((sec,n)=>{const t=textarea('');t.rows=Math.max(3,Math.min(12,Math.ceil(sec[1].length/110)));t.value=sec[1];t.oninput=()=>{draft.reportSections[n]=[sec[0],t.value];};review.append(field(sec[0],t));});
+  wrap.append(review);
+  if(check){const c=box('section','card');c.append(box('h2','card-title','Checagem anti-negativa'));
+    if(!check.codes_confirmed)c.append(box('div','alert alert-warn','Os códigos TUSS deste modelo ainda não foram confirmados por você (Modelos de cirurgia).'));
+    for(const f of check.checks||[])c.append(box('div','alert alert-'+(f.level==='BLOQUEIO'?'error':f.level==='OK'?'ok':'warn'),`${f.level==='BLOQUEIO'?'Corrigir':f.level==='OK'?'OK':'Atenção'} · ${f.topic}: ${f.message}`));
+    if(check.deadline)c.append(box('p','muted',check.deadline));wrap.append(c);}
+  const out=box('section','card');const open=button('Abrir relatório e solicitação'),save=button('Baixar (.html)','ghost'),tcle=button('Termo de consentimento','ghost');
+  const a=box('div','actions');a.append(open,save,tcle);const st=box('div','status-area');out.append(box('p','muted','O documento é montado aqui com os dados do paciente. Imprima ou salve em PDF pelo navegador.'),a,st);
+  const build=async()=>combinedDocument(client,check);
+  open.onclick=()=>busy(open,async()=>{const html=await build();const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('relatorio-e-solicitacao.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);});
+  save.onclick=()=>busy(save,async()=>download('relatorio-e-solicitacao.html',await build(),'text/html'));
+  tcle.onclick=()=>busy(tcle,async()=>{try{const html=await consentForm(client,draft.templateId,draft.procedure,draft.laterality);const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('termo-consentimento.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){say(st,e instanceof Error?e.message:'Falha.');}});
+  wrap.append(out);return wrap;
+}
+
+/** Medical report + surgery and material request, assembled in the browser.
+ * @param {import('./evidence.js').EvidenceClient} client @param {any} check */
+async function combinedDocument(client,check){
+  const [profile,catalog]=await Promise.all([client.profileGet().catch(()=>({})),client.catalog().catch(()=>({templates:[]}))]);
+  const t=(catalog.templates||[]).find((/** @type {any} */ x)=>x.template_id===draft.templateId)||null;
+  const doc=document.implementation.createHTMLDocument('Relatório médico e solicitação');
+  const meta=doc.createElement('meta');meta.setAttribute('charset','utf-8');doc.head.prepend(meta);
+  const style=doc.createElement('style');
+  style.textContent='body{font-family:Georgia,serif;max-width:780px;margin:28px auto;padding:0 16px;color:#111;line-height:1.5;font-size:14px}h1{text-align:center;font-size:17px;letter-spacing:.04em;margin:18px 0}h2{font-size:13.5px;margin:18px 0 4px;text-transform:uppercase}table{border-collapse:collapse;width:100%;margin:4px 0}td,th{padding:3px 6px;vertical-align:top;text-align:left;border-bottom:1px solid #ddd}.ident td:first-child{width:32%;color:#444}.head{border-bottom:2px solid #111;padding-bottom:6px}.small{font-size:12px;color:#444}.sign{margin-top:48px;text-align:center}.draft{border:1px solid #b45309;color:#b45309;padding:6px 10px;font-size:12px}@media print{.draft{display:none}}';
+  doc.head.append(style);
+  /** @param {string} tag @param {string} txt @param {HTMLElement} [parent] */
+  const add=(tag,txt,parent)=>{const e=doc.createElement(tag);e.textContent=txt;(parent||doc.body).append(e);return e;};
+  /** @param {string[][]} rows @param {string[]} [headers] @param {string} [cls] */
+  const table=(rows,headers,cls)=>{const tb=doc.createElement('table');if(cls)tb.className=cls;if(headers){const tr=doc.createElement('tr');for(const h of headers)add('th',h,tr);tb.append(tr);}
+    for(const r of rows){const tr=doc.createElement('tr');for(const c of r)add('td',c,tr);tb.append(tr);}doc.body.append(tb);};
+  add('div','RASCUNHO — revise e assine antes de enviar. Este aviso não aparece na impressão.').className='draft';
+  const head=add('div','');head.className='head';
+  add('strong',profile.name||'',head);head.append(doc.createElement('br'));
+  add('span',[profile.specialty,profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · '),head);
+  const contact=[profile.address,profile.phone,profile.email].filter(Boolean).join(' · ');if(contact){head.append(doc.createElement('br'));add('span',contact,head).className='small';}
+  add('h1','RELATÓRIO MÉDICO E SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO');
+  if(patient.operadora)add('p',`À ${patient.operadora} — Setor de Autorizações`);
+  const confirmed=current&&current.view.confirmed||{};
+  table([['Paciente',patient.name],['Data de nascimento',patient.birth_date],['CPF',patient.cpf],['Carteirinha',patient.card_number],['Operadora / plano',patient.operadora]].filter(r=>r[1]),undefined,'ident');
+  for(const [title,txt] of draft.reportSections){add('h2',title);for(const para of txt.split(/\n+/))if(para.trim())add('p',para.trim());}
+  add('h2','Solicitação');
+  const proc=[draft.procedure||(t&&t.name)||'',draft.laterality?`— ${draft.laterality.toLowerCase()}`:''].filter(Boolean).join(' ');
+  /** @type {string[][]} */ const info=[['Procedimento',proc],['CID-10',(confirmed.icd10||[]).join(', ')],['Caráter','Eletivo'],['Regime',draft.regime||(t&&t.regime)||'']];
+  if(t&&(t.icu_days!=null||t.ward_days!=null))info.push(['Internação prevista',`UTI ${t.icu_days??0} dia(s), quarto ${t.ward_days??0} dia(s)`]);
+  const s=draft.schedule;if(s.hospital)info.push(['Hospital',s.hospital]);
+  if(s.date)info.push(['Data proposta',s.date.split('-').reverse().join('/')+(s.time?` às ${s.time}`:'')]);
+  if(s.anesthesia)info.push(['Anestesia',s.anesthesia]);if(s.icu!==null)info.push(['Reserva de UTI',s.icu?'Sim':'Não']);if(s.blood_reserve!==null)info.push(['Reserva de sangue',s.blood_reserve?'Sim':'Não']);
+  table(info.filter(r=>r[1]),undefined,'ident');
+  if(t&&t.tuss_codes.length){add('p','Códigos (TUSS):');table(t.tuss_codes.map((/** @type {string} */ c)=>[c,t.tuss_terms[c]||'']),['Código','Descrição']);}
+  if(t&&t.opme.length){add('p','Órteses, próteses e materiais especiais (OPME):');table(t.opme.map((/** @type {any} */ i)=>[i.description,String(i.quantity)]),['Material','Qtd.']);}
+  const brands=t?(t.suppliers||[]).filter((/** @type {any} */ x)=>x.label):[];
+  if(brands.length){add('p','Fornecedores indicados, de fabricantes diferentes (CFM 1.956/2010, art. 5º):'+(s.supplier?` preferência: ${s.supplier}.`:''));
+    for(const b of brands){add('p',b.label).style.fontWeight='bold';if(b.materials.length)table(b.materials.map((/** @type {any} */ m)=>[t.opme[m.item_index]?.description||'',`${m.tuss_code} ${m.term}`,m.manufacturer,m.anvisa]),['Item','Material (TUSS 19)','Fabricante','Anvisa']);}}
+  if(t&&t.sbot_entry)add('p',`Codificação conforme SBOT, Manual de Diretrizes de Codificação, procedimento ${t.sbot_entry}.`).className='small';
+  if(check&&check.deadline)add('p',check.deadline).className='small';
+  add('p','Anexos: laudos dos exames e termo de consentimento assinado.');
+  add('p',`${profile.city?profile.city+', ':''}${new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}.`);
+  const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),
+    doc.createTextNode(profile.name||'Médico assistente'),doc.createElement('br'),doc.createTextNode([profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'CRM',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · ')));
+  return '<!doctype html>\n'+doc.documentElement.outerHTML;
+}
+

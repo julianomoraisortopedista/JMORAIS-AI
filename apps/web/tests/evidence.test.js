@@ -48,7 +48,10 @@ test('patient identification only goes to the de-identifying routes, never to th
   const src=await readFile('src/case.js','utf8');
   const documentCall=src.slice(src.indexOf('client.document({'),src.indexOf('});',src.indexOf('client.document({')));
   assert.ok(documentCall.length>20 && !/identifiers|patient\./.test(documentCall));
-  assert.equal((src.match(/identifiers:identifiers\(\)/g)||[]).length,2); // case create + each upload (for removal only)
+  // identifiers are sent only with case create and each upload (for removal), in both the detailed and the quick flows
+  const all=(src.match(/identifiers:identifiers\(\)/g)||[]).length;
+  const allowed=(src.match(/client\.case(Create|Document)\([^;]*?identifiers:identifiers\(\)/g)||[]).length;
+  assert.ok(all>=2 && all===allowed);
   assert.ok(src.includes("doc.querySelectorAll('[data-ident]')"));
 });
 

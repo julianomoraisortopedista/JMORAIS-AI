@@ -40,6 +40,7 @@ export class EvidenceClient {
   /** @param {string} id */ caseGet(id){return this.call('case/'+encodeURIComponent(id));}
   /** @param {string} id @param {Record<string,unknown>} body */ caseConfirm(id,body){return this.call('case/'+encodeURIComponent(id)+'/confirm',body);}
   /** @param {string} id */ caseDelete(id){return this.call('case/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {string} id @param {Record<string,unknown>} body */ caseCheck(id,body){return this.call('case/'+encodeURIComponent(id)+'/check',body);}
   /** @param {string} id @param {Record<string,unknown>} body */ caseReport(id,body){return this.call('case/'+encodeURIComponent(id)+'/report',body);}
   styleGet(){return this.call('report-style');}
   /** @param {Record<string,unknown>} body */ stylePreview(body){return this.call('report-style/preview',body);}

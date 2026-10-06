@@ -192,3 +192,17 @@ def test_endpoints(tmp_path):
     assert "imediato" in result["deadline"] and "SBOT, Manual de Diretrizes de Codificação, procedimento 9.1" in result["html"]
     no_sbot = TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), token=TOKEN), base_url="http://127.0.0.1:8770")
     assert no_sbot.get("/api/sbot/search?q=joelho", headers=H).status_code == 503
+
+
+def test_case_check_endpoint(tmp_path):
+    catalog = CatalogStore(tmp_path / "procedures.json")
+    app = create_app(pubmed=SearchablePubMed(), crossref=Crossref(), clock=lambda: NOW, token=TOKEN, catalog=catalog,
+                     tuss_index=Tuss(), sbot_index=Index(tmp_path))
+    c = TestClient(app, base_url="http://127.0.0.1:8770")
+    created = c.post("/api/catalog/from-sbot", headers=H, json={"entry_id": "9.1"}).json()
+    case = c.post("/api/case", headers=H, json={"history": "RX do joelho com artrose. RM: condropatia.",
+                                                "identifiers": {"name": "Fulano Tal"}, "consent": True}).json()
+    out = c.post(f"/api/case/{case['case_id']}/check", headers=H, json={"template_id": created["template_id"]}).json()
+    assert out["sbot_entry"] == "9.1" and out["codes_confirmed"] is False and "21 dias úteis" in out["deadline"]
+    assert any(f["topic"] == "Exames" and f["level"] == "OK" for f in out["checks"])
+    assert c.post(f"/api/case/{case['case_id']}/check", headers=H, json={"template_id": "nope"}).status_code == 404

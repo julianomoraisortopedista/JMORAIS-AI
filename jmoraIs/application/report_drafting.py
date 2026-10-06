@@ -95,7 +95,7 @@ def report_prompt() -> PromptTemplate:
                           INSTRUCTIONS, ("CanonicalStructuredDTO",), "medical-report-output-v1", POLICY)
 
 
-MAX_STYLE_CHARS = 6000
+MAX_STYLE_CHARS = 14000
 _NUMBER = re.compile(r"\d+(?:[.,]\d+)?")
 
 

@@ -17,7 +17,7 @@ from typing import Optional
 
 from jmoraIs.application.deidentification import DeidentifiedText, PatientIdentifiers, deidentify, detect_identifiers
 
-MAX_STYLE_CHARS = 6000
+MAX_STYLE_CHARS = 14000
 
 
 class ReportStyleRejected(ValueError):

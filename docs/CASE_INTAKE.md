@@ -83,3 +83,16 @@ cannot pass the grounding check.
 name, birth date, CPF, card number and insurer from the identification card, plus date and
 signature line. The request document also carries birth date and CPF placeholders filled
 locally. None of these values reach the server's AI calls.
+
+## Pedido rápido (one click)
+
+The "Pedido rápido" page chains: dictated request -> catalog template, laterality and
+scheduling; identifiers read locally from the files; de-identified upload; fact extraction;
+all quote-grounded facts and the AI's ICD-10 suggestions accepted (the review screen says so
+and lets the physician edit); report drafted in the physician's saved model format;
+`POST /api/case/{id}/check` (SBOT findings and ANS deadline). The review screen assembles,
+in the browser, the combined "Relatório médico e solicitação de procedimento cirúrgico":
+physician header from the profile, patient identification, report sections, request table
+(procedure and side, ICD-10, character, regime and stay, hospital and date, anesthesia),
+TUSS codes, OPME kit, suppliers per CFM 1.956/2010, SBOT reference, deadline, signature.
+The report model limit is 14,000 characters.

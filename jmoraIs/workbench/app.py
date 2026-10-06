@@ -100,7 +100,7 @@ class DecideIn(BaseModel):
 
 
 class StyleIn(BaseModel):
-    text: str = Field(min_length=40, max_length=8000)
+    text: str = Field(min_length=40, max_length=16000)
     confirmed: bool
 
 
@@ -191,6 +191,12 @@ class CaseDocumentIn(BaseModel):
 
 class SbotTemplateIn(BaseModel):
     entry_id: str = Field(pattern=r"^\d{1,2}\.\d{1,3}$")
+
+
+class CheckIn(BaseModel):
+    template_id: str = Field(max_length=40)
+    urgency: Urgency = Urgency.ELECTIVE
+    regime: str = Field("", max_length=60)
 
 
 class ScanIn(BaseModel):
@@ -495,6 +501,25 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 case["report"] = {"status": "ERROR", "error": f"Falha ao consultar o modelo ({type(exc).__name__})."}
         __import__("threading").Thread(target=run, daemon=True).start()
         return case_view(case_id, case)
+
+    @app.post("/api/case/{case_id}/check")
+    def case_check(case_id: str, body: CheckIn, request: Request):
+        """SBOT anti-denial findings and ANS deadline for this case and template (no document generated)."""
+        case = case_of(request, case_id)
+        template = next((t for t in need_catalog().load() if t.template_id == body.template_id), None)
+        if template is None:
+            bad("Modelo não encontrado.", 404)
+        checks = []
+        entry = sbot_index.get(template.sbot_entry) if (sbot_index is not None and template.sbot_entry) else None
+        if entry is not None:
+            text = " ".join([case["history"].text] + [f"{n} {d.text}" for d, n in case["documents"]])
+            confirmed = case.get("confirmed") or {}
+            checks = [dict(level=f.level, topic=f.topic, message=f.message) for f in check_request(
+                entry, tuss_codes=list(template.tuss_codes), icd10=list(confirmed.get("icd10", [])),
+                opme=[(i.description, i.quantity) for i in template.opme], urgency=body.urgency.value, documents_text=text)]
+        deadline = deadline_for(body.regime or template.regime, body.urgency.value, clock().date())
+        return {"checks": checks, "deadline": deadline.text() if deadline else "", "sbot_entry": template.sbot_entry,
+                "codes_confirmed": template.codes_confirmed}
 
     @app.delete("/api/case/{case_id}")
     def case_delete(case_id: str, request: Request):
