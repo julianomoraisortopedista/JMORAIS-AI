@@ -117,3 +117,47 @@ def _assert_clean(text: str, ids: PatientIdentifiers, words: list[str]) -> None:
             raise DeidentificationRejected("a patient name part survived de-identification")
     if ids.email.strip() and _fold(ids.email.strip()) in folded:
         raise DeidentificationRejected("e-mail survived de-identification")
+
+
+_DETECT = {  # field -> labelled pattern; the value follows the label
+    "name": dict(_LABELLED)["NOME"],
+    "card_number": dict(_LABELLED)["CARTEIRINHA"],
+    "birth_date": dict(_LABELLED)["NASCIMENTO"],
+    "address": dict(_LABELLED)["ENDERECO"],
+    "cpf": r"(?im)(?P<label>\bCPF\s*(?:n[ºo°.]*)?\s*[:\-]?)\s*\d{3}\.?\d{3}\.?\d{3}\s?-?\s?\d{2}\b",
+    "rg": r"(?im)(?P<label>\bRG\s*(?:n[ºo°.]*)?\s*[:\-]?)\s*[\dXx.\-]{5,14}",
+}
+
+
+def _cpf_valid(value: str) -> bool:
+    d = [int(c) for c in _digits(value)]
+    if len(d) != 11 or len(set(d)) == 1:
+        return False
+    for n in (9, 10):
+        if (sum(d[i] * (n + 1 - i) for i in range(n)) * 10 % 11) % 10 != d[n]:
+            return False
+    return True
+
+
+def detect_identifiers(text: str) -> dict[str, str]:
+    """Find the patient's identifiers in a document so the physician need not type them.
+
+    Deterministic, local, no AI. Only the first labelled value of each field is taken;
+    the physician confirms every value before it is used to de-identify the case.
+    """
+    found: dict[str, str] = {}
+    for key, pattern in _DETECT.items():
+        for m in re.finditer(pattern, text or ""):
+            value = " ".join(m.group(0)[m.end("label") - m.start():].split()).strip(" .,;:-")
+            if key == "name" and not re.fullmatch(r"[^\W\d_]+(?:[ '\-][^\W\d_]+)+", value):
+                continue
+            if key == "cpf" and not _cpf_valid(value):
+                continue
+            if len(value) >= 3:
+                found[key] = value[:200]
+                break
+    for key, pattern in (("email", dict(_PATTERNS)["EMAIL"]), ("phone", dict(_PATTERNS)["TELEFONE"])):
+        m = re.search(pattern, text or "")
+        if m:
+            found[key] = m.group(0).strip()
+    return found

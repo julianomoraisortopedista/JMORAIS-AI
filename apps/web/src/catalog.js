@@ -140,12 +140,12 @@ function supplierBox(client,t,s,sn,rerender){
 }
 
 /** Template picker for the medical request. @param {import('./evidence.js').EvidenceClient} client @param {(t:Template|null)=>void} onPick */
-export function templatePicker(client,onPick){
+export function templatePicker(client,onPick,initial=''){
   const pick=select([['','Sem modelo']]);const info=box('div','status-area');
   /** @type {Template[]} */
   let templates=[];
-  client.catalog().then((/** @type {any} */ r)=>{templates=r.templates;for(const t of templates){const o=el('option',t.name+(t.codes_confirmed?'':' (códigos a confirmar)'));o.setAttribute('value',t.template_id);pick.append(o);}}).catch(()=>{info.replaceChildren(box('span','muted','Base de modelos indisponível.'));});
-  pick.onchange=()=>{const t=templates.find(x=>x.template_id===pick.value)||null;onPick(t);
-    info.replaceChildren();if(t)for(const w of t.warnings||[])info.append(box('div','alert alert-warn',w));};
+  client.catalog().then((/** @type {any} */ r)=>{templates=r.templates;for(const t of templates){const o=el('option',t.name+(t.codes_confirmed?'':' (códigos a confirmar)'));o.setAttribute('value',t.template_id);pick.append(o);}if(initial&&templates.some(x=>x.template_id===initial)){pick.value=initial;show();}}).catch(()=>{info.replaceChildren(box('span','muted','Base de modelos indisponível.'));});
+  const show=()=>{const t=templates.find(x=>x.template_id===pick.value)||null;info.replaceChildren();if(t)for(const w of t.warnings||[])info.append(box('div','alert alert-warn',w));return t;};
+  pick.onchange=()=>onPick(show());
   const wrap=box('div','');wrap.append(field('Modelo de cirurgia',pick,'preenche procedimento, TUSS, OPME e as três marcas'),info);return wrap;
 }

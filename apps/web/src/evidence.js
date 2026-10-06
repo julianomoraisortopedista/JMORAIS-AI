@@ -35,6 +35,7 @@ export class EvidenceClient {
   /** @param {Record<string,unknown>} body */ document(body){return this.call('document',body);}
   /** @param {Record<string,unknown>} body */ caseCreate(body){return this.call('case',body);}
   /** @param {string} id @param {Record<string,unknown>} body */ caseDocument(id,body){return this.call('case/'+encodeURIComponent(id)+'/document',body);}
+  /** @param {Record<string,unknown>} body */ caseScan(body){return this.call('case/scan',body);}
   /** @param {string} id */ caseExtract(id){return this.call('case/'+encodeURIComponent(id)+'/extract',{});}
   /** @param {string} id */ caseGet(id){return this.call('case/'+encodeURIComponent(id));}
   /** @param {string} id @param {Record<string,unknown>} body */ caseConfirm(id,body){return this.call('case/'+encodeURIComponent(id)+'/confirm',body);}

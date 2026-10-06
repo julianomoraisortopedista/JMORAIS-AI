@@ -31,7 +31,7 @@ from jmoraIs.application.scientific_verification import AuthoritativeReconciliat
 from jmoraIs.application.case_intake import (
     CATEGORY_PT, MAX_DOCUMENT_CHARS, CaseDocument, CaseIntakeRejected, extract_text, prepare_documents,
 )
-from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify
+from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify, detect_identifiers
 from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.report_drafting import ReportDraftRejected
 from jmoraIs.application.surgical_catalog import (
@@ -159,6 +159,11 @@ class CaseDocumentIn(BaseModel):
     name: str = Field(max_length=200)
     content_base64: str = Field(max_length=MAX_DOCUMENT_B64)
     identifiers: IdentifiersIn
+
+
+class ScanIn(BaseModel):
+    name: str = Field(max_length=200)
+    content_base64: str = Field(max_length=MAX_DOCUMENT_B64)
 
 
 class ReportIn(BaseModel):
@@ -333,6 +338,17 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         case_id = "case-" + secrets.token_hex(8)
         state_of(request).cases[case_id] = {"history": history, "documents": [], "job": {"status": "NEW"}}
         return case_view(case_id, state_of(request).cases[case_id])
+
+    @app.post("/api/case/scan")
+    def case_scan(body: ScanIn):
+        """Read identifiers from a document so the page can pre-fill them. Local, no AI, nothing stored."""
+        import base64
+        try:
+            content = base64.b64decode(body.content_base64, validate=True)
+            text = extract_text(body.name, content)[:MAX_DOCUMENT_CHARS]
+        except (ValueError, CaseIntakeRejected):
+            bad("Não foi possível ler este arquivo (envie PDF com texto ou .txt).")
+        return {"identifiers": detect_identifiers(text)}
 
     @app.post("/api/case/{case_id}/document")
     def case_document(case_id: str, body: CaseDocumentIn, request: Request):

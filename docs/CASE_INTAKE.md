@@ -6,6 +6,10 @@ Platform page **Pedido médico** (http://localhost/ after login).
    lives only in the browser. It is sent with each upload solely so the server can
    remove it, is never stored, and fills the printed header client-side
    (`data-ident` placeholders) — the document request itself never carries it.
+   *Pre-fill*: when files are chosen, `POST /api/case/scan` reads labelled
+   identifiers (name, CPF with valid checksum, card, birth date, RG, address, e-mail,
+   phone) with `detect_identifiers` — deterministic, local, no AI, nothing stored — and
+   the page fills only empty fields for the physician to confirm.
 2. **Documents**: text PDFs or .txt (one per request, <= 700 KB, inside the API's 1 MB
    body limit; up to 8). Images are never sent to AI; scanned PDFs without text are
    refused with guidance. History is free text.
@@ -41,3 +45,13 @@ Anthropic's API does not train on API data; default retention up to 30 days (zer
 retention requires an agreement with Anthropic). Residual risk: names not supplied and
 not on a labelled line (e.g. a relative mentioned in free text) can remain — review the
 preview before extraction.
+
+## One-click flow
+
+With Claude configured, "Remover identificação e ler com o Claude" creates the case,
+uploads and de-identifies each document, and starts fact extraction in one action.
+"Confirmar e redigir o relatório" confirms the facts and starts the report draft for
+the surgery template and laterality chosen in the documents card. The physician still
+reviews facts, report and request; identification is filled into the final request only
+in the browser, after that review.
+

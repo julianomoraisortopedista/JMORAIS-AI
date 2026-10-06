@@ -9,17 +9,18 @@ const REQUIREMENT=/** @type {Record<string,string>} */ ({ATENDIDO:'Atendido',PEN
 const patient={name:'',cpf:'',rg:'',card_number:'',birth_date:'',phone:'',email:'',address:'',operadora:''};
 /** @type {{id:string,view:Record<string,any>}|null} */ let current=null;
 /** Request fields shared with the report card; the edited report text goes into the request. */
-const draft={procedure:'',laterality:'',templateId:/** @type {string|null} */(null),reportText:''};
-export function clearCase(){for(const k of Object.keys(patient))/** @type {Record<string,string>} */(patient)[k]='';current=null;draft.procedure='';draft.laterality='';draft.templateId=null;draft.reportText='';}
+const draft={procedure:'',laterality:'',templateId:/** @type {string|null} */(null),reportText:'',autoReport:false};
+/** Inputs of the identification card, so values read from the documents can fill them. */
+const identityInputs=/** @type {Record<string,HTMLInputElement>} */ ({});
+export function clearCase(){for(const k of Object.keys(patient))/** @type {Record<string,string>} */(patient)[k]='';current=null;draft.procedure='';draft.laterality='';draft.templateId=null;draft.reportText='';draft.autoReport=false;}
 function identifiers(){const {operadora,...ids}=patient;return ids;}
 
 /** @param {File} file @returns {Promise<string>} */
 async function base64(file){const bytes=new Uint8Array(await file.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(bin);}
 
-/** @param {import('./evidence.js').EvidenceClient} client */
-export function casePage(client){
-  const root=box('div','page-grid');
-  root.append(identityCard(),documentsCard(client,root));
+/** Renders the page; pass the live root to re-render it in place. @param {import('./evidence.js').EvidenceClient} client @param {HTMLElement} [root] */
+export function casePage(client,root=box('div','page-grid')){
+  root.replaceChildren(identityCard(),documentsCard(client,root));
   if(current)root.append(factsCard(client,root),reportCard(client),requestCard(client));
   return root;
 }
@@ -31,7 +32,7 @@ function identityCard(){
   const grid=box('div','form-grid');
   /** @type {[keyof typeof patient,string,string][]} */
   const fields=[['name','Nome completo',''],['cpf','CPF',''],['rg','RG',''],['card_number','Carteirinha',''],['operadora','Operadora / plano',''],['birth_date','Nascimento','dd/mm/aaaa'],['phone','Telefone',''],['email','E-mail',''],['address','Endereço','']];
-  for(const [key,label,hint] of fields){const i=input(hint,patient[key]);i.autocomplete='off';i.oninput=()=>{patient[key]=i.value;};grid.append(field(label,i));}
+  for(const [key,label,hint] of fields){const i=input(hint,patient[key]);i.autocomplete='off';i.oninput=()=>{patient[key]=i.value;};identityInputs[key]=i;grid.append(field(label,i));}
   card.append(grid);return card;
 }
 
@@ -39,14 +40,27 @@ function identityCard(){
 function documentsCard(client,root){
   const card=box('section','card');
   card.append(box('h2','card-title','Documentos e história'),
-    box('p','muted','Envie laudos em PDF (com texto) ou .txt — ressonância, raio-x, tomografia, exames. As imagens em si não são enviadas à IA. Escreva a história resumida abaixo.'));
+    box('p','muted','Envie laudos em PDF (com texto) ou .txt — ressonância, raio-x, tomografia, exames. Ao escolher os arquivos, nome, CPF e carteirinha são lidos aqui no seu computador (sem IA) e preenchem a identificação acima; confira. As imagens em si não são enviadas à IA.'));
+  const picker=templatePicker(client,(t)=>{draft.templateId=t?t.template_id:null;if(t)draft.procedure=t.name;},draft.templateId||'');
+  const side=select([['','—'],['Direito','Direito'],['Esquerdo','Esquerdo'],['Bilateral','Bilateral']]);side.value=draft.laterality;side.onchange=()=>{draft.laterality=side.value;};
   const history=textarea('História resumida: queixa, tempo de evolução, tratamentos realizados e por quanto tempo, exame físico, escalas (EVA, KOOS…), indicação.');history.rows=7;
   const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.pdf,.txt,application/pdf,text/plain';
   const consent=document.createElement('input');consent.type='checkbox';
   const consentLabel=box('label','chip');consentLabel.append(consent,el('span','Consentimento do paciente registrado para tratamento dos dados (LGPD)'));
-  const go=button('Remover identificação e enviar');const status=box('div','status-area');const preview=box('div','');
+  const go=button(session.model?'Remover identificação e ler com o Claude':'Remover identificação e enviar');const status=box('div','status-area');const preview=box('div','');
+  const found=box('div','status-area');
+  files.onchange=async()=>{
+    /** @type {Set<string>} */ const filled=new Set();
+    for(const f of Array.from(files.files||[])){
+      if(f.size>700000)continue;
+      try{const r=await client.caseScan({name:f.name,content_base64:await base64(f)});
+        for(const [k,v] of Object.entries(r.identifiers||{})){const box_=identityInputs[k];if(box_&&!box_.value.trim()&&typeof v==='string'){box_.value=v;/** @type {Record<string,string>} */(patient)[k]=v;filled.add(k);}}
+      }catch{/* unreadable file: reported when sending */}
+    }
+    say(found,filled.size?'Identificação lida dos documentos (no seu computador, sem IA). Confira os campos acima antes de enviar.':'Nenhuma identificação encontrada nos arquivos. Preencha ao menos o nome acima.',filled.size?'ok':'info');
+  };
   const actions=box('div','actions');actions.append(go);
-  card.append(field('História resumida',history),dictation(history),field('Laudos (PDF ou .txt, até 8)',files),consentLabel,actions,status,preview);
+  card.append(picker,field('Lateralidade',side),field('História resumida',history),dictation(history),field('Laudos (PDF ou .txt, até 8)',files),found,consentLabel,actions,status,preview);
   if(current)renderPreview(preview,current.view);
   go.onclick=()=>busy(go,async()=>{
     if(!patient.name.trim()){say(status,'Preencha ao menos o nome do paciente, para que ele seja removido dos textos.');return;}
@@ -61,8 +75,13 @@ function documentsCard(client,root){
         view=await client.caseDocument(id,{name:f.name,content_base64:await base64(f),identifiers:identifiers()});
       }
       current={id,view};files.value='';
-      say(status,'Identificação removida. Confira o texto abaixo antes de pedir a leitura da IA.','ok');
-      root.replaceChildren(...casePage(client).children);
+      if(session.model){
+        say(status,'Identificação removida. O Claude está lendo o texto sem identificação…','info');
+        view=await client.caseExtract(id);
+        for(let i=0;i<90&&view.status==='RUNNING';i++){await new Promise(r=>setTimeout(r,2000));view=await client.caseGet(id);}
+        current.view=view;
+      }
+      casePage(client,root);
     }catch(e){say(status,e instanceof Error?e.message:'Falha no envio.');}
   });
   return card;
@@ -105,7 +124,7 @@ function factsCard(client,root){
     for(const c of v.icd10_suggestions||[]){const b=document.createElement('input');b.type='checkbox';b.value=c.code;codeBoxes.push(b);
       const l=box('label','chip');l.append(b,el('span',`${c.code} — ${c.description}`));codes.append(l);}
     const manual=input('Outros CID-10, separados por vírgula (ex.: M17.1)');
-    const confirm=button('Confirmar fatos e CID');const done=box('div','status-area');const a2=box('div','actions');a2.append(confirm);
+    const confirm=button(session.model?'Confirmar e redigir o relatório':'Confirmar fatos e CID');const done=box('div','status-area');const a2=box('div','actions');a2.append(confirm);
     list.append(box('h3','section-title','CID-10 (sugestões da IA — marque só os que você confirma)'),codes,field('CID-10 adicionais',manual),a2,done);
     if(v.confirmed)say(done,`Confirmado: ${v.confirmed.facts.length} fato(s), CID ${v.confirmed.icd10.join(', ')||'—'}.`,'ok');
     confirm.onclick=()=>busy(confirm,async()=>{
@@ -115,6 +134,7 @@ function factsCard(client,root){
         const icd10=[...codeBoxes.filter(b=>b.checked).map(b=>b.value),...manual.value.split(',').map(x=>x.trim()).filter(Boolean)];
         const nv=await client.caseConfirm(String(current?.id),{fact_ids:rows.filter(r=>r.check.checked).map(r=>r.id),edits,icd10});
         if(current)current.view=nv;say(done,`Confirmado: ${nv.confirmed.facts.length} fato(s), CID ${nv.confirmed.icd10.join(', ')||'—'}.`,'ok');
+        if(session.model){draft.autoReport=true;casePage(client,root);}
       }catch(e){say(done,e instanceof Error?e.message:'Falha.');}
     });
   };
@@ -127,13 +147,13 @@ function factsCard(client,root){
       current.view=v;draw(v);
     }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
   });
-  void root;return card;
+  return card;
 }
 
 /** @param {import('./evidence.js').EvidenceClient} client */
 function reportCard(client){
   const card=box('section','card');
-  card.append(box('h2','card-title','Relatório médico'),box('p','muted','O Claude redige o relatório usando só os fatos que você confirmou. Cada frase é ligada aos fatos de origem, números que não estão nos fatos são descartados e o que faltar vira lacuna — nada é inventado. Escolha o procedimento ou o modelo no quadro "Pedido médico" abaixo antes de redigir.'));
+  card.append(box('h2','card-title','Relatório médico'),box('p','muted','O Claude redige o relatório usando só os fatos que você confirmou. Cada frase é ligada aos fatos de origem, números que não estão nos fatos são descartados e o que faltar vira lacuna — nada é inventado. O modelo de cirurgia escolhido em "Documentos e história" define o procedimento e o OPME.'));
   const go=button(session.model?'Redigir relatório com o Claude':'IA não configurada');go.disabled=!session.model;
   const status=box('div','status-area');const body=box('div','');const a=box('div','actions');a.append(go);card.append(a,status,body);
   /** @type {HTMLTextAreaElement[]} */
@@ -157,7 +177,7 @@ function reportCard(client){
     sync();
   };
   const existing=current&&current.view.report;if(existing)render(existing);
-  go.onclick=()=>busy(go,async()=>{
+  go.onclick=()=>busy(go,async()=>{draft.autoReport=false;
     if(!current){return;}
     if(!current.view.confirmed){say(status,'Confirme os fatos clínicos antes.');return;}
     try{
@@ -166,6 +186,7 @@ function reportCard(client){
       current.view=v;render(v.report);
     }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
   });
+  if(draft.autoReport&&session.model)queueMicrotask(()=>go.click());
   return card;
 }
 
@@ -182,7 +203,7 @@ function repeater(container,labels){
 function requestCard(client){
   const card=box('section','card');
   card.append(box('h2','card-title','Pedido médico'),box('p','muted','Códigos e materiais são informados por você. A fundamentação científica usa as decisões da página Evidências para a mesma afirmação.'));
-  const procedure=input('Artroplastia total do joelho');const laterality=select([['','—'],['Direito','Direito'],['Esquerdo','Esquerdo'],['Bilateral','Bilateral']]);
+  const procedure=input('Artroplastia total do joelho');const laterality=select([['','—'],['Direito','Direito'],['Esquerdo','Esquerdo'],['Bilateral','Bilateral']]);laterality.value=draft.laterality;
   const regime=select([['Internação','Internação'],['Ambulatorial','Ambulatorial'],['Hospital-dia','Hospital-dia']]);
   const rol=select([['NAO_INFORMADO','Não sei / verificar'],['SIM','Sim'],['NAO','Não']]);const urgency=select([['ELETIVA','Eletivo'],['URGENCIA','Urgência'],['EMERGENCIA','Emergência']]);
   const ans=select([['NAO_INFORMADO','Não sei'],['SEM_ANALISE','Nunca analisado'],['NEGADA','Incorporação negada'],['PENDENTE','Análise pendente']]);
@@ -192,8 +213,8 @@ function requestCard(client){
   const grid=box('div','form-grid');grid.append(field('Procedimento',procedure),field('Lateralidade',laterality),field('Regime',regime),field('Consta do Rol da ANS?',rol),field('Caráter',urgency),field('Situação na ANS',ans),field('Médico assistente (CRM)',crm),field('Pedido prévio à operadora',prior),field('Plano de autogestão',self));
   const tussBox=box('div','');const tuss=repeater(tussBox,['Código TUSS (8 dígitos)','Descrição']);
   const opmeBox=box('div','');const opme=repeater(opmeBox,['Material (OPME)','Registro Anvisa','Quantidade']);
-  /** @type {string|null} */ let templateId=null;
-  const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;draft.templateId=templateId;if(t){procedure.value=t.name;draft.procedure=t.name;regime.value=t.regime||regime.value;}});
+  /** @type {string|null} */ let templateId=draft.templateId;
+  const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;draft.templateId=templateId;if(t){procedure.value=t.name;draft.procedure=t.name;regime.value=t.regime||regime.value;}},draft.templateId||'');
   procedure.oninput=()=>{draft.procedure=procedure.value;};laterality.onchange=()=>{draft.laterality=laterality.value;};
   if(draft.procedure)procedure.value=draft.procedure;
   card.append(picker,field('Procedimento solicitado',procedure),grid,box('div','field-label','TUSS'),tussBox,box('div','field-label','OPME'),opmeBox,field('Alternativas do Rol',alt),dictation(alt),field('Texto clínico adicional',summary),dictation(summary));

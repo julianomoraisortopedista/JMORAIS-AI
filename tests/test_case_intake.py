@@ -153,3 +153,28 @@ def test_extraction_requires_configured_model():
     c = TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), token=TOKEN), base_url="http://127.0.0.1:8770")
     case = c.post("/api/case", headers=H, json={"history": "dor", "identifiers": {"name": "Fulano"}, "consent": True}).json()
     assert c.post(f"/api/case/{case['case_id']}/extract", headers=H).status_code == 503
+
+
+def test_identifiers_are_detected_locally_from_labelled_lines():
+    from jmoraIs.application.deidentification import detect_identifiers
+    found = detect_identifiers(LAUDO)
+    assert found["name"] == "JOSÉ CARLOS DA SILVA" and found["birth_date"] == "03/04/1962"
+    assert found["cpf"] == "12345678909" and found["card_number"].endswith("456789012345-6")
+    assert found["email"] == "jose@exemplo.com" and found["phone"] == "(11) 98765-4321"
+    # invalid CPF checksum, non-name values and clinical text are not taken as identifiers
+    assert detect_identifiers("Nome: 123\nCPF: 111.111.111-11\nCondropatia grau IV.") == {}
+    # detected values, once confirmed, de-identify the document completely
+    ids = PatientIdentifiers(name=found["name"], cpf=found["cpf"], card_number=found["card_number"])
+    assert "SILVA" not in deidentify(LAUDO, ids).text
+
+
+def test_scan_endpoint_reads_identifiers_without_ai_or_storage():
+    def no_ai():
+        raise AssertionError("scan must not call the model")
+    c = TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), token=TOKEN, resolve_case_extractor=no_ai),
+                   base_url="http://127.0.0.1:8770")
+    doc = {"name": "laudo.txt", "content_base64": base64.b64encode(LAUDO.encode()).decode()}
+    assert c.post("/api/case/scan", json=doc).status_code in (401, 403)
+    found = c.post("/api/case/scan", headers=H, json=doc).json()["identifiers"]
+    assert found["name"] == "JOSÉ CARLOS DA SILVA"
+    assert c.post("/api/case/scan", headers=H, json={**doc, "name": "rx.jpg"}).status_code == 400
