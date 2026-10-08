@@ -61,3 +61,13 @@ The standalone workbench (`make workbench`, http://127.0.0.1:8770/) remains avai
 Browser login never worked: `auth.js`/`client.js` stored `fetch` as an instance method,
 which browsers reject with "Illegal invocation". Defaults now wrap `fetch`, and a test
 forbids the unbound pattern. Verified with a real browser login against Keycloak.
+
+## Keeping the local platform reachable
+
+`make local-pilot-up` and `make local-pilot-repair` check that http://127.0.0.1/ answers through
+the host port and restart or recreate the frontend when Docker Desktop keeps the port bound but
+stops forwarding it. `make local-pilot-watchdog` installs a macOS launch agent
+(`com.jmorais.pilot-watchdog`) that runs `deploy/local/watchdog.sh` every 5 minutes: when Docker is
+running and the page does not answer, it runs the repair (log:
+`~/.local/share/jmorais-local-pilot/watchdog.log`). It never starts Docker by itself.
+`make local-pilot-watchdog-off` removes it.

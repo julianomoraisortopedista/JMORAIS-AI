@@ -69,6 +69,12 @@ local-pilot-proof:
 # Bring every service up and make sure http://localhost/ answers through the host port (repairs the web front).
 local-pilot-repair:
 	@$(VENV_PYTHON) -m deploy.local.control repair
+# macOS: check http://localhost every 5 minutes and repair it automatically (uninstall: local-pilot-watchdog-off).
+.PHONY: local-pilot-watchdog local-pilot-watchdog-off
+local-pilot-watchdog:
+	@$(VENV_PYTHON) -m deploy.local.watchdog_install
+local-pilot-watchdog-off:
+	@$(VENV_PYTHON) -m deploy.local.watchdog_install uninstall
 
 .PHONY: evidence-search
 # Read-only PubMed + Crossref discovery; candidates only, never patient data. Usage: make evidence-search Q="..."
