@@ -268,7 +268,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                resolve_request_parser: Optional[Callable[[], Optional[Callable]]] = None,
                sbot_index=None, practice: Optional[PracticeStore] = None,
                appeal_library: Optional[AppealLibrary] = None,
-               resolve_appeal_writer: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
+               resolve_appeal_writer: Optional[Callable[[], Optional[Callable]]] = None,
+               finance=None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -786,6 +787,10 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         if job is None:
             bad("Contestação não encontrada.", 404)
         return dict(job, job_id=job_id)
+
+    if finance is not None:  # practice-finance domain, separate store and routes
+        from jmoraIs.workbench.finance_api import mount_finance
+        mount_finance(app, finance, clock)
 
     @app.get("/api/letterhead")
     def letterhead_get():

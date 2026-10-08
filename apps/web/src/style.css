@@ -105,3 +105,10 @@ ol.timeline{list-style:none;padding:0;display:grid;gap:12px}ol.timeline li{borde
 @media print{.sidebar,.topbar{display:none}.layout{grid-template-columns:1fr}}
 details{border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-top:8px}details summary{cursor:pointer;font-weight:600}
 .dictation{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px}.dictation .btn{padding:7px 14px}.is-recording{background:color-mix(in srgb,var(--bad) 12%,transparent);color:var(--bad);border-color:var(--bad);animation:pulse 1.2s infinite}@keyframes pulse{50%{opacity:.6}}
+
+/* Finance tables */
+.table-wrap{overflow-x:auto;margin:8px 0}
+.data-table{width:100%;border-collapse:collapse;font-size:13px}
+.data-table th{text-align:left;font-weight:600;color:var(--muted,#64748b);border-bottom:1px solid var(--line,#e2e8f0);padding:6px 8px;white-space:nowrap}
+.data-table td{border-bottom:1px solid var(--line,#e2e8f0);padding:6px 8px;vertical-align:middle}
+.data-table tr:hover td{background:var(--hover,rgba(15,61,94,.04))}

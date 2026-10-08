@@ -52,6 +52,19 @@ export class EvidenceClient {
   /** @param {string} id */ catalogFromSbot(id){return this.call('catalog/from-sbot',{entry_id:id});}
   profileGet(){return this.call('profile');}
   /** @param {Record<string,unknown>} p */ profileSave(p){return this.call('profile',p,'PUT');}
+  financePanel(){return this.call('finance/panel');}
+  financeSurgeries(){return this.call('finance/surgeries');}
+  /** @param {Record<string,unknown>} s */ financeSurgerySave(s){return this.call('finance/surgeries',s,'PUT');}
+  /** @param {string} id */ financeSurgeryDelete(id){return this.call('finance/surgeries/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {Record<string,unknown>} body */ financeImportSurgeries(body){return this.call('finance/import/surgeries',body);}
+  financeInvoices(){return this.call('finance/invoices');}
+  /** @param {Record<string,unknown>} body */ financeImportInvoices(body){return this.call('finance/import/invoices',body);}
+  /** @param {string} id */ financeInvoiceDelete(id){return this.call('finance/invoices/'+encodeURIComponent(id),undefined,'DELETE');}
+  financePayments(){return this.call('finance/payments');}
+  /** @param {Record<string,unknown>} body */ financeImportPayments(body){return this.call('finance/import/payments',body);}
+  /** @param {string} id */ financePaymentDelete(id){return this.call('finance/payments/'+encodeURIComponent(id),undefined,'DELETE');}
+  financeSuggestions(){return this.call('finance/suggestions');}
+  /** @param {Record<string,unknown>} body */ financeLink(body){return this.call('finance/link',body);}
   appeals(){return this.call('appeals');}
   /** @param {Record<string,unknown>} body */ appealPreview(body){return this.call('appeals/preview',body);}
   /** @param {Record<string,unknown>} body */ appealSave(body){return this.call('appeals',body);}

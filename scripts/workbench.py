@@ -7,6 +7,7 @@ import argparse
 import uvicorn
 
 from jmoraIs.application.appeal_library import AppealLibrary
+from jmoraIs.practice_finance.store import FinanceStore
 from jmoraIs.application.practice_documents import PracticeStore
 from jmoraIs.application.report_style import ReportStyleStore
 from jmoraIs.application.support_classification_runtime import save_keychain_api_key
@@ -55,7 +56,8 @@ def main(argv=None) -> int:
                      report_style=ReportStyleStore(STATE / "catalog/report_style.json"),
                      sbot_index=sbot_index(), practice=PracticeStore(STATE / "catalog/practice.json"),
                      appeal_library=AppealLibrary(STATE / "catalog/appeals.json"),
-                     resolve_appeal_writer=default_appeal_writer_factory)
+                     resolve_appeal_writer=default_appeal_writer_factory,
+                     finance=FinanceStore(STATE / "catalog/finance.sqlite"))
     uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning",
                 server_header=False, access_log=False)
     return 0
