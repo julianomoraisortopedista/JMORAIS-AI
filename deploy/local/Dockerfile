@@ -15,3 +15,6 @@ COPY alembic ./alembic
 COPY alembic.ini ./
 COPY tests ./tests
 COPY deploy/local ./deploy/local
+# Least privilege: the application never runs as root inside the container.
+RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin jmorais
+USER 10001

@@ -91,3 +91,10 @@ test('letterhead logo is limited to PNG/JPEG data and the prescription never cal
   const rx=src.slice(src.indexOf('export function prescriptionPage'));
   assert.ok(!/client\.(case|document|request|question|propose)/.test(rx)); // only letterhead/profile are read
 });
+
+test('idle sessions are closed and patient data cleared',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const src=await readFile('src/main.js','utf8');
+  assert.ok(src.includes('const IDLE_MS=20*60*1000') && /Date\.now\(\)-lastActivity>IDLE_MS\)\{reset\(\);login\(\)/.test(src));
+  assert.ok(/function reset\(\)\{[^}]*clearCase\(\)/.test(src));
+});

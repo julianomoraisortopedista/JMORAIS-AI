@@ -49,10 +49,35 @@ def prepare():
                 lastName='Piloto',email=name+'@example.invalid',
                 credentials=[{'type':'password','value':values[key],'temporary':False}]))
         payload=dict(realm='jmorais-local',enabled=True,sslRequired='none',registrationAllowed=False,
-            resetPasswordAllowed=False,loginWithEmailAllowed=False,clients=clients,users=users)
+            resetPasswordAllowed=False,loginWithEmailAllowed=False,clients=clients,users=users,**REALM_HARDENING)
         fd=os.open(realm,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w') as f:json.dump(payload,f)
     return env
+
+
+REALM_HARDENING=dict(bruteForceProtected=True,failureFactor=5,waitIncrementSeconds=60,maxFailureWaitSeconds=900,
+    maxDeltaTimeSeconds=43200,permanentLockout=False,accessTokenLifespan=300,ssoSessionIdleTimeout=1800,
+    ssoSessionMaxLifespan=36000,passwordPolicy='length(12) and notUsername',revokeRefreshToken=True)
+
+
+def harden_realm(env_path,url='http://127.0.0.1:8081'):
+    """Brute-force lockout, short tokens and sessions on the local realm (idempotent; prints nothing secret)."""
+    import urllib.parse
+    values=dict(line.split('=',1) for line in Path(env_path).read_text().splitlines() if '=' in line)
+    form=urllib.parse.urlencode({'grant_type':'password','client_id':'admin-cli','username':'local-admin',
+        'password':values['LOCAL_OIDC_ADMIN_PASSWORD']}).encode()
+    for _ in range(30):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url+'/realms/master/protocol/openid-connect/token',data=form),timeout=5) as r:
+                token=json.load(r)['access_token'];break
+        except Exception:
+            time.sleep(2)
+    else:
+        return False
+    request=urllib.request.Request(url+'/admin/realms/jmorais-local',data=json.dumps(REALM_HARDENING).encode(),method='PUT',
+        headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'})
+    with urllib.request.urlopen(request,timeout=10) as r:
+        return r.status in (200,204)
 
 
 def reachable(url='http://127.0.0.1/',attempts=10):
@@ -77,6 +102,7 @@ def repair(base,process_env,log):
 
 
 def main():
+    os.umask(0o077)  # every file this tool creates is private to the user
     parser=argparse.ArgumentParser();parser.add_argument('action',choices=('up','down','proof','repair'))
     args=parser.parse_args()
     try:
@@ -103,7 +129,7 @@ def main():
             result=subprocess.run(command,cwd=ROOT,stdout=f,stderr=subprocess.STDOUT,env=process_env)
             ok=result.returncode==0
             if ok and args.action in ('up','repair'):
-                f.flush();ok=repair(base,process_env,f)
+                f.flush();ok=repair(base,process_env,f) and harden_realm(env)
         print(('PASS' if ok else 'NOT_READY')+': '+args.action)
         if args.action in ('up','repair') and ok:print('http://localhost/ — synthetic only; credentials and launches in private local state directory')
         return 0 if ok else 1

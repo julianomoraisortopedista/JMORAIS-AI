@@ -134,6 +134,12 @@ function patients(client){
  return page;
 }
 
+/** Idle protection: after 20 minutes without use, sign out and clear patient data from memory. */
+const IDLE_MS=20*60*1000;let lastActivity=Date.now();
+for(const ev of ['pointerdown','keydown','wheel','touchstart'])window.addEventListener(ev,()=>{lastActivity=Date.now();},{passive:true});
+setInterval(()=>{if(document.body.classList.contains('is-app')&&Date.now()-lastActivity>IDLE_MS){reset();login();
+  root.prepend(box('div','alert alert-info','Sessão encerrada após 20 minutos sem uso, para proteger os dados dos pacientes. Entre novamente.'));}},30000);
+
 window.addEventListener('unhandledrejection',(event)=>{
  if(event.reason instanceof EvidenceError && event.reason.status===401){reset();login();}
 });

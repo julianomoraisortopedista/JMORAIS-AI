@@ -70,6 +70,10 @@ local-pilot-proof:
 local-pilot-repair:
 	@$(VENV_PYTHON) -m deploy.local.control repair
 # macOS: check http://localhost every 5 minutes and repair it automatically (uninstall: local-pilot-watchdog-off).
+# Read-only security self-check of the local platform and this Mac.
+.PHONY: security-check
+security-check:
+	@$(VENV_PYTHON) -m deploy.local.security_check
 .PHONY: local-pilot-watchdog local-pilot-watchdog-off
 local-pilot-watchdog:
 	@$(VENV_PYTHON) -m deploy.local.watchdog_install

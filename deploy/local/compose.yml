@@ -2,6 +2,7 @@ name: jmorais-local-pilot
 services:
   postgres:
     image: postgres:16-alpine
+    security_opt: ['no-new-privileges:true']
     environment:
       POSTGRES_USER: pilot_owner
       POSTGRES_DB: jmorais_local_synthetic
@@ -15,6 +16,8 @@ services:
       retries: 30
   oidc:
     image: quay.io/keycloak/keycloak:26.8.0
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
     command: [start-dev, --import-realm, '--hostname=http://localhost:8081']
     ports: ['127.0.0.1:8081:8080']
     environment:
@@ -30,6 +33,8 @@ services:
       dockerfile: deploy/local/Dockerfile
     image: jmorais-local-pilot:synthetic
     command: [python, -m, deploy.local.seed]
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
     env_file: ['${LOCAL_PILOT_DIR}/.env']
     volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output']
     depends_on:
@@ -38,6 +43,8 @@ services:
   backend:
     pull_policy: never
     image: jmorais-local-pilot:synthetic
+    security_opt: ['no-new-privileges:true']
+    cap_drop: [ALL]
     command: [python, -m, uvicorn, 'deploy.local.runtime:create', --factory, --host, '0.0.0.0', --port, '8000', --no-access-log, --no-server-header]
     environment:
       JMORAIS_LOCAL_SYNTHETIC: 'YES'
@@ -58,6 +65,7 @@ services:
     build:
       context: ../..
       dockerfile: deploy/local/Frontend.Dockerfile
+    security_opt: ['no-new-privileges:true']
     ports: ['127.0.0.1:80:80']
     depends_on:
       backend: {condition: service_healthy}
