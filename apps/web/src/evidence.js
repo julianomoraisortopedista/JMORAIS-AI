@@ -52,6 +52,13 @@ export class EvidenceClient {
   /** @param {string} id */ catalogFromSbot(id){return this.call('catalog/from-sbot',{entry_id:id});}
   profileGet(){return this.call('profile');}
   /** @param {Record<string,unknown>} p */ profileSave(p){return this.call('profile',p,'PUT');}
+  appeals(){return this.call('appeals');}
+  /** @param {Record<string,unknown>} body */ appealPreview(body){return this.call('appeals/preview',body);}
+  /** @param {Record<string,unknown>} body */ appealSave(body){return this.call('appeals',body);}
+  /** @param {string} id @param {string} outcome */ appealOutcome(id,outcome){return this.call('appeals/'+encodeURIComponent(id),{outcome},'PATCH');}
+  /** @param {string} id */ appealDelete(id){return this.call('appeals/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {Record<string,unknown>} body */ appealDraft(body){return this.call('appeal/draft',body);}
+  /** @param {string} id */ appealDraftGet(id){return this.call('appeal/draft/'+encodeURIComponent(id));}
   letterheadGet(){return this.call('letterhead');}
   /** @param {Record<string,unknown>} l */ letterheadSave(l){return this.call('letterhead',l,'PUT');}
   consentGet(){return this.call('consent-model');}

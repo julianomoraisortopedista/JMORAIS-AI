@@ -150,3 +150,20 @@ def build_request_service(model_id: str = DEFAULT_MODEL, transport=None):
     gateway = CanonicalLLMGateway(prompts, audit, InMemoryInvocationRepository(),
                                   InMemoryLLMInvocationContextRepository(), (AnthropicProviderAdapter(transport),), clock=clock)
     return RequestIntakeService(gateway, prompt_version_id=version.prompt_version_id, model=model, clock=clock)
+
+
+def build_appeal_service(model_id: str = DEFAULT_MODEL, transport=None):
+    """Point-by-point contestation of an insurer denial, behind the Canonical LLM Gateway."""
+    from jmoraIs.application.appeal_drafting import OUTPUT_JSON_SCHEMA as A_SCHEMA, AppealDraftingService, appeal_prompt
+    clock = lambda: datetime.now(timezone.utc)
+    prompts, audit = InMemoryPromptRepository(), InMemoryPromptAuditRepository()
+    version = PromptGovernanceService(prompts, audit, clock=clock).register(appeal_prompt(), created_by="jmorais")
+    input_price, output_price = MODEL_PRICES.get(model_id, (0.0, 0.0))
+    model = LLMModel(LLMProvider.ANTHROPIC, model_id, model_id, input_price, output_price, True, "MIP-10.1")
+    if transport is None:
+        from jmoraIs.llm_gateway.anthropic_transport import AnthropicMessagesTransport  # optional SDK
+        env_key = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
+        transport = AnthropicMessagesTransport(json_schema=A_SCHEMA, effort="medium", api_key=None if env_key else keychain_api_key())
+    gateway = CanonicalLLMGateway(prompts, audit, InMemoryInvocationRepository(),
+                                  InMemoryLLMInvocationContextRepository(), (AnthropicProviderAdapter(transport),), clock=clock)
+    return AppealDraftingService(gateway, prompt_version_id=version.prompt_version_id, model=model, clock=clock)

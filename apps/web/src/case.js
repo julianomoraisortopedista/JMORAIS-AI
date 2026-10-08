@@ -526,3 +526,10 @@ async function combinedDocument(client,check){
 
 /** Prescription pad with the patient's name from this session. @param {import('./evidence.js').EvidenceClient} client */
 export function prescription(client){return prescriptionPage(client,patient,dictation,download);}
+
+/** What the contestation page may use from the open case: ids for removal, patient data for the local header only. */
+export function caseContext(){
+  return {caseId:current?current.id:null,hasFacts:Boolean(current&&current.view.confirmed),identifiers:identifiers(),
+    patient:/** @type {Record<string,string>} */({...patient})};
+}
+

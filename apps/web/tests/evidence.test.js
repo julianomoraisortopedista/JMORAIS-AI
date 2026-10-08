@@ -50,8 +50,14 @@ test('patient identification only goes to the de-identifying routes, never to th
   assert.ok(documentCall.length>20 && !/identifiers|patient\./.test(documentCall));
   // identifiers are sent only with case create and each upload (for removal), in both the detailed and the quick flows
   const all=(src.match(/identifiers:identifiers\(\)/g)||[]).length;
-  const allowed=(src.match(/client\.case(Create|Document)\([^;]*?identifiers:identifiers\(\)/g)||[]).length;
-  assert.ok(all>=2 && all===allowed);
+  const allowed=(src.match(/client\.case(Create|Document)\([^;]*?identifiers:identifiers\(\)/g)||[]).length
+    +(src.match(/export function caseContext\(\)\{[^}]*identifiers:identifiers\(\)/g)||[]).length;
+  assert.ok(all>=3 && all===allowed);
+  // contestations: identifiers go only to the drafting route (for removal); patient data only into the local document
+  const appeals=await readFile('src/appeals.js','utf8');
+  assert.equal((appeals.match(/identifiers:c\./g)||[]).length,1);
+  assert.ok(/client\.appealDraft\(\{[^;]*identifiers:c\.identifiers/.test(appeals));
+  assert.ok(!/client\.\w+\([^)]*patient/.test(appeals));
   assert.ok(src.includes("doc.querySelectorAll('[data-ident]')"));
 });
 

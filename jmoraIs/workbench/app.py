@@ -35,6 +35,8 @@ from jmoraIs.application.deidentification import DeidentificationRejected, Patie
 from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.report_drafting import ReportDraftRejected
 from jmoraIs.application.ans_deadlines import deadline_for
+from jmoraIs.application.appeal_drafting import AppealDraftRejected
+from jmoraIs.application.appeal_library import AppealEntry, AppealLibrary, AppealLibraryRejected
 from jmoraIs.application.practice_documents import Letterhead, PracticeRejected, PracticeStore, Profile
 from jmoraIs.application.request_check import check_request
 from jmoraIs.application.report_style import ReportStyleRejected, ReportStyleStore, deidentify_model
@@ -193,6 +195,28 @@ class SbotTemplateIn(BaseModel):
     entry_id: str = Field(pattern=r"^\d{1,2}\.\d{1,3}$")
 
 
+class AppealSaveIn(BaseModel):
+    kind: str = Field(pattern="^(NEGATIVA|GLOSA|JUNTA_MEDICA)$")
+    procedure: str = Field("", max_length=160)
+    outcome: str = Field("PENDENTE", pattern="^(DEFERIDA|PARCIAL|INDEFERIDA|PENDENTE)$")
+    text: str = Field(min_length=100, max_length=16000)
+    confirmed: bool
+
+
+class OutcomeIn(BaseModel):
+    outcome: str = Field(pattern="^(DEFERIDA|PARCIAL|INDEFERIDA|PENDENTE)$")
+
+
+class AppealDraftIn(BaseModel):
+    kind: str = Field(pattern="^(NEGATIVA|GLOSA|JUNTA_MEDICA)$")
+    denial_text: str = Field("", max_length=20000)
+    denial_file: Optional["ScanIn"] = None
+    identifiers: IdentifiersIn
+    case_id: Optional[str] = Field(None, max_length=40)
+    template_id: Optional[str] = Field(None, max_length=40)
+    procedure: str = Field("", max_length=300)
+
+
 class CheckIn(BaseModel):
     template_id: str = Field(max_length=40)
     urgency: Urgency = Urgency.ELECTIVE
@@ -224,6 +248,7 @@ class WorkbenchState:
         self.proposals: dict = {}   # proposal_id -> SupportClassificationProposal
         self.decisions: dict = {}   # pmid -> decision record (latest physician decision)
         self.cases: dict = {}       # case_id -> dict (de-identified texts, extraction job, confirmed facts)
+        self.appeals: dict = {}     # job_id -> contestation draft job (de-identified)
 
 
 def _split(value: str) -> tuple[str, ...]:
@@ -241,7 +266,9 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                resolve_report_writer: Optional[Callable[[], Optional[Callable]]] = None,
                report_style: Optional[ReportStyleStore] = None,
                resolve_request_parser: Optional[Callable[[], Optional[Callable]]] = None,
-               sbot_index=None, practice: Optional[PracticeStore] = None) -> FastAPI:
+               sbot_index=None, practice: Optional[PracticeStore] = None,
+               appeal_library: Optional[AppealLibrary] = None,
+               resolve_appeal_writer: Optional[Callable[[], Optional[Callable]]] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -647,6 +674,119 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
     def profile_save(body: Profile):
         return need_practice().save_profile(body).model_dump()
 
+    def need_library() -> AppealLibrary:
+        if appeal_library is None:
+            bad("Biblioteca de contestações indisponível neste servidor.", 503)
+        return appeal_library
+
+    @app.get("/api/appeals")
+    def appeals_list():
+        return {"entries": [dict(appeal_id=e.appeal_id, kind=e.kind, procedure=e.procedure, outcome=e.outcome,
+                                 created_at=e.created_at, preview=e.text[:280], chars=len(e.text))
+                            for e in need_library().entries()]}
+
+    @app.post("/api/appeals/preview")
+    def appeals_preview(body: ScanIn):
+        """De-identify a past contestation for review. Nothing is stored and no AI is called."""
+        import base64
+        need_library()
+        try:
+            text = extract_text(body.name, base64.b64decode(body.content_base64, validate=True))
+            cleaned = deidentify_model(text[:MAX_DOCUMENT_CHARS])
+        except (ValueError, CaseIntakeRejected, DeidentificationRejected, ReportStyleRejected) as exc:
+            bad(str(exc) if isinstance(exc, (CaseIntakeRejected, ReportStyleRejected)) else "Não foi possível ler este arquivo.")
+        return {"text": cleaned.text, "removed": cleaned.removed}
+
+    @app.post("/api/appeals")
+    def appeals_add(body: AppealSaveIn):
+        if not body.confirmed:
+            bad("Confirme que a contestação não tem dados de paciente.")
+        try:
+            saved = need_library().add(AppealEntry(kind=body.kind, procedure=body.procedure, outcome=body.outcome, text=body.text))
+        except (AppealLibraryRejected, DeidentificationRejected) as exc:
+            bad(str(exc))
+        return {"appeal_id": saved.appeal_id}
+
+    @app.patch("/api/appeals/{appeal_id}")
+    def appeals_outcome(appeal_id: str, body: OutcomeIn):
+        try:
+            return need_library().set_outcome(appeal_id, body.outcome).model_dump(exclude={"text"})
+        except AppealLibraryRejected as exc:
+            bad(str(exc), 404)
+
+    @app.delete("/api/appeals/{appeal_id}")
+    def appeals_delete(appeal_id: str):
+        need_library().delete(appeal_id)
+        return {"deleted": appeal_id}
+
+    def sbot_summary(entry) -> str:
+        return (f"SBOT {entry.entry_id} {entry.name}. CID: {', '.join(entry.icd10)}. Indicação: {entry.indication} "
+                f"Caráter: {entry.character}. Exames da indicação: {entry.exams}. Códigos: "
+                + "; ".join(f"{c.cbhpm} {c.description} (porte {c.porte})" for c in entry.codes)
+                + ". OPME: " + ", ".join(f"{o.quantity} {o.description}" for o in entry.opme)
+                + (f". Internação: UTI {entry.icu_days} dia(s), quarto {entry.ward_days} dia(s)" if entry.icu_days is not None else ""))
+
+    @app.post("/api/appeal/draft")
+    def appeal_draft(body: AppealDraftIn, request: Request):
+        import base64
+        factory = resolve_appeal_writer() if resolve_appeal_writer else None
+        if factory is None:
+            bad("Modelo de IA não configurado.", 503)
+        text = body.denial_text
+        if body.denial_file is not None:
+            try:
+                text = (text + "\n" + extract_text(body.denial_file.name,
+                                                    base64.b64decode(body.denial_file.content_base64, validate=True)))
+            except (ValueError, CaseIntakeRejected) as exc:
+                bad(str(exc) if isinstance(exc, CaseIntakeRejected) else "Arquivo da negativa inválido.")
+        try:
+            denial = deidentify(text[:MAX_DOCUMENT_CHARS], identifiers(body.identifiers)).text
+        except DeidentificationRejected as exc:
+            bad(str(exc))
+        facts = []
+        if body.case_id:
+            facts = list((case_of(request, body.case_id).get("confirmed") or {}).get("facts", []))
+        context, sbot, procedure = "", "", body.procedure.strip()
+        if body.template_id:
+            template = next((t for t in need_catalog().load() if t.template_id == body.template_id), None)
+            if template is None:
+                bad("Modelo não encontrado.", 404)
+            procedure = procedure or template.name
+            context = (f"Procedimento: {procedure}. TUSS: " + "; ".join(f"{c} {template.tuss_terms.get(c, '')}" for c in template.tuss_codes)
+                       + (". OPME: " + ", ".join(f"{i.quantity} {i.description}" for i in template.opme) if template.opme else ""))
+            entry = sbot_index.get(template.sbot_entry) if (sbot_index is not None and template.sbot_entry) else None
+            sbot = sbot_summary(entry) if entry is not None else ""
+        elif procedure:
+            context = f"Procedimento: {procedure}."
+        examples = [e.text for e in appeal_library.examples(body.kind, procedure)] if appeal_library is not None else []
+        job_id = "apl-job-" + secrets.token_hex(6)
+        jobs = state_of(request).appeals
+        jobs[job_id] = {"status": "RUNNING", "examples": len(examples)}
+        principal = getattr(request.state, "principal", "local")
+
+        def run():
+            try:
+                with TenantContextBinder().bind_tenant(tenant(principal)):
+                    draft = factory().draft(kind=body.kind, denial_text=denial, facts=facts, context=context, sbot=sbot,
+                                            examples=examples)
+                jobs[job_id] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "sources": draft.sources,
+                                "examples": len(examples), "model": draft.model_id,
+                                "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, source_ids=list(x.source_ids)) for x in ss])
+                                             for k, t, ss in draft.sections]}
+            except AppealDraftRejected as exc:
+                jobs[job_id] = {"status": "ERROR", "error": str(exc)}
+            except Exception as exc:  # provider failure: no provider text exposed
+                jobs[job_id] = {"status": "ERROR", "error": f"Falha ao consultar o modelo ({type(exc).__name__})."}
+        __import__("threading").Thread(target=run, daemon=True).start()
+        return dict(jobs[job_id], job_id=job_id)
+
+    @app.get("/api/appeal/draft/{job_id}")
+    def appeal_draft_get(job_id: str, request: Request):
+        job = state_of(request).appeals.get(job_id)
+        if job is None:
+            bad("Contestação não encontrada.", 404)
+        return dict(job, job_id=job_id)
+
     @app.get("/api/letterhead")
     def letterhead_get():
         return need_practice().letterhead().model_dump()
@@ -918,6 +1058,11 @@ def schedule_rows(schedule: Optional[ScheduleIn]) -> tuple[tuple[str, str], ...]
 def default_request_parser_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
     from jmoraIs.application.support_classification_runtime import build_request_service, credentials_configured, keychain_api_key
     return build_request_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
+
+
+def default_appeal_writer_factory(environ=os.environ, keychain=None) -> Optional[Callable]:
+    from jmoraIs.application.support_classification_runtime import build_appeal_service, credentials_configured, keychain_api_key
+    return build_appeal_service if credentials_configured(environ, keychain=keychain or keychain_api_key) else None
 
 
 def default_report_writer_factory(environ=os.environ, keychain=None) -> Optional[Callable]:

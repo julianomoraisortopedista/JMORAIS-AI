@@ -79,7 +79,8 @@ def create():
     # Evidence workbench behind the same OIDC bearer + IAM (CLINICAL_REVIEW, human reviewer).
     from jmoraIs.connect.crossref import CrossrefConnector
     from jmoraIs.connect.pubmed import PubMedConnector
-    from jmoraIs.workbench.app import create_app as create_workbench, default_case_extractor_factory, default_classifier_factory, default_question_translator_factory, default_report_writer_factory, default_request_parser_factory
+    from jmoraIs.workbench.app import create_app as create_workbench, default_case_extractor_factory, default_classifier_factory, default_question_translator_factory, default_report_writer_factory, default_request_parser_factory, default_appeal_writer_factory
+    from jmoraIs.application.appeal_library import AppealLibrary
     from jmoraIs.application.report_style import ReportStyleStore
     from jmoraIs.application.practice_documents import PracticeStore
     from jmoraIs.workbench.platform_auth import iam_authenticator
@@ -93,6 +94,8 @@ def create():
         resolve_request_parser=lambda: default_request_parser_factory(os.environ, keychain=lambda: None),
         report_style=ReportStyleStore(Path('/catalog/report_style.json')),
         sbot_index=_sbot_index(), practice=PracticeStore(Path('/catalog/practice.json')),
+        appeal_library=AppealLibrary(Path('/catalog/appeals.json')),
+        resolve_appeal_writer=lambda: default_appeal_writer_factory(os.environ, keychain=lambda: None),
         authenticate=iam_authenticator(canonical.operational_services)))
     return app
 
