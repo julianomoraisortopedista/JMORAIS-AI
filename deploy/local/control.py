@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 import secrets
 import subprocess
+import time
+import urllib.request
 
 ROOT=Path(__file__).resolve().parents[2]
 STATE=Path.home()/'.local/share/jmorais-local-pilot'
@@ -53,8 +55,29 @@ def prepare():
     return env
 
 
+def reachable(url='http://127.0.0.1/',attempts=10):
+    """The page must answer through the host port, not only inside the container."""
+    for _ in range(attempts):
+        try:
+            with urllib.request.urlopen(url,timeout=5) as r:
+                if r.status==200:return True
+        except Exception:
+            pass
+        time.sleep(1)
+    return False
+
+
+def repair(base,process_env,log):
+    """Docker Desktop sometimes keeps the port bound but stops forwarding it; recreate the web front."""
+    if reachable(attempts=3):return True
+    subprocess.run(base+['restart','frontend'],cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,env=process_env)
+    if reachable():return True
+    subprocess.run(base+['up','-d','--force-recreate','--no-deps','frontend'],cwd=ROOT,stdout=log,stderr=subprocess.STDOUT,env=process_env)
+    return reachable(attempts=20)
+
+
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=('up','down','proof'))
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=('up','down','proof','repair'))
     args=parser.parse_args()
     try:
         env=prepare()
@@ -71,14 +94,19 @@ def main():
         base=['docker','compose','--env-file',str(env),'-f',str(ROOT/'deploy/local/compose.yml')]
         if args.action=='up':command=base+['up','--build','-d','--wait','--wait-timeout','300']
         elif args.action=='down':command=base+['down'] # Persist named volumes; never -v.
+        elif args.action=='repair':command=base+['up','-d','--wait','--wait-timeout','300']
         else:command=base+['run','--rm','--no-deps','seed','python','-m','deploy.local.proof']
         # Persist output privately; sanitized terminal result only.
         log=STATE/(args.action+'.log')
         fd=os.open(log,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
-        with os.fdopen(fd,'w') as f:result=subprocess.run(command,cwd=ROOT,stdout=f,stderr=subprocess.STDOUT,env=process_env)
-        print(('PASS' if result.returncode==0 else 'NOT_READY')+': '+args.action)
-        if args.action=='up' and result.returncode==0:print('http://localhost/ — synthetic only; credentials and launches in private local state directory')
-        return result.returncode
+        with os.fdopen(fd,'w') as f:
+            result=subprocess.run(command,cwd=ROOT,stdout=f,stderr=subprocess.STDOUT,env=process_env)
+            ok=result.returncode==0
+            if ok and args.action in ('up','repair'):
+                f.flush();ok=repair(base,process_env,f)
+        print(('PASS' if ok else 'NOT_READY')+': '+args.action)
+        if args.action in ('up','repair') and ok:print('http://localhost/ — synthetic only; credentials and launches in private local state directory')
+        return 0 if ok else 1
     except Exception as exc:
         print('NOT_READY: '+type(exc).__name__);return 1
 

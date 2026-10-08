@@ -59,13 +59,16 @@ pilot-link-physician:
 pilot-create-launch:
 	@"$(VENV_PYTHON)" -m scripts.pilot_admin create-launch $(PILOT_FLAGS)
 
-.PHONY: local-pilot-up local-pilot-down local-pilot-proof
+.PHONY: local-pilot-up local-pilot-down local-pilot-proof local-pilot-repair
 local-pilot-up:
 	@$(VENV_PYTHON) -m deploy.local.control up
 local-pilot-down:
 	@$(VENV_PYTHON) -m deploy.local.control down
 local-pilot-proof:
 	@$(VENV_PYTHON) -m deploy.local.control proof
+# Bring every service up and make sure http://localhost/ answers through the host port (repairs the web front).
+local-pilot-repair:
+	@$(VENV_PYTHON) -m deploy.local.control repair
 
 .PHONY: evidence-search
 # Read-only PubMed + Crossref discovery; candidates only, never patient data. Usage: make evidence-search Q="..."
