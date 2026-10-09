@@ -3,7 +3,8 @@
 Only de-identified text reaches the Canonical LLM Gateway (human review mandatory).
 Every extracted fact must carry a verbatim quote from the named source document or
 history; facts without a matching quote are discarded as UNGROUNDED. ICD-10 codes are
-returned only as suggestions for the physician to confirm. Images are never sent.
+returned only as suggestions for the physician to confirm. Images are never sent: photos
+and scanned PDFs are read locally (`local_ocr`) and only their de-identified text continues.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import re
 from typing import Callable
 from uuid import uuid4
 
+from jmoraIs.application import local_ocr
 from jmoraIs.application.deidentification import DeidentifiedText, PatientIdentifiers, deidentify
 from jmoraIs.llm_gateway.domain import (
     CanonicalStructuredDTO, LLMModel, LLMOutputClassification, LLMRequest, PromptTemplate, ReviewPolicy, StructuredField,
@@ -27,6 +29,7 @@ PROMPT_ID = "case-intake-extraction-v1"
 MAX_OUTPUT_TOKENS = 12000
 MAX_DOCUMENT_CHARS = 40000
 TEXT_TYPES = (".pdf", ".txt", ".docx")
+IMAGE_TYPES = (".jpg", ".jpeg", ".png")
 
 
 class CaseIntakeRejected(ValueError):
@@ -127,8 +130,10 @@ def extract_text(filename: str, content: bytes) -> str:
         return content.decode("utf-8", errors="replace")
     if name.endswith(".docx"):
         return docx_text(content)
+    if name.endswith(IMAGE_TYPES):
+        return _ocr(local_ocr.ocr_image, content, "Foto")
     if not name.endswith(".pdf"):
-        raise CaseIntakeRejected("Apenas PDF, Word (.docx) ou texto. Imagens não são enviadas à IA.")
+        raise CaseIntakeRejected("Apenas PDF, Word (.docx), texto ou foto (JPG/PNG).")
     if not content.startswith(b"%PDF"):
         raise CaseIntakeRejected("Arquivo PDF inválido.")
     try:
@@ -142,7 +147,18 @@ def extract_text(filename: str, content: bytes) -> str:
     except Exception as exc:
         raise CaseIntakeRejected("Não foi possível ler o PDF.") from exc
     if len(text.strip()) < 40:
-        raise CaseIntakeRejected("PDF sem texto (provavelmente escaneado). Digite o laudo na história ou envie o PDF original.")
+        return _ocr(local_ocr.ocr_pdf, content, "PDF escaneado")
+    return text
+
+
+def _ocr(read: Callable[[bytes], str], content: bytes, kind: str) -> str:
+    """Local OCR (no AI); failures explain how to proceed without it."""
+    try:
+        text = read(content)
+    except local_ocr.OCRUnavailable as exc:
+        raise CaseIntakeRejected(f"{kind}: {exc}. Digite o laudo na história ou envie o PDF original com texto.") from exc
+    if len(text.strip()) < local_ocr.MIN_TEXT_CHARS:
+        raise CaseIntakeRejected(f"{kind} sem texto legível. Fotografe o laudo de frente, com boa luz, ou digite-o na história.")
     return text
 
 

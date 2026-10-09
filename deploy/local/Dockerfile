@@ -2,6 +2,9 @@
 FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# Local OCR for photographed/scanned reports (Portuguese); images never go to the AI.
+RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-por poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
 COPY requirements-production.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements-production.lock
 # Optional Claude SDK for the local evidence workbench (pinned; not in the production lock).

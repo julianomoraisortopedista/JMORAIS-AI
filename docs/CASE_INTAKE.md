@@ -10,9 +10,18 @@ Platform page **Pedido médico** (http://localhost/ after login).
    identifiers (name, CPF with valid checksum, card, birth date, RG, address, e-mail,
    phone) with `detect_identifiers` — deterministic, local, no AI, nothing stored — and
    the page fills only empty fields for the physician to confirm.
-2. **Documents**: text PDFs or .txt (one per request, <= 700 KB, inside the API's 1 MB
-   body limit; up to 8). Images are never sent to AI; scanned PDFs without text are
-   refused with guidance. History is free text.
+2. **Documents**: PDFs, Word (.docx), .txt or photos (one per request, <= 700 KB, inside
+   the API's 1 MB body limit; up to 8). History is free text.
+   **Photos and scanned PDFs** (`jmoraIs/application/local_ocr.py`): the browser redraws a
+   photo as a JPEG of at most 2400 px / 700 KB (dropping EXIF and location); the server
+   reads it with Tesseract (Portuguese) on this machine. A PDF without a text layer is
+   rendered at 300 dpi (first 10 pages) and read the same way. File type is taken from the
+   content, not the name; each page has a 60 s limit; work files live in a private temporary
+   directory removed after reading. Images never reach the AI: the recognised text goes
+   through identifier pre-fill, de-identification and the physician preview like any other
+   document. If OCR is not installed or the text is illegible the file is refused with
+   guidance. OCR can misread an identifier so that it escapes removal: check the preview.
+   The local pilot image installs `tesseract-ocr`, `tesseract-ocr-por` and `poppler-utils`.
    **Dictation**: "🎤 Ditar" (history, Rol alternatives, extra clinical text) uses the
    browser's built-in speech recognition in pt-BR (Chrome: Google's service; Safari:
    Apple's). Without support, the page points to macOS Dictation (Fn twice). Dictated

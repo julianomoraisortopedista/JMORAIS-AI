@@ -21,8 +21,31 @@ export function clearCase(){for(const k of Object.keys(patient))/** @type {Recor
   draft.schedule={hospital:'',date:'',time:'',duration_minutes:0,anesthesia:'',icu:null,blood_reserve:null,supplier:'',notes:''};}
 function identifiers(){const {operadora,...ids}=patient;return ids;}
 
-/** @param {File} file @returns {Promise<string>} */
+/** @param {Blob} file @returns {Promise<string>} */
 async function base64(file){const bytes=new Uint8Array(await file.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(bin);}
+
+const MAX_UPLOAD=700000;
+const ACCEPT='.pdf,.txt,.docx,.jpg,.jpeg,.png,.heic,application/pdf,text/plain,image/*';
+/** Photos of reports are redrawn here as a smaller JPEG (no location/EXIF) and read on the server by local OCR, never by the AI.
+ * @param {File} f @returns {Promise<{name:string,content_base64:string}>} */
+async function prepared(f){
+  if(!f.type.startsWith('image/')&&!/\.(jpe?g|png|heic|heif)$/i.test(f.name)){
+    if(f.size>MAX_UPLOAD)throw new Error(`"${f.name}" passa de 700 KB. Envie o PDF do laudo, uma foto ou copie o texto na história.`);
+    return {name:f.name,content_base64:await base64(f)};}
+  const url=URL.createObjectURL(f);
+  try{
+    const img=new Image();img.src=url;await img.decode();
+    const scale=Math.min(1,2400/Math.max(img.naturalWidth,img.naturalHeight));
+    const canvas=document.createElement('canvas');canvas.width=Math.round(img.naturalWidth*scale);canvas.height=Math.round(img.naturalHeight*scale);
+    const ctx=canvas.getContext('2d');if(!ctx)throw new Error('canvas');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    for(const q of [0.85,0.7,0.55,0.4]){
+      const blob=await new Promise((/** @type {(b:Blob|null)=>void} */ done)=>canvas.toBlob(done,'image/jpeg',q));
+      if(blob&&blob.size<=MAX_UPLOAD)return {name:f.name.replace(/\.[^.]+$/,'')+'.jpg',content_base64:await base64(blob)};
+    }
+  }catch{/* reported below */}finally{URL.revokeObjectURL(url);}
+  throw new Error(`Não consegui abrir a foto "${f.name}". Envie em JPG ou PNG, ou fotografe de novo.`);
+}
 
 /** Renders the page; pass the live root to re-render it in place. @param {import('./evidence.js').EvidenceClient} client @param {HTMLElement} [root] */
 export function casePage(client,root=box('div','page-grid')){
@@ -69,11 +92,11 @@ function identityCard(){
 function documentsCard(client,root){
   const card=box('section','card');
   card.append(box('h2','card-title','Documentos e história'),
-    box('p','muted','Envie laudos em PDF (com texto) ou .txt — ressonância, raio-x, tomografia, exames. Ao escolher os arquivos, nome, CPF e carteirinha são lidos aqui no seu computador (sem IA) e preenchem a identificação acima; confira. As imagens em si não são enviadas à IA.'));
+    box('p','muted','Envie laudos em PDF, Word, .txt ou foto — ressonância, raio-x, tomografia, exames. Fotos e PDFs escaneados são lidos aqui no seu computador, sem IA. Ao escolher os arquivos, nome, CPF e carteirinha são lidos localmente e preenchem a identificação acima; confira. As imagens em si nunca são enviadas à IA.'));
   const picker=templatePicker(client,(t)=>{draft.templateId=t?t.template_id:null;if(t)draft.procedure=t.name;},draft.templateId||'');
   const side=select([['','—'],['Direito','Direito'],['Esquerdo','Esquerdo'],['Bilateral','Bilateral']]);side.value=draft.laterality;side.onchange=()=>{draft.laterality=side.value;};
   const history=textarea('História resumida: queixa, tempo de evolução, tratamentos realizados e por quanto tempo, exame físico, escalas (EVA, KOOS…), indicação.');history.rows=7;
-  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.pdf,.txt,.docx,application/pdf,text/plain';
+  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept=ACCEPT;
   const consent=document.createElement('input');consent.type='checkbox';
   const consentLabel=box('label','chip');consentLabel.append(consent,el('span','Consentimento do paciente registrado para tratamento dos dados (LGPD)'));
   const go=button(session.model?'Remover identificação e ler com o Claude':'Remover identificação e enviar');const status=box('div','status-area');const preview=box('div','');
@@ -81,15 +104,14 @@ function documentsCard(client,root){
   files.onchange=async()=>{
     /** @type {Set<string>} */ const filled=new Set();
     for(const f of Array.from(files.files||[])){
-      if(f.size>700000)continue;
-      try{const r=await client.caseScan({name:f.name,content_base64:await base64(f)});
+      try{const r=await client.caseScan(await prepared(f));
         for(const [k,v] of Object.entries(r.identifiers||{})){const box_=identityInputs[k];if(box_&&!box_.value.trim()&&typeof v==='string'){box_.value=v;/** @type {Record<string,string>} */(patient)[k]=v;filled.add(k);}}
       }catch{/* unreadable file: reported when sending */}
     }
     say(found,filled.size?'Identificação lida dos documentos (no seu computador, sem IA). Confira os campos acima antes de enviar.':'Nenhuma identificação encontrada nos arquivos. Preencha ao menos o nome acima.',filled.size?'ok':'info');
   };
   const actions=box('div','actions');actions.append(go);
-  card.append(picker,field('Lateralidade',side),field('História resumida',history),dictation(history),field('Laudos (PDF ou .txt, até 8)',files),found,consentLabel,actions,status,preview);
+  card.append(picker,field('Lateralidade',side),field('História resumida',history),dictation(history),field('Laudos (PDF, Word, .txt ou foto, até 8)',files),found,consentLabel,actions,status,preview);
   if(current)renderPreview(preview,current.view);
   go.onclick=()=>busy(go,async()=>{
     if(!patient.name.trim()){say(status,'Preencha ao menos o nome do paciente, para que ele seja removido dos textos.');return;}
@@ -100,8 +122,7 @@ function documentsCard(client,root){
       let view=await client.caseCreate({history:history.value,identifiers:identifiers(),consent:true});
       const id=String(view.case_id);
       for(const f of Array.from(files.files||[])){
-        if(f.size>700000)throw new Error(`"${f.name}" passa de 700 KB. Envie o PDF do laudo ou copie o texto na história.`);
-        view=await client.caseDocument(id,{name:f.name,content_base64:await base64(f),identifiers:identifiers()});
+        view=await client.caseDocument(id,{...(await prepared(f)),identifiers:identifiers()});
       }
       current={id,view};files.value='';
       if(session.model){
@@ -395,8 +416,8 @@ export function quickPage(client){
   ask.append(field('Pedido',text),dictation(text),picker,field('Lateralidade',side));
   const docs=box('section','card');
   docs.append(box('h2','card-title','2. Documentos do paciente'),
-    box('p','muted','Laudos, exames, relatórios e pedidos anteriores (PDF com texto, Word ou .txt). Nome, CPF e carteirinha são lidos e removidos aqui no seu computador, sem IA.'));
-  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept='.pdf,.txt,.docx,application/pdf,text/plain';
+    box('p','muted','Laudos, exames, relatórios e pedidos anteriores (PDF, Word, .txt ou foto). Fotos e PDFs escaneados são lidos aqui no seu computador; nome, CPF e carteirinha são lidos e removidos localmente, sem IA.'));
+  const files=document.createElement('input');files.type='file';files.multiple=true;files.accept=ACCEPT;
   const history=textarea('Opcional: história, exame físico, tratamentos e tempo de evolução (pode ditar).');history.rows=5;
   const consent=document.createElement('input');consent.type='checkbox';const cl=box('label','chip');cl.append(consent,el('span','Consentimento do paciente registrado para tratamento dos dados (LGPD)'));
   docs.append(field('Arquivos (até 8)',files),field('História (opcional)',history),dictation(history),cl);
@@ -412,7 +433,7 @@ export function quickPage(client){
       if(!consent.checked)throw new Error('Registre o consentimento do paciente (LGPD).');
       const list=Array.from(files.files||[]);
       if(!list.length&&history.value.trim().length<20)throw new Error('Anexe os documentos ou escreva a história.');
-      if(list.some(f=>f.size>700000))throw new Error('Cada arquivo deve ter até 700 KB.');
+      const ready=[];for(const f of list)ready.push(await prepared(f));
       if(text.value.trim().length>=6){const done=step('Entendendo o pedido');
         const r=await client.requestParse(text.value);
         if(r.template_id){draft.templateId=r.template_id;draft.procedure=r.template_name;}else if(r.procedure)draft.procedure=r.procedure;
@@ -421,14 +442,14 @@ export function quickPage(client){
         done();}
       if(!draft.procedure&&!draft.templateId)throw new Error('Diga o procedimento ou escolha o modelo de cirurgia.');
       let done=step('Lendo a identificação nos documentos (no seu computador)');
-      for(const f of list){try{const r=await client.caseScan({name:f.name,content_base64:await base64(f)});
+      for(const f of ready){try{const r=await client.caseScan(f);
         for(const [k,v] of Object.entries(r.identifiers||{})){const rec=/** @type {Record<string,string>} */(patient);if(!rec[k]&&typeof v==='string')rec[k]=v;}}catch{/* reported on upload */}}
       done();
       if(!patient.name.trim())throw new Error('Não encontrei o nome do paciente nos documentos. Digite-o em "Pedido médico" > Identificação e tente de novo.');
       done=step('Removendo a identificação e enviando');
       if(current)await client.caseDelete(current.id).catch(()=>{});
       let view=await client.caseCreate({history:history.value,identifiers:identifiers(),consent:true});const id=String(view.case_id);
-      for(const f of list)view=await client.caseDocument(id,{name:f.name,content_base64:await base64(f),identifiers:identifiers()});
+      for(const f of ready)view=await client.caseDocument(id,{...f,identifiers:identifiers()});
       current={id,view};done();
       done=step('Claude lendo o texto sem identificação');
       view=await client.caseExtract(id);for(let i=0;i<90&&view.status==='RUNNING';i++){await pause(2000);view=await client.caseGet(id);}
