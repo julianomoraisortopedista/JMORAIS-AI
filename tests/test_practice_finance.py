@@ -106,3 +106,37 @@ def test_one_note_per_xml_block_and_brazilian_formats(tmp_path):
     assert len(invoices_from_xml(XML)) == 1
     from jmoraIs.practice_finance.reconcile import br, brl
     assert brl(123456789) == "R$ 1.234.567,89" and brl(-5) == "-R$ 0,05" and br("2026-10-08") == "08/10/2026"
+
+
+def xlsx(sheets):
+    """Minimal workbook with inline strings: {sheet name: [[cell, ...], ...]}."""
+    import io
+    import zipfile
+    from xml.sax.saxutils import escape
+    ns = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    rel = 'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        entries, rels = [], []
+        for n, (name, rows) in enumerate(sheets.items(), 1):
+            cells = "".join(f'<row r="{i}">' + "".join(f'<c r="{chr(65 + j)}{i}" t="inlineStr"><is><t>{escape(v)}</t></is></c>'
+                                                      for j, v in enumerate(row)) + "</row>" for i, row in enumerate(rows, 1))
+            z.writestr(f"xl/worksheets/sheet{n}.xml", f"<worksheet {ns}><sheetData>{cells}</sheetData></worksheet>")
+            entries.append(f'<sheet name="{escape(name)}" sheetId="{n}" r:id="rId{n}"/>')
+            rels.append(f'<Relationship Id="rId{n}" Type="worksheet" Target="worksheets/sheet{n}.xml"/>')
+        z.writestr("xl/workbook.xml", f"<workbook {ns} {rel}><sheets>{''.join(entries)}</sheets></workbook>")
+        z.writestr("xl/_rels/workbook.xml.rels",
+                   f'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">{"".join(rels)}</Relationships>')
+    return buf.getvalue()
+
+
+def test_workbook_one_sheet_per_hospital():
+    from jmoraIs.practice_finance.importers import surgeries_from_workbook
+    book = xlsx({"Hospital Alfa": [["Paciente", "Convênio", "Data", "Procedimento", "Valor"],
+                                   ["Paciente Ficticio Um", "Sul América", "05/09/2026", "ATJ", "3.500,00"]],
+                 "Hospital Beta": [["Data", "Paciente", "Procedimento"], ["12/09/2026", "Paciente Ficticio Dois", "Artroscopia"]],
+                 "legendas": [["Cor", "Significado"], ["azul", "faturado"]]})
+    surgeries, skipped, info = surgeries_from_workbook(book)
+    assert [(s.hospital, s.patient) for s in surgeries] == [("Hospital Alfa", "Paciente Ficticio Um"), ("Hospital Beta", "Paciente Ficticio Dois")]
+    assert surgeries[0].expected_cents == 350000 and surgeries[0].insurer == "Sul América"
+    assert [s["count"] for s in info["sheets"]] == [1, 1, 0]

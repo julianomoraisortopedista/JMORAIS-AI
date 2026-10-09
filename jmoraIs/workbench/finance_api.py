@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from jmoraIs.practice_finance.importers import (
     ImportRejected, invoice_from_text, invoices_from_xml, payments_from_table, payments_from_text, read_email, read_table,
-    surgeries_from_table,
+    surgeries_from_table, surgeries_from_workbook,
 )
 from jmoraIs.practice_finance.reconcile import apply_certain, panel, suggest
 from jmoraIs.practice_finance.store import FinanceStore, Surgery
@@ -78,8 +78,11 @@ def mount_finance(app: FastAPI, store: FinanceStore, clock: Callable[[], datetim
     @app.post("/api/finance/import/surgeries")
     def finance_import_surgeries(body: SurgeryImportIn):
         try:
-            rows = read_table(body.name, _decode(body))
-            surgeries, skipped, info = surgeries_from_table(rows, body.mapping)
+            content = _decode(body)
+            if body.name.lower().endswith(".xlsx"):
+                surgeries, skipped, info = surgeries_from_workbook(content, body.mapping)
+            else:
+                surgeries, skipped, info = surgeries_from_table(read_table(body.name, content), body.mapping)
         except ImportRejected as exc:
             _bad(str(exc))
         if not body.commit:

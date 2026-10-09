@@ -92,7 +92,8 @@ function renderImports(client,target,reload){
   sheet.onchange=async()=>{const f=sheet.files?.[0];if(!f)return;
     try{const body={name:f.name,content_base64:await base64(f)};const r=await client.financeImportSurgeries({...body,commit:false});
       const mapped=Object.entries(r.mapping).map(([k,i])=>`${k} ← "${r.headers[Number(i)]}"`).join(' · ');
-      sheetPreview.replaceChildren(box('p','muted',`Colunas reconhecidas: ${mapped}`),
+      const tabs=(r.sheets||[]).map((/** @type {any} */ x)=>`${x.sheet}: ${x.count}`).join(' · ');
+      sheetPreview.replaceChildren(box('p','muted',`Colunas reconhecidas: ${mapped}`+(tabs?` — Abas (hospital = nome da aba): ${tabs}`:'')),
         table(['Data','Hospital','Paciente','Procedimento','Valor'],r.preview.map((/** @type {any} */ s)=>[br(s.date),s.hospital,s.patient,s.procedure,brl(s.expected_cents)])));
       const go=button(`Importar ${r.count} cirurgia(s)`);const a=box('div','actions');a.append(go);sheetPreview.append(a);
       if(r.skipped.length)sheetPreview.append(box('div','alert alert-warn','Ignoradas: '+r.skipped.join('; ')));

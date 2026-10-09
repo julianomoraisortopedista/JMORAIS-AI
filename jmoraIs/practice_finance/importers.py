@@ -119,6 +119,50 @@ def read_table(filename: str, content: bytes) -> list[list[str]]:
     raise ImportRejected("Envie a planilha em .xlsx ou .csv.")
 
 
+def xlsx_sheets(content: bytes) -> list[tuple[str, list[list[str]]]]:
+    """(sheet name, rows) for every worksheet, in workbook order."""
+    import zipfile
+    from jmoraIs.reference.tuss import iter_xlsx_rows
+    try:
+        book = zipfile.ZipFile(io.BytesIO(content))
+        wb = fromstring(book.read("xl/workbook.xml"))
+        rels = fromstring(book.read("xl/_rels/workbook.xml.rels"))
+    except Exception as exc:
+        raise ImportRejected("Não foi possível ler a planilha (.xlsx).") from exc
+    targets = {r.get("Id"): r.get("Target", "") for r in rels if _local(r.tag) == "Relationship"}
+    out = []
+    for sheet in (el for el in wb.iter() if _local(el.tag) == "sheet"):
+        rid = next((v for k, v in sheet.attrib.items() if k.endswith("}id")), "")
+        target = targets.get(rid, "").lstrip("/")
+        path = target if target.startswith("xl/") else "xl/" + target
+        rows = list(iter_xlsx_rows(content, path))
+        width = max((max(r) for r in rows if r), default=-1) + 1
+        out.append((sheet.get("name", ""), [[r.get(i, "") for i in range(width)] for r in rows]))
+    return out
+
+
+def surgeries_from_workbook(content: bytes, mapping: dict[str, int] | None = None) -> tuple[list[Surgery], list[str], dict]:
+    """Every sheet with a date column; the sheet name is the hospital when the sheet has no hospital column."""
+    surgeries, skipped, sheets = [], [], []
+    for name, rows in xlsx_sheets(content):
+        if not rows:
+            continue
+        try:
+            found, notes, info = surgeries_from_table(rows, mapping)
+        except ImportRejected as exc:
+            sheets.append({"sheet": name, "count": 0, "note": str(exc)})
+            continue
+        if "hospital" not in info["mapping"]:
+            found = [s.model_copy(update={"hospital": name.strip()}) for s in found]
+        surgeries += found
+        skipped += [f"aba {name}: {n}" for n in notes]
+        sheets.append({"sheet": name, "count": len(found), "headers": info["headers"], "mapping": info["mapping"]})
+    if not surgeries:
+        raise ImportRejected("Nenhuma aba com coluna de data. Me diga o título da coluna de data da sua planilha.")
+    first = next(s for s in sheets if s.get("count"))
+    return surgeries, skipped, {"headers": first["headers"], "mapping": first["mapping"], "sheets": sheets}
+
+
 def header_row(rows: list[list[str]]) -> int:
     """First row (within 15) whose cells look like headers (most text, a date-like word)."""
     for idx, row in enumerate(rows[:15]):

@@ -41,8 +41,8 @@ def _excel_date(value: str | None) -> str | None:
         return None
 
 
-def iter_xlsx_rows(content: bytes):
-    """Yield {column_index: text} for each non-empty row of every worksheet (stdlib only)."""
+def iter_xlsx_rows(content: bytes, only: str | None = None):
+    """Yield {column_index: text} for each non-empty row of every worksheet, or of the sheet file `only` (stdlib only)."""
     book = zipfile.ZipFile(io.BytesIO(content))
     shared: list[str] = []
     if "xl/sharedStrings.xml" in book.namelist():
@@ -50,7 +50,7 @@ def iter_xlsx_rows(content: bytes):
             if el.tag == NS + "si":
                 shared.append("".join(t.text or "" for t in el.iter(NS + "t")))
                 el.clear()
-    for name in sorted(n for n in book.namelist() if n.startswith("xl/worksheets/sheet")):
+    for name in sorted(n for n in book.namelist() if n.startswith("xl/worksheets/sheet") and (only is None or n == only)):
         for _, el in iterparse(book.open(name)):
             if el.tag != NS + "row":
                 continue
