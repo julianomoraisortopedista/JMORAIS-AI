@@ -40,14 +40,16 @@ export class BrowserAuth {
     }
     return d;
   }
-  async begin() {
+  /** @param {'UPDATE_PASSWORD'} [action] identity-server action (password change), same PKCE round trip */
+  async begin(action) {
     this.logout();
     const d=await this.discovery(), verifier=random(), state=random(), nonce=random();
     const challenge=encode(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier))));
     this.storage.setItem(transactionKey,JSON.stringify({verifier,state,nonce,created:Date.now(),issuer:this.config.issuer,client:this.config.client_id,redirect:this.config.redirect_uri}));
     const url=new URL(d.authorization_endpoint);
     url.search=new URLSearchParams({response_type:'code',client_id:this.config.client_id,redirect_uri:this.config.redirect_uri,
-      scope:this.config.scopes.join(' '),state,nonce,code_challenge:challenge,code_challenge_method:'S256'}).toString();
+      scope:this.config.scopes.join(' '),state,nonce,code_challenge:challenge,code_challenge_method:'S256',
+      ...(action==='UPDATE_PASSWORD'?{kc_action:action}:{})}).toString();
     return url.href;
   }
   /** @param {URL} url @param {(path:string)=>void} clearURL */

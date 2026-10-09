@@ -60,7 +60,9 @@ async function shell(){
  const top=box('header','topbar');const title=box('h1','page-title','');
  const ai=session.model?pill('Claude conectado','SUPPORTING'):pill('IA em modo manual','muted');
  const exit=button('Sair','ghost');exit.onclick=()=>{reset();login();};
- const tools=box('div','top-tools');tools.append(ai,exit);top.append(title,tools);
+ const password=button('Alterar senha','ghost');
+ password.onclick=async()=>{password.setAttribute('disabled','');try{const url=await current.begin('UPDATE_PASSWORD');reset();location.assign(url);}catch{password.removeAttribute('disabled');}};
+ const tools=box('div','top-tools');tools.append(ai,password,exit);top.append(title,tools);
  const content=box('section','content');content.setAttribute('aria-live','polite');
  main.append(top,content);
  const layout=box('div','layout');layout.append(side,main);root.replaceChildren(layout);

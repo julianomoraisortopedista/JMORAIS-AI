@@ -25,6 +25,12 @@ async function fixture(){
  const url=new URL(await auth.begin());nonce=url.searchParams.get('nonce');
  return {auth,storage,url,get exchange(){return exchange;},set tokenNonce(v){tokenNonce=v;}};
 }
+test('password change reuses the PKCE round trip and allows only that action',async()=>{
+ const f=await fixture();assert.equal(f.url.searchParams.has('kc_action'),false);
+ const url=new URL(await f.auth.begin('UPDATE_PASSWORD'));
+ assert.equal(url.searchParams.get('kc_action'),'UPDATE_PASSWORD');assert.equal(url.searchParams.get('code_challenge_method'),'S256');
+ assert.equal(new URL(await f.auth.begin(/** @type {any} */('delete_account'))).searchParams.has('kc_action'),false);
+});
 test('public config rejects missing fields, secret and unsafe redirects',()=>{
  assert.deepEqual(validateConfig(config,'https://workspace.example'),config);
  for(const c of [{},{...config,client_secret:'forbidden'},{...config,client_id:''},{...config,issuer:'http://identity.example'},{...config,redirect_uri:'https://other.example/callback'}])assert.throws(()=>validateConfig(c,'https://workspace.example'));

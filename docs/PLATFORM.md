@@ -7,6 +7,13 @@ make local-pilot-up      # builds and starts Postgres, Keycloak, backend and the
 Open http://localhost/ and sign in (local test users and passwords are in
 `~/.local/share/jmorais-local-pilot/.env`; synthetic data only).
 
+Login and password-change pages are in Portuguese and mark the fields `username` /
+`current-password`, so Safari/iCloud Keychain can save the login and fill it with Touch ID or
+Face ID. **Alterar senha** (top bar) runs the same code+PKCE round trip with
+`kc_action=UPDATE_PASSWORD` (policy: at least 12 characters, not the username). After the
+physician changes the `medico` password, `.env` no longer holds it, so `make local-pilot-proof`
+cannot sign in as the physician until the proof is given another way to authenticate.
+
 Sections after login:
 
 - **Visão geral** — caller context, session counters, guided steps.

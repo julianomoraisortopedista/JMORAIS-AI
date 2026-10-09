@@ -57,7 +57,9 @@ def prepare():
 
 REALM_HARDENING=dict(bruteForceProtected=True,failureFactor=5,waitIncrementSeconds=60,maxFailureWaitSeconds=900,
     maxDeltaTimeSeconds=43200,permanentLockout=False,accessTokenLifespan=300,ssoSessionIdleTimeout=1800,
-    ssoSessionMaxLifespan=36000,passwordPolicy='length(12) and notUsername',revokeRefreshToken=True)
+    ssoSessionMaxLifespan=36000,passwordPolicy='length(12) and notUsername',revokeRefreshToken=True,
+    # Login and password-change pages in Portuguese.
+    internationalizationEnabled=True,supportedLocales=['pt-BR'],defaultLocale='pt-BR',displayName='JMORAIS')
 
 
 def harden_realm(env_path,url='http://127.0.0.1:8081'):
