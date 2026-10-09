@@ -12,6 +12,10 @@ import requests
 from sqlalchemy import create_engine,text
 from deploy.local.runtime import database_url,ISSUER
 
+# Remote access mode moves the public origin and issuer to the private HTTPS address.
+ORIGIN=os.environ.get('PUBLIC_ORIGIN','http://localhost')
+OIDC_PUBLIC=os.environ.get('OIDC_PUBLIC_URL','http://localhost:8081')
+
 
 class LoginForm(HTMLParser):
     def __init__(self):super().__init__();self.action=None;self.fields={}
@@ -34,7 +38,7 @@ def login(operations=False):
         response.raise_for_status()
         form=LoginForm();form.feed(response.text)
         if not form.action:raise RuntimeError('OIDC_LOGIN_FORM_UNAVAILABLE')
-        target=form.action.replace('http://localhost:8081/','http://oidc:8080/')
+        target=form.action.replace(OIDC_PUBLIC+'/','http://oidc:8080/')
         if not target.startswith('http://oidc:8080/'):raise RuntimeError('OIDC_LOGIN_ORIGIN_REJECTED')
         response=session.post(target,data={**form.fields,'username':'operations' if operations else 'medico',
             'password':os.environ['LOCAL_OPERATIONS_PASSWORD' if operations else 'LOCAL_PHYSICIAN_PASSWORD']},
@@ -58,12 +62,13 @@ def main():
     auth={'authorization':'Bearer '+login()}
     ops={'authorization':'Bearer '+login(True),'x-purpose':'INTERNAL_OPERATIONS'}
     base='http://frontend'
+    host=urlsplit(ORIGIN).netloc
     def request(method,path,**kwargs):
-        response=requests.request(method,base+path,headers={'Host':'localhost',**kwargs.pop('headers',{})},timeout=30,**kwargs)
+        response=requests.request(method,base+path,headers={'Host':host,**kwargs.pop('headers',{})},timeout=30,**kwargs)
         return response
     prefix='/internal/api/v1/'
     assert request('GET','/').status_code==200
-    assert request('GET','/workspace-config.json').json()['redirect_uri']=='http://localhost/'
+    assert request('GET','/workspace-config.json').json()['redirect_uri']==ORIGIN+'/'
     assert request('GET',prefix+'health/live').status_code==200
     ready=request('GET',prefix+'health/ready',headers=ops)
     assert ready.status_code==200 and ready.json()['status']=='READY','READINESS_FAILED'

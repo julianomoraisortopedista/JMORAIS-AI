@@ -36,6 +36,11 @@ services:
     security_opt: ['no-new-privileges:true']
     cap_drop: [ALL]
     env_file: ['${LOCAL_PILOT_DIR}/.env']
+    environment:
+      # The acceptance proof runs in this image and must follow remote access mode.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost}
+      OIDC_PUBLIC_URL: ${OIDC_PUBLIC_URL:-http://localhost:8081}
+      OIDC_ISSUER: ${OIDC_PUBLIC_URL:-http://localhost:8081}/realms/jmorais-local
     volumes: ['${LOCAL_PILOT_DIR}/output:/pilot-output']
     depends_on:
       postgres: {condition: service_healthy}
