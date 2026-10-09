@@ -1,3 +1,10 @@
+# With remote access on, http://localhost is sent to the private HTTPS address (one origin, one issuer).
+map "$http_host|${PUBLIC_ORIGIN}" $jm_canonical {
+    "localhost|http://localhost" "";
+    "~^localhost\|" "${PUBLIC_ORIGIN}";
+    default "";
+}
+
 server {
     listen 80;
     server_name localhost;
@@ -7,13 +14,18 @@ server {
     client_max_body_size 1m;
     add_header Cache-Control "no-store" always;
     # Browser hardening: only this origin runs code; login/token calls go to the local identity server.
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http://localhost:8081; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self' http://localhost:8081" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ${OIDC_PUBLIC_URL}; frame-src 'none'; frame-ancestors 'none'; object-src 'none'; base-uri 'none'; form-action 'self' ${OIDC_PUBLIC_URL}" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "no-referrer" always;
     add_header Permissions-Policy "microphone=(self), camera=(), geolocation=(), payment=(), usb=()" always;
     add_header Cross-Origin-Opener-Policy "same-origin" always;
     add_header Cross-Origin-Resource-Policy "same-origin" always;
+    if ($jm_canonical) { return 302 $jm_canonical$request_uri; }
+    location = /workspace-config.json {
+        default_type application/json;
+        return 200 '{"environment":"DEVELOPMENT","issuer":"${OIDC_PUBLIC_URL}/realms/jmorais-local","client_id":"jmorais-local","redirect_uri":"${PUBLIC_ORIGIN}/","scopes":["openid","profile"]}';
+    }
     location /internal/api/ {
         proxy_pass http://backend:8000;
         proxy_set_header Host localhost;

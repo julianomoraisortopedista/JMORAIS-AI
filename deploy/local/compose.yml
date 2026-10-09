@@ -18,7 +18,7 @@ services:
     image: quay.io/keycloak/keycloak:26.8.0
     security_opt: ['no-new-privileges:true']
     cap_drop: [ALL]
-    command: [start-dev, --import-realm, '--hostname=http://localhost:8081']
+    command: [start-dev, --import-realm, '--hostname=${OIDC_PUBLIC_URL:-http://localhost:8081}', '--proxy-headers=xforwarded']
     ports: ['127.0.0.1:8081:8080']
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: local-admin
@@ -48,6 +48,7 @@ services:
     command: [python, -m, uvicorn, 'deploy.local.runtime:create', --factory, --host, '0.0.0.0', --port, '8000', --no-access-log, --no-server-header]
     environment:
       JMORAIS_LOCAL_SYNTHETIC: 'YES'
+      OIDC_ISSUER: ${OIDC_PUBLIC_URL:-http://localhost:8081}/realms/jmorais-local
       LOCAL_RUNTIME_PASSWORD: ${LOCAL_RUNTIME_PASSWORD:?local env required}
       LOCAL_DRAFT_KEY: ${LOCAL_DRAFT_KEY:?local env required}
       LOCAL_PSEUDO_KEY: ${LOCAL_PSEUDO_KEY:?local env required}
@@ -66,6 +67,9 @@ services:
       context: ../..
       dockerfile: deploy/local/Frontend.Dockerfile
     security_opt: ['no-new-privileges:true']
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-http://localhost}
+      OIDC_PUBLIC_URL: ${OIDC_PUBLIC_URL:-http://localhost:8081}
     ports: ['127.0.0.1:80:80']
     depends_on:
       backend: {condition: service_healthy}

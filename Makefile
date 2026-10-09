@@ -70,6 +70,13 @@ local-pilot-proof:
 local-pilot-repair:
 	@$(VENV_PYTHON) -m deploy.local.control repair
 # macOS: check http://localhost every 5 minutes and repair it automatically (uninstall: local-pilot-watchdog-off).
+# iPhone/remote access through the private Tailscale network (HTTPS, never public).
+.PHONY: remote-on remote-off
+remote-on:
+	@$(VENV_PYTHON) -m deploy.local.control remote-on
+remote-off:
+	@$(VENV_PYTHON) -m deploy.local.control remote-off
+
 # Read-only security self-check of the local platform and this Mac.
 .PHONY: security-check
 security-check:

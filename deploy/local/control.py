@@ -80,6 +80,60 @@ def harden_realm(env_path,url='http://127.0.0.1:8081'):
         return r.status in (200,204)
 
 
+TAILSCALE=('/Applications/Tailscale.localized/Tailscale.app/Contents/MacOS/Tailscale','/Applications/Tailscale.app/Contents/MacOS/Tailscale','/usr/local/bin/tailscale','/opt/homebrew/bin/tailscale')
+REMOTE=STATE/'remote.env'
+
+
+def tailscale(*args,timeout=30):
+    for path in TAILSCALE:
+        if Path(path).exists():
+            r=subprocess.run([path,*args],capture_output=True,text=True,timeout=timeout)
+            if 'CLI failed to start' not in (r.stdout+r.stderr):return r
+    raise RuntimeError('Tailscale CLI not available')
+
+
+def private_host():
+    data=json.loads(tailscale('status','--json').stdout)
+    if data.get('BackendState')!='Running':raise RuntimeError('Tailscale not connected')
+    return data['Self']['DNSName'].rstrip('.')
+
+
+def admin_token(env_path,url='http://127.0.0.1:8081'):
+    import urllib.parse
+    values=dict(line.split('=',1) for line in Path(env_path).read_text().splitlines() if '=' in line)
+    form=urllib.parse.urlencode({'grant_type':'password','client_id':'admin-cli','username':'local-admin',
+        'password':values['LOCAL_OIDC_ADMIN_PASSWORD']}).encode()
+    for _ in range(40):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url+'/realms/master/protocol/openid-connect/token',data=form),timeout=5) as r:
+                return json.load(r)['access_token']
+        except Exception:
+            time.sleep(2)
+    raise RuntimeError('identity server not ready')
+
+
+def admin(token,method,path,body=None,url='http://127.0.0.1:8081'):
+    request=urllib.request.Request(url+'/admin/realms/jmorais-local'+path,method=method,
+        data=None if body is None else json.dumps(body).encode(),
+        headers={'Authorization':'Bearer '+token,'Content-Type':'application/json'})
+    with urllib.request.urlopen(request,timeout=10) as r:
+        raw=r.read()
+        return json.loads(raw) if raw else None
+
+
+def sync_clients(env_path):
+    """Redirect URIs and web origins of the browser clients: localhost plus the private address when on."""
+    origins=['http://localhost']
+    if REMOTE.exists():
+        origins.append(dict(l.split('=',1) for l in REMOTE.read_text().splitlines() if '=' in l)['PUBLIC_ORIGIN'])
+    token=admin_token(env_path)
+    for client in admin(token,'GET','/clients'):
+        if client['clientId'] in ('jmorais-local','jmorais-operations'):
+            client.update(redirectUris=[o+'/' for o in origins],webOrigins=origins)
+            admin(token,'PUT','/clients/'+client['id'],client)
+    return True
+
+
 def reachable(url='http://127.0.0.1/',attempts=10):
     """The page must answer through the host port, not only inside the container."""
     for _ in range(attempts):
@@ -103,7 +157,7 @@ def repair(base,process_env,log):
 
 def main():
     os.umask(0o077)  # every file this tool creates is private to the user
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=('up','down','proof','repair'))
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=('up','down','proof','repair','remote-on','remote-off'))
     args=parser.parse_args()
     try:
         env=prepare()
@@ -111,16 +165,28 @@ def main():
         (public/'config.json').write_text(json.dumps({'cliPluginsExtraDirs':['/Applications/Docker.app/Contents/Resources/cli-plugins']}))
         process_env={**os.environ,'DOCKER_CONFIG':str(public),
             'DOCKER_HOST':'unix://'+str(Path.home()/'.docker/run/docker.sock')}
-        if args.action in ('up','repair') and not process_env.get('ANTHROPIC_API_KEY'):
+        if args.action in ('up','repair','remote-on','remote-off') and not process_env.get('ANTHROPIC_API_KEY'):
             # Optional Claude key for the evidence workbench, from the Keychain; process env only.
             from jmoraIs.application.support_classification_runtime import keychain_api_key
             key=keychain_api_key()
             if key:process_env['ANTHROPIC_API_KEY']=key
 
-        base=['docker','compose','--env-file',str(env),'-f',str(ROOT/'deploy/local/compose.yml')]
+        if args.action=='remote-on':
+            host=private_host()
+            fd=os.open(REMOTE,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
+            with os.fdopen(fd,'w') as f:f.write(f'PUBLIC_ORIGIN=https://{host}\nOIDC_PUBLIC_URL=https://{host}:8443\n')
+            for port,target in (('443','http://127.0.0.1:80'),('8443','http://127.0.0.1:8081')):
+                r=tailscale('serve','--bg','--https='+port,target)
+                if r.returncode!=0:
+                    REMOTE.unlink(missing_ok=True);print('NOT_READY: '+(r.stdout+r.stderr).strip().splitlines()[-1][:200]);return 1
+        elif args.action=='remote-off':
+            REMOTE.unlink(missing_ok=True)
+            try:tailscale('serve','reset')
+            except RuntimeError:pass
+        base=['docker','compose','--env-file',str(env)]+(['--env-file',str(REMOTE)] if REMOTE.exists() else [])+['-f',str(ROOT/'deploy/local/compose.yml')]
         if args.action=='up':command=base+['up','--build','-d','--wait','--wait-timeout','300']
         elif args.action=='down':command=base+['down'] # Persist named volumes; never -v.
-        elif args.action=='repair':command=base+['up','-d','--wait','--wait-timeout','300']
+        elif args.action in ('repair','remote-on','remote-off'):command=base+['up','-d','--wait','--wait-timeout','300']
         else:command=base+['run','--rm','--no-deps','seed','python','-m','deploy.local.proof']
         # Persist output privately; sanitized terminal result only.
         log=STATE/(args.action+'.log')
@@ -128,10 +194,12 @@ def main():
         with os.fdopen(fd,'w') as f:
             result=subprocess.run(command,cwd=ROOT,stdout=f,stderr=subprocess.STDOUT,env=process_env)
             ok=result.returncode==0
-            if ok and args.action in ('up','repair'):
-                f.flush();ok=repair(base,process_env,f) and harden_realm(env)
+            if ok and args.action in ('up','repair','remote-on','remote-off'):
+                f.flush();ok=repair(base,process_env,f) and harden_realm(env) and sync_clients(env)
         print(('PASS' if ok else 'NOT_READY')+': '+args.action)
-        if args.action in ('up','repair') and ok:print('http://localhost/ — synthetic only; credentials and launches in private local state directory')
+        if args.action in ('up','repair','remote-on','remote-off') and ok:
+            print((dict(l.split('=',1) for l in REMOTE.read_text().splitlines() if '=' in l)['PUBLIC_ORIGIN']+'/' if REMOTE.exists() else 'http://localhost/')
+                  +' — credentials and launches in private local state directory')
         return 0 if ok else 1
     except Exception as exc:
         print('NOT_READY: '+type(exc).__name__);return 1

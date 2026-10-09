@@ -50,7 +50,7 @@ def headers():
 def files():
     loose = []
     for path in STATE.rglob('*'):
-        if path.name == '.DS_Store' or path.is_symlink():
+        if path.name == '.DS_Store' or path.is_symlink() or 'buildx' in path.parts:  # Docker build metadata, no data; parent is 0700
             continue
         if path.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
             loose.append(str(path.relative_to(STATE)))

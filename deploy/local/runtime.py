@@ -16,7 +16,8 @@ from jmoraIs.secrets.domain import KeyReference, SecretReference, SecretPurpose
 
 PROVIDER='local-synthetic'
 POLICY='MIP-10.1'
-ISSUER='http://localhost:8081/realms/jmorais-local'
+# Local by default; the private HTTPS address when remote access (Tailscale) is on.
+ISSUER=os.environ.get('OIDC_ISSUER','http://localhost:8081/realms/jmorais-local')
 SIGNING=KeyReference(PROVIDER,'draft-signing','1',SecretPurpose.SIGNING_KEY)
 PSEUDO=KeyReference(PROVIDER,'pseudonymization','1',SecretPurpose.PSEUDONYMIZATION_HMAC)
 DATABASE=SecretReference(PROVIDER,'runtime-database',SecretPurpose.POSTGRESQL_CREDENTIALS,'1')
