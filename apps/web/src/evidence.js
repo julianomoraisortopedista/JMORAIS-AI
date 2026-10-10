@@ -80,6 +80,10 @@ export class EvidenceClient {
   catalog(){return this.call('catalog');}
   /** @param {Record<string,unknown>} t */ catalogSave(t){return this.call('catalog',t,'PUT');}
   /** @param {string} id */ catalogDelete(id){return this.call('catalog/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {string} id */ libraryGet(id){return this.call('library/'+encodeURIComponent(id));}
+  /** @param {string} id @param {string} claim */ librarySave(id,claim){return this.call('library/'+encodeURIComponent(id),{claim},'PUT');}
+  /** @param {string} id @param {string} pmid */ libraryRemove(id,pmid){return this.call('library/'+encodeURIComponent(id)+'/'+encodeURIComponent(pmid),undefined,'DELETE');}
+  /** @param {string} id */ libraryReferences(id){return this.call('library/'+encodeURIComponent(id)+'/justification',{});}
   /** @param {string} q */ tussProcedures(q){return this.call('tuss/procedures?q='+encodeURIComponent(q));}
   /** @param {string} q @param {string} m */ tussMaterials(q,m){return this.call('tuss/materials?q='+encodeURIComponent(q)+'&manufacturer='+encodeURIComponent(m));}
 }

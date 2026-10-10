@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, SecretStr
 
 from jmoraIs.application.coverage_document import RequestDetails, render_coverage_html
+from jmoraIs.application.evidence_library import EvidenceLibrary, EvidenceLibraryRejected
 from jmoraIs.application.evidence_packages import ScientificEvidencePackagePort
 from jmoraIs.application.evidence_query import EvidenceQueryRejected, PICOQuestion, build_pubmed_query
 from jmoraIs.application.legal_basis import (
@@ -136,6 +137,10 @@ class OpmeIn(BaseModel):
     description: str = Field(min_length=2, max_length=200)
     anvisa: str = Field("", max_length=40)
     quantity: int = Field(1, ge=1, le=50)
+
+
+class LibraryIn(BaseModel):
+    claim: str = Field(min_length=10, max_length=600)
 
 
 class DocumentIn(BaseModel):
@@ -269,7 +274,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                sbot_index=None, practice: Optional[PracticeStore] = None,
                appeal_library: Optional[AppealLibrary] = None,
                resolve_appeal_writer: Optional[Callable[[], Optional[Callable]]] = None,
-               finance=None) -> FastAPI:
+               finance=None, evidence_library: Optional[EvidenceLibrary] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -952,10 +957,69 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         state_of(request).decisions.pop(pmid, None)
         return {"removed": pmid}
 
+    def need_evidence_library() -> EvidenceLibrary:
+        if evidence_library is None:
+            bad("Biblioteca científica não configurada.", 503)
+        return evidence_library
+
+    def library_view(template_id: str) -> dict:
+        saved = need_evidence_library().get(template_id) or {"claim": "", "records": [], "updated_at": ""}
+        return {"template_id": template_id, "claim": saved["claim"], "updated_at": saved["updated_at"],
+                "articles": [dict(pmid=r["pmid"], direction=r["final_direction"], quote=r["quote"],
+                                  reviewer=r["reviewer"], decided_at=r["decided_at"]) for r in saved["records"]]}
+
+    @app.get("/api/library/{template_id}")
+    def library_get(template_id: str):
+        return library_view(template_id)
+
+    @app.put("/api/library/{template_id}")
+    def library_save(template_id: str, body: LibraryIn, request: Request):
+        """Keeps the physician's accepted decisions (made in this session) as the surgery's library."""
+        if not any(t.template_id == template_id for t in need_catalog().load()):
+            bad("Modelo não encontrado.", 404)
+        claim = " ".join(body.claim.split())
+        session = [r for r in state_of(request).decisions.values() if " ".join(r["claim"].split()) == claim]
+        previous = need_evidence_library().get(template_id)
+        if previous and previous["claim"] == claim:
+            session += [r for r in previous["records"] if r["pmid"] not in {x["pmid"] for x in session}]
+        try:
+            need_evidence_library().save(template_id, claim, session)
+        except EvidenceLibraryRejected as exc:
+            bad(str(exc))
+        return library_view(template_id)
+
+    @app.delete("/api/library/{template_id}/{pmid}")
+    def library_remove(template_id: str, pmid: str):
+        need_evidence_library().remove(template_id, pmid)
+        return library_view(template_id)
+
+    @app.post("/api/library/{template_id}/justification")
+    def library_justification(template_id: str):
+        """Re-verified references of the surgery's library, for the request assembled in the browser."""
+        saved = need_evidence_library().get(template_id)
+        if not saved:
+            return {"claim": "", "references": [], "excluded": []}
+        packages = ScientificEvidencePackagePort(catalog=InMemoryPackageCatalogRepository(), clock=clock)
+        pipeline = AuthoritativeReconciliationPipeline(pubmed=pubmed, crossref=crossref, packages=packages, clock=clock)
+        try:
+            draft = build_justification(saved["claim"], saved["records"], pubmed=pubmed, pipeline=pipeline,
+                                        packages=packages, clock=clock)
+        except (JustificationRejected, ValueError) as exc:
+            bad(str(exc))
+        return {"claim": draft.claim,
+                "references": [dict(number=r.number, pmid=r.pmid, direction=r.direction.value, quote=r.quote,
+                                    vancouver=r.vancouver, study=r.study_label, high_level=r.high_level)
+                               for r in draft.references],
+                "excluded": [dict(pmid=e.pmid, reason=e.reason) for e in draft.excluded]}
+
     @app.post("/api/document")
     def document(body: DocumentIn, request: Request):
         claim = " ".join(body.claim.split())
         records = [r for r in state_of(request).decisions.values() if " ".join(r["claim"].split()) == claim]
+        if body.template_id and evidence_library is not None:
+            saved = evidence_library.get(body.template_id)
+            if saved and saved["claim"] == claim:  # the surgery's library; this session's decisions take precedence
+                records += [r for r in saved["records"] if r["pmid"] not in {x["pmid"] for x in records}]
         packages = ScientificEvidencePackagePort(catalog=InMemoryPackageCatalogRepository(), clock=clock)
         pipeline = AuthoritativeReconciliationPipeline(pubmed=pubmed, crossref=crossref, packages=packages, clock=clock)
         try:
@@ -988,7 +1052,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             opme = [(i.description, "ver marcas indicadas", i.quantity) for i in template.opme] + opme
             brands = tuple((s.label, tuple((template.opme[m.item_index].description, template.opme[m.item_index].quantity,
                                             m.term, m.manufacturer, m.anvisa, m.tuss_code) for m in s.materials))
-                           for s in template.suppliers if s.materials)
+                           for s in template.suppliers if s.label.strip())
             regime = regime or template.regime
         checks = []
         if template is not None and template.sbot_entry and sbot_index is not None:

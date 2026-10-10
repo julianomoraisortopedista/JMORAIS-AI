@@ -2,6 +2,7 @@
 import {el} from './view.js';
 import {box,button,busy,field,input,pill,say,select,session,textarea} from './evidence.js';
 import {letterheadCard} from './letterhead.js';
+import {libraryPanel} from './library.js';
 
 /** @typedef {{description:string,quantity:number}} Item */
 /** @typedef {{item_index:number,tuss_code:string,term?:string,manufacturer?:string,anvisa?:string}} Material */
@@ -48,6 +49,7 @@ function templateCard(client,t,reload,list){
   if(t.consent_risks&&t.consent_risks.length)card.append(box('p','muted',`Termo de consentimento: ${t.consent_risks.length} complicação(ões) descritas`));
   else card.append(box('p','muted','Termo de consentimento: descreva as complicações em Editar.'));
   if(t.notes)card.append(box('p','muted',t.notes));
+  card.append(libraryPanel(client,t));
   const edit=button('Editar','ghost'),del=button('Excluir','quiet');const a=box('div','actions');a.append(edit,del);card.append(a);
   edit.onclick=()=>card.replaceWith(editor(client,structuredClone(t),reload));
   del.onclick=()=>busy(del,async()=>{await client.catalogDelete(t.template_id);await reload();});

@@ -22,6 +22,8 @@ Sections after login:
   `docs/CASE_INTAKE.md`.
 - **Modelos de cirurgia** — templates with official TUSS codes, OPME kit, three suppliers
   from the official TUSS 19 table and hospital packages; see `docs/SURGICAL_CATALOG.md`.
+  Each template keeps its scientific library ("Montar artigos com o Claude"); see
+  `docs/EVIDENCE_LIBRARY.md`.
 - **Pacientes** — import the owner-issued launch reference and read the seven exact
   viewers (unchanged S004/S005 behaviour).
 - **Evidências / Pergunta em português** — type or dictate the question (or pick a surgery

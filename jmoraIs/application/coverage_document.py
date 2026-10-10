@@ -105,7 +105,10 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
         if request.brands:
             out.append("<h3>Marcas indicadas (fabricantes diferentes, registro Anvisa — CFM 1.956/2010, art. 5º)</h3>")
             for label, materials in request.brands:
-                out.append(f"<p><strong>{escape(label)}</strong></p><table class=\"ident\"><tr><td><strong>Item</strong></td>"
+                out.append(f"<p><strong>{escape(label)}</strong></p>")
+                if not materials:
+                    continue
+                out.append("<table class=\"ident\"><tr><td><strong>Item</strong></td>"
                            "<td><strong>Material (TUSS 19)</strong></td><td><strong>Fabricante</strong></td>"
                            "<td><strong>Anvisa</strong></td><td><strong>Qtd.</strong></td></tr>")
                 out += [f"<tr><td>{escape(i)}</td><td>{escape(c)} — {escape(t)}</td><td>{escape(m)}</td><td>{escape(a)}</td>"

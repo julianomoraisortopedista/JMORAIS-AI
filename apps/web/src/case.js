@@ -1,6 +1,6 @@
 /** Medical request from patient documents. Identification never leaves this page except to be removed. */
 import {el} from './view.js';
-import {box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
+import {DIRECTIONS,box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
 import {dictation} from './dictation.js';
 import {templatePicker} from './catalog.js';
 import {applyLetterhead,practice,prescriptionPage,printModeSelect} from './letterhead.js';
@@ -24,6 +24,7 @@ function identifiers(){const {operadora,...ids}=patient;return ids;}
 /** @param {Blob} file @returns {Promise<string>} */
 async function base64(file){const bytes=new Uint8Array(await file.arrayBuffer());let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));return btoa(bin);}
 
+/** @type {any} */ let science=null;
 const MAX_UPLOAD=700000;
 const ACCEPT='.pdf,.txt,.docx,.jpg,.jpeg,.png,.heic,application/pdf,text/plain,image/*';
 /** Photos of reports are redrawn here as a smaller JPEG (no location/EXIF) and read on the server by local OCR, never by the AI.
@@ -465,7 +466,10 @@ export function quickPage(client){
       current.view=view;draft.reportSections=view.report.sections.map((/** @type {any} */ sec)=>[sec.title,sec.sentences.map((/** @type {any} */ x)=>x.text).join(' ')]).filter((/** @type {any} */ x)=>x[1]);
       done();
       /** @type {any} */ let check=null;
-      if(draft.templateId){done=step('Conferindo com a SBOT e o prazo da ANS');check=await client.caseCheck(id,{template_id:draft.templateId,regime:draft.regime}).catch(()=>null);done();}
+      if(draft.templateId){done=step('Conferindo com a SBOT e o prazo da ANS');check=await client.caseCheck(id,{template_id:draft.templateId,regime:draft.regime}).catch(()=>null);done();
+        done=step('Conferindo os artigos da biblioteca desta cirurgia no PubMed e no Crossref');
+        science=await client.libraryReferences(draft.templateId).catch(()=>null);done(science&&science.references.length?'✓':'!');}
+      else science=null;
       say(status,'Pronto. Revise o relatório e a solicitação abaixo antes de imprimir.','ok');
       result.replaceChildren(...quickResult(client,view,check).children);
     }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
@@ -488,6 +492,12 @@ function quickResult(client,view,check){
   for(const g of view.report.gaps||[])review.append(box('div','alert alert-warn','Lacuna: '+g));
   draft.reportSections.forEach((sec,n)=>{const t=textarea('');t.rows=Math.max(3,Math.min(12,Math.ceil(sec[1].length/110)));t.value=sec[1];t.oninput=()=>{draft.reportSections[n]=[sec[0],t.value];};review.append(field(sec[0],t));});
   wrap.append(review);
+  const sci=box('section','card');sci.append(box('h2','card-title','Fundamentação científica'));
+  if(science&&science.references.length){sci.append(box('p','muted',`${science.references.length} artigo(s) da biblioteca desta cirurgia, conferidos agora no PubMed e no Crossref. Entram no pedido com o trecho literal e a referência em Vancouver.`));
+    for(const r of science.references)sci.append(box('p','',`[${r.number}] ${DIRECTIONS[/** @type {keyof typeof DIRECTIONS} */(r.direction)]||r.direction}${r.study?' · '+r.study:''} — ${r.vancouver}`));}
+  else sci.append(box('div','alert alert-warn','Esta cirurgia ainda não tem artigos aprovados. Em "Modelos de cirurgia", use "Montar artigos com o Claude" uma vez; os próximos pedidos já saem com a fundamentação.'));
+  for(const e of (science&&science.excluded)||[])sci.append(box('p','muted',`PMID ${e.pmid} não entrou: ${e.reason}`));
+  wrap.append(sci);
   if(check){const c=box('section','card');c.append(box('h2','card-title','Checagem anti-negativa'));
     if(!check.codes_confirmed)c.append(box('div','alert alert-warn','Os códigos TUSS deste modelo ainda não foram confirmados por você (Modelos de cirurgia).'));
     for(const f of check.checks||[])c.append(box('div','alert alert-'+(f.level==='BLOQUEIO'?'error':f.level==='OK'?'ok':'warn'),`${f.level==='BLOQUEIO'?'Corrigir':f.level==='OK'?'OK':'Atenção'} · ${f.topic}: ${f.message}`));
@@ -533,8 +543,15 @@ async function combinedDocument(client,check){
   if(t&&t.tuss_codes.length){add('p','Códigos (TUSS):');table(t.tuss_codes.map((/** @type {string} */ c)=>[c,t.tuss_terms[c]||'']),['Código','Descrição']);}
   if(t&&t.opme.length){add('p','Órteses, próteses e materiais especiais (OPME):');table(t.opme.map((/** @type {any} */ i)=>[i.description,String(i.quantity)]),['Material','Qtd.']);}
   const brands=t?(t.suppliers||[]).filter((/** @type {any} */ x)=>x.label):[];
+  if(t&&t.opme.length&&brands.length<3)throw new Error(`O modelo "${t.name}" tem ${brands.length} empresa(s) de material. Cadastre 3, de fabricantes diferentes, em Modelos de cirurgia (CFM 1.956/2010).`);
   if(brands.length){add('p','Fornecedores indicados, de fabricantes diferentes (CFM 1.956/2010, art. 5º):'+(s.supplier?` preferência: ${s.supplier}.`:''));
     for(const b of brands){add('p',b.label).style.fontWeight='bold';if(b.materials.length)table(b.materials.map((/** @type {any} */ m)=>[t.opme[m.item_index]?.description||'',`${m.tuss_code} ${m.term}`,m.manufacturer,m.anvisa]),['Item','Material (TUSS 19)','Fabricante','Anvisa']);}}
+  if(science&&science.references.length){
+    add('h2','Fundamentação científica');
+    add('p',`Afirmação clínica: ${science.claim}`);
+    for(const r of science.references)add('p',`[${r.number}] ${DIRECTIONS[/** @type {keyof typeof DIRECTIONS} */(r.direction)]||r.direction}${r.study?` (${r.study})`:''}: "${r.quote}"`);
+    add('p','Referências (Vancouver):');const ol=doc.createElement('ol');for(const r of science.references)add('li',r.vancouver,ol);doc.body.append(ol);
+    add('p','Trechos literais dos resumos publicados; artigos classificados com confirmação do médico e metadados verificados no PubMed e no Crossref.').className='small';}
   if(t&&t.sbot_entry)add('p',`Codificação conforme SBOT, Manual de Diretrizes de Codificação, procedimento ${t.sbot_entry}.`).className='small';
   if(check&&check.deadline)add('p',check.deadline).className='small';
   add('p','Anexos: laudos dos exames e termo de consentimento assinado.');
