@@ -36,3 +36,15 @@ genicular nerve block 31403026 (alt. 31602118).
 With a template, the request lists the official TUSS codes and terms, the kit, a table of the
 three brands with TUSS 19 code, manufacturer and Anvisa, and the legal section quotes CFM
 Res. 1.956/2010 arts. 1, 3, 4 and 5 (verbatim from the CFM PDF).
+
+## Printed request in the physician's format
+
+Suppliers carry an optional contact (e-mail or phone) and templates an optional list of
+technically equivalent brands and an ANVISA reference, all stated by the physician. The
+Pedido rápido document follows the physician's own request: place and date, "RELATÓRIO
+MÉDICO", physician line, patient and insurer, the report sections in the order of the saved
+report model, then "Fundamentação normativa" (ANS RN 424/2017, art. 7º, I and II — wording
+checked against ANS Parecer Técnico nº 24/2021 — and CFM 1.956/2010, art. 5º) with the three
+suppliers and contacts, equivalent brands and ANVISA reference, the conclusion, request data
+(procedure, ICD-10, TUSS, OPME, hospital and date), cited quotes, references and signature.
+The report writer is told not to write the normative block itself.

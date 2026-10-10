@@ -130,3 +130,14 @@ def test_seed_copies_official_terms_and_warning_waits_for_materials(index, tmp_p
     seeded = store.load()[0]
     assert seeded.tuss_terms["30726034"].startswith("Artroplastia total")
     assert not any("fabricantes diferentes" in w for w in supplier_warnings(seeded))
+
+
+def test_supplier_contact_equivalent_brands_and_anvisa_reference_persist(tmp_path):
+    from jmoraIs.application.surgical_catalog import CatalogStore, OpmeItem, ProcedureTemplate, Supplier
+    store = CatalogStore(tmp_path / "p.json")
+    saved = store.save(ProcedureTemplate(name="Bloqueio de nervos geniculares", opme=[OpmeItem(description="Kit cânula")],
+                                         suppliers=[Supplier(label="Fornecedor A", contact="vendas@a.example")],
+                                         equivalent_brands=["Marca 1", "Marca 2"], anvisa_reference="80000000001"))
+    loaded = next(t for t in store.load() if t.template_id == saved.template_id)
+    assert loaded.suppliers[0].contact == "vendas@a.example" and loaded.equivalent_brands == ["Marca 1", "Marca 2"]
+    assert loaded.anvisa_reference == "80000000001"

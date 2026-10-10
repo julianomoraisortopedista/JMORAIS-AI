@@ -13,6 +13,7 @@ const patient={name:'',cpf:'',rg:'',card_number:'',birth_date:'',phone:'',email:
 /** Request fields shared with the report card; the edited report text goes into the request. */
 const draft={procedure:'',laterality:'',templateId:/** @type {string|null} */(null),reportText:'',autoReport:false,
   /** Report sections as edited by the physician: [title, text]. */ reportSections:/** @type {[string,string][]} */([]),
+  /** Title of the closing section (request/conclusion), printed after the normative basis. */ conclusionTitle:'',
   /** Hospital scheduling stated by the physician. */
   schedule:{hospital:'',date:'',time:'',duration_minutes:0,anesthesia:'',icu:/** @type {boolean|null} */(null),blood_reserve:/** @type {boolean|null} */(null),supplier:'',notes:''},
   regime:''};
@@ -465,6 +466,7 @@ export function quickPage(client){
       for(let i=0;i<90&&view.report&&view.report.status==='RUNNING';i++){await pause(2000);view=await client.caseGet(id);}
       if(!view.report||view.report.status!=='READY')throw new Error((view.report&&view.report.error)||'Falha ao redigir o relatório.');
       science=view.report.science&&view.report.science.references.length?view.report.science:null;
+      draft.conclusionTitle=(view.report.sections.find((/** @type {any} */ sec)=>sec.key==='solicitacao')||{title:''}).title;
       current.view=view;draft.reportSections=view.report.sections.map((/** @type {any} */ sec)=>[sec.title,sec.sentences.map((/** @type {any} */ x)=>x.text).join(' ')]).filter((/** @type {any} */ x)=>x[1]);
       done();
       /** @type {any} */ let check=null;
@@ -546,25 +548,41 @@ async function combinedDocument(client,check){
   const table=(rows,headers,cls)=>{const tb=doc.createElement('table');if(cls)tb.className=cls;if(headers){const tr=doc.createElement('tr');for(const h of headers)add('th',h,tr);tb.append(tr);}
     for(const r of rows){const tr=doc.createElement('tr');for(const c of r)add('td',c,tr);tb.append(tr);}doc.body.append(tb);};
   add('div','RASCUNHO — revise e assine antes de enviar. Este aviso não aparece na impressão.').className='draft';
-  add('h1','RELATÓRIO MÉDICO E SOLICITAÇÃO DE PROCEDIMENTO CIRÚRGICO');
-  if(patient.operadora)add('p',`À ${patient.operadora} — Setor de Autorizações`);
+  // Same order as the physician's own request: place and date, title, physician, patient and insurer.
+  const today=new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'});
+  add('p',`${profile.city?profile.city+', ':''}${today}`).style.textAlign='right';
+  add('h1','RELATÓRIO MÉDICO');
+  const crm=profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'';
+  add('p',[profile.name?`Dr(a). ${profile.name}`:'',[profile.specialty,profile.rqe?`RQE nº ${profile.rqe}`:''].filter(Boolean).join(' – '),crm].filter(Boolean).join(' · ')).className='small';
   const confirmed=current&&current.view.confirmed||{};
-  table([['Paciente',patient.name],['Data de nascimento',patient.birth_date],['CPF',patient.cpf],['Carteirinha',patient.card_number],['Operadora / plano',patient.operadora]].filter(r=>r[1]),undefined,'ident');
-  for(const [title,txt] of draft.reportSections){add('h2',title);for(const para of txt.split(/\n+/))if(para.trim())add('p',para.trim());}
-  add('h2','Solicitação');
+  table([['Paciente',patient.name],['Data de nascimento',patient.birth_date],['CPF',patient.cpf],['Carteirinha',patient.card_number],['Convênio',patient.operadora]].filter(r=>r[1]),undefined,'ident');
+  /** @param {string} title @param {string} txt */
+  const section=(title,txt)=>{add('h2',title);for(const para of txt.split(/\n+/))if(para.trim())add('p',para.trim());};
+  const conclusion=draft.reportSections.find(([title])=>title===draft.conclusionTitle);
+  for(const [title,txt] of draft.reportSections)if(title!==draft.conclusionTitle)section(title,txt);
+  const s=draft.schedule;
+  const brands=t?(t.suppliers||[]).filter((/** @type {any} */ x)=>x.label):[];
+  if(t&&t.opme.length&&brands.length<3)throw new Error(`O modelo "${t.name}" tem ${brands.length} empresa(s) de material. Cadastre 3, de fabricantes diferentes, em Modelos de cirurgia (CFM 1.956/2010).`);
+  if(t&&t.opme.length){
+    // Verified wording: ANS RN 424/2017, art. 7º, I and II (ANS Parecer Técnico 24/2021); CFM 1.956/2010, art. 5º.
+    add('h2','Fundamentação normativa');
+    add('p','Conforme o art. 7º da RN nº 424/2017 da ANS, cabe ao profissional assistente determinar as características (tipo, matéria-prima e dimensões) das OPME necessárias à execução do procedimento (inciso I) e, quando solicitado pela operadora, justificar clinicamente a indicação e oferecer pelo menos três marcas de produtos de fabricantes diferentes, quando disponíveis, regularizadas na ANVISA (inciso II). No mesmo sentido, a Resolução CFM nº 1.956/2010, art. 5º. Seguem três opções de fabricantes/fornecedores:'+(s.supplier?` (preferência: ${s.supplier})`:''));
+    const ul=doc.createElement('ul');for(const b of brands)add('li',[b.label,b.contact].filter(Boolean).join(' – '),ul);doc.body.append(ul);
+    if((t.equivalent_brands||[]).length)add('p',`Marcas tecnicamente equivalentes: ${t.equivalent_brands.join(', ')}.`);
+    if(t.anvisa_reference)add('p',`ANVISA de referência: ${t.anvisa_reference}.`);
+  }
+  if(conclusion)section(conclusion[0],conclusion[1]);
+  add('h2','Dados da solicitação');
   const proc=[draft.procedure||(t&&t.name)||'',draft.laterality?`— ${draft.laterality.toLowerCase()}`:''].filter(Boolean).join(' ');
   /** @type {string[][]} */ const info=[['Procedimento',proc],['CID-10',(confirmed.icd10||[]).join(', ')],['Caráter','Eletivo'],['Regime',draft.regime||(t&&t.regime)||'']];
   if(t&&(t.icu_days!=null||t.ward_days!=null))info.push(['Internação prevista',`UTI ${t.icu_days??0} dia(s), quarto ${t.ward_days??0} dia(s)`]);
-  const s=draft.schedule;if(s.hospital)info.push(['Hospital',s.hospital]);
+  if(s.hospital)info.push(['Hospital',s.hospital]);
   if(s.date)info.push(['Data proposta',s.date.split('-').reverse().join('/')+(s.time?` às ${s.time}`:'')]);
   if(s.anesthesia)info.push(['Anestesia',s.anesthesia]);if(s.icu!==null)info.push(['Reserva de UTI',s.icu?'Sim':'Não']);if(s.blood_reserve!==null)info.push(['Reserva de sangue',s.blood_reserve?'Sim':'Não']);
   table(info.filter(r=>r[1]),undefined,'ident');
   if(t&&t.tuss_codes.length){add('p','Códigos (TUSS):');table(t.tuss_codes.map((/** @type {string} */ c)=>[c,t.tuss_terms[c]||'']),['Código','Descrição']);}
-  if(t&&t.opme.length){add('p','Órteses, próteses e materiais especiais (OPME):');table(t.opme.map((/** @type {any} */ i)=>[i.description,String(i.quantity)]),['Material','Qtd.']);}
-  const brands=t?(t.suppliers||[]).filter((/** @type {any} */ x)=>x.label):[];
-  if(t&&t.opme.length&&brands.length<3)throw new Error(`O modelo "${t.name}" tem ${brands.length} empresa(s) de material. Cadastre 3, de fabricantes diferentes, em Modelos de cirurgia (CFM 1.956/2010).`);
-  if(brands.length){add('p','Fornecedores indicados, de fabricantes diferentes (CFM 1.956/2010, art. 5º):'+(s.supplier?` preferência: ${s.supplier}.`:''));
-    for(const b of brands){add('p',b.label).style.fontWeight='bold';if(b.materials.length)table(b.materials.map((/** @type {any} */ m)=>[t.opme[m.item_index]?.description||'',`${m.tuss_code} ${m.term}`,m.manufacturer,m.anvisa]),['Item','Material (TUSS 19)','Fabricante','Anvisa']);}}
+  if(t&&t.opme.length){add('p','Órteses, próteses e materiais especiais (OPME):');table(t.opme.map((/** @type {any} */ i)=>[i.description,String(i.quantity)]),['Material','Qtd.']);
+    for(const b of brands)if(b.materials.length){add('p',b.label).style.fontWeight='bold';table(b.materials.map((/** @type {any} */ m)=>[t.opme[m.item_index]?.description||'',`${m.tuss_code} ${m.term}`,m.manufacturer,m.anvisa]),['Item','Material (TUSS 19)','Fabricante','Anvisa']);}}
   if(science&&science.references.length){
     add('h2','Trechos citados dos artigos');
     add('p',`Afirmação clínica avaliada: ${science.claim}`);
@@ -574,9 +592,9 @@ async function combinedDocument(client,check){
   if(t&&t.sbot_entry)add('p',`Codificação conforme SBOT, Manual de Diretrizes de Codificação, procedimento ${t.sbot_entry}.`).className='small';
   if(check&&check.deadline)add('p',check.deadline).className='small';
   add('p','Anexos: laudos dos exames e termo de consentimento assinado.');
-  add('p',`${profile.city?profile.city+', ':''}${new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}.`);
   const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),
-    doc.createTextNode(profile.name||'Médico assistente'),doc.createElement('br'),doc.createTextNode([profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'CRM',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · ')));
+    doc.createTextNode(profile.name?`Dr(a). ${profile.name}`:'Médico assistente'),doc.createElement('br'),doc.createTextNode([crm||'CRM',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · ')),
+    doc.createElement('br'),doc.createTextNode(profile.specialty||''));
   applyLetterhead(doc,letterhead,profile);
   return '<!doctype html>\n'+doc.documentElement.outerHTML;
 }

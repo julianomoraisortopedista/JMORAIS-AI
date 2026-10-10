@@ -51,6 +51,10 @@ EVIDENCE_INSTRUCTIONS = (
     "exagerar o nível de evidência. Prefira diretrizes, meta-análises e ensaios randomizados. Se houver artigo contra "
     "ou neutro, mencione-o com honestidade e explique, somente com fatos F, por que o caso se enquadra na indicação. "
     "Na 'indicacao' você também pode citar E. Sem campos E, deixe 'evidencias' vazia."
+    " A fundamentação normativa (RN 424/2017, CFM 1.956/2010), a lista de fornecedores, marcas e registro ANVISA "
+    "são inseridas pelo sistema a partir do modelo de cirurgia: não as escreva. Equivalências de seções do MODELO: "
+    "correlação clínico-radiológica → 'imagem'; justificativa médica → 'indicacao'; justificativa técnica dos "
+    "procedimentos → 'evidencias'; justificativa técnica da OPME → 'opme'; conclusão → 'solicitacao'."
 )
 INSTRUCTIONS = (
     "Você é um ortopedista sênior redigindo o relatório médico de um pedido de cirurgia ao convênio. Escreva em "

@@ -6,9 +6,9 @@ import {libraryPanel} from './library.js';
 
 /** @typedef {{description:string,quantity:number}} Item */
 /** @typedef {{item_index:number,tuss_code:string,term?:string,manufacturer?:string,anvisa?:string}} Material */
-/** @typedef {{label:string,materials:Material[]}} Supplier */
+/** @typedef {{label:string,contact?:string,materials:Material[]}} Supplier */
 /** @typedef {{network:string,package_code:string,description:string,includes_opme:boolean|null,notes:string}} Package */
-/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[],sbot_entry?:string,icu_days?:number|null,ward_days?:number|null,anesthesia?:string,consent_definition?:string,consent_risks?:string[]}} Template */
+/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],equivalent_brands?:string[],anvisa_reference?:string,suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[],sbot_entry?:string,icu_days?:number|null,ward_days?:number|null,anesthesia?:string,consent_definition?:string,consent_risks?:string[]}} Template */
 
 /** @param {import('./evidence.js').EvidenceClient} client */
 export function catalogPage(client){
@@ -87,7 +87,10 @@ function editor(client,t,reload){
     const rm=button('Remover','quiet');rm.onclick=()=>{t.opme.splice(n,1);for(const s of t.suppliers)s.materials=s.materials.filter(m=>m.item_index!==n).map(m=>({...m,item_index:m.item_index>n?m.item_index-1:m.item_index}));renderKit();renderSuppliers();};
     row.append(d,qy,rm);kit.append(row);});};
   const addItem=button('+ Item','quiet');addItem.onclick=()=>{t.opme.push({description:'',quantity:1});renderKit();renderSuppliers();};
-  renderKit();card.append(kit,addItem);
+  renderKit();
+  const brandsIn=input('Ex.: Evereast, Renova, MedFactor',(t.equivalent_brands||[]).join(', '));
+  const anvisaIn=input('Registro ANVISA de referência',t.anvisa_reference||'');
+  card.append(kit,addItem,field('Marcas tecnicamente equivalentes',brandsIn,'aparecem na justificativa da OPME'),field('ANVISA de referência',anvisaIn));
 
   // Suppliers: official TUSS 19 material per kit item.
   card.append(box('h3','section-title','Fornecedores (3 fabricantes diferentes)'),box('p','muted','Para cada fornecedor, escolha na tabela TUSS 19 o material de cada item. O fabricante e o registro Anvisa vêm da tabela oficial.'));
@@ -121,6 +124,7 @@ function editor(client,t,reload){
   const save=button('Salvar modelo'),cancel=button('Cancelar','quiet');const status=box('div','status-area');const a=box('div','actions');a.append(save,cancel);card.append(a,status);
   cancel.onclick=()=>reload();
   save.onclick=()=>busy(save,async()=>{
+    t.equivalent_brands=brandsIn.value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6);t.anvisa_reference=anvisaIn.value.trim();
     t.name=name.value;t.region=region.value;t.regime=regime.value;t.notes=notes.value;t.codes_confirmed=confirm.checked;
     t.anesthesia=anesthesia.value;t.consent_definition=definition.value;t.consent_risks=risks.value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,40);
     t.suppliers=t.suppliers.filter(s=>s.label.trim());t.packages=t.packages.filter(p=>p.network.trim());t.opme=t.opme.filter(i=>i.description.trim());
@@ -134,7 +138,8 @@ function editor(client,t,reload){
 function supplierBox(client,t,s,sn,rerender){
   const wrap=box('div','card');const label=input('Fornecedor / fabricante (ex.: Zimmer Biomet)',s.label);label.oninput=()=>{s.label=label.value;};
   const rm=button('Remover fornecedor','quiet');rm.onclick=()=>{t.suppliers.splice(sn,1);rerender();};
-  wrap.append(field(`Fornecedor ${sn+1}`,label));
+  const contact=input('Contato impresso no pedido (e-mail ou telefone)',s.contact||'');contact.oninput=()=>{s.contact=contact.value;};
+  wrap.append(field(`Fornecedor ${sn+1}`,label),field('Contato',contact));
   t.opme.forEach((item,n)=>{
     const current=s.materials.find(m=>m.item_index===n);
     const row=box('div','row');const m=box('div','row-main');m.append(box('strong','',item.description||`Item ${n+1}`),

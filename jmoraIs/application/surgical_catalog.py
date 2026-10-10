@@ -40,6 +40,7 @@ class SupplierMaterial(BaseModel):
 
 class Supplier(BaseModel):
     label: str = Field(min_length=2, max_length=120)               # e.g. "Zimmer Biomet"
+    contact: str = Field("", max_length=160)                       # supplier e-mail/phone printed in the request
     materials: list[SupplierMaterial] = Field(default_factory=list, max_length=50)
 
 
@@ -60,6 +61,8 @@ class ProcedureTemplate(BaseModel):
     codes_confirmed: bool = False                                  # physician confirmed the codes
     regime: str = Field("", max_length=60)
     opme: list[OpmeItem] = Field(default_factory=list, max_length=50)
+    equivalent_brands: list[str] = Field(default_factory=list, max_length=6)   # technically equivalent brands, stated by the physician
+    anvisa_reference: str = Field("", max_length=120)              # ANVISA registration cited for the OPME kit
     suppliers: list[Supplier] = Field(default_factory=list, max_length=5)
     packages: list[HospitalPackage] = Field(default_factory=list, max_length=20)
     notes: str = Field("", max_length=1000)
