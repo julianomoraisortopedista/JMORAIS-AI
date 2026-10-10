@@ -1,10 +1,13 @@
 """Professional medical report drafted by AI strictly from physician-confirmed facts.
 
 Input: confirmed, de-identified clinical facts (each with its verbatim source quote) and
-the procedure/OPME context stated by the physician. The model writes Portuguese prose
+the procedure/OPME context stated by the physician, plus the articles of the surgery's
+scientific library already re-verified for this request (E1, E2... = reference numbers,
+each with its verbatim abstract quote). The model writes Portuguese prose
 per section, citing fact ids for every sentence. A sentence is kept only if it cites
 existing ids and every number it contains appears in the cited facts or context; others
-are dropped and counted. Missing information is returned as gaps, never filled in. The
+are dropped and counted; a sentence in the scientific section must cite at least one
+article, and cited articles become the reference marker "[n]". Missing information is returned as gaps, never filled in. The
 result is a draft that the physician edits and signs.
 """
 from __future__ import annotations
@@ -28,6 +31,7 @@ SECTIONS = (
     ("exame_fisico", "Exame físico"),
     ("imagem", "Exames de imagem"),
     ("indicacao", "Indicação cirúrgica"),
+    ("evidencias", "Fundamentação científica"),
     ("opme", "Justificativa do OPME"),
     ("solicitacao", "Solicitação"),
 )
@@ -38,6 +42,16 @@ STYLE_INSTRUCTIONS = (
     "dados clínicos, números, lados ou achados do MODELO, e nunca cite MODELO como fonte."
 )
 CONTEXT_ID = "CTX"
+EVIDENCE_SECTION = "evidencias"
+DIRECTION_PT = {"SUPPORTING": "a favor", "OPPOSING": "contra", "NEUTRAL": "neutro", "INCONCLUSIVE": "inconclusivo"}
+EVIDENCE_INSTRUCTIONS = (
+    " Os campos E1, E2... são artigos científicos verificados e aprovados pelo médico, com o trecho literal do resumo "
+    "e a direção (a favor, contra, neutro). Na seção 'evidencias', escreva a fundamentação científica ligando o caso "
+    "(fatos F) aos artigos (E): cada frase deve citar ao menos um E e afirmar só o que o trecho do artigo diz, sem "
+    "exagerar o nível de evidência. Prefira diretrizes, meta-análises e ensaios randomizados. Se houver artigo contra "
+    "ou neutro, mencione-o com honestidade e explique, somente com fatos F, por que o caso se enquadra na indicação. "
+    "Na 'indicacao' você também pode citar E. Sem campos E, deixe 'evidencias' vazia."
+)
 INSTRUCTIONS = (
     "Você é um ortopedista sênior redigindo o relatório médico de um pedido de cirurgia ao convênio. Escreva em "
     "português formal, técnico e objetivo, em terceira pessoa ('Paciente apresenta...'). Use SOMENTE os fatos "
@@ -47,7 +61,7 @@ INSTRUCTIONS = (
     "documentado: descrever amplitude de movimento e estabilidade'). Na justificativa do OPME, relacione cada "
     "material à necessidade clínica documentada. Em 'solicitacao', peça a autorização do procedimento e do OPME "
     "do contexto (CTX). Em 'title' use o título padrão da seção, salvo quando houver MODELO. Responda somente com o JSON solicitado."
-) + STYLE_INSTRUCTIONS
+) + STYLE_INSTRUCTIONS + EVIDENCE_INSTRUCTIONS
 OUTPUT_JSON_SCHEMA = {
     "type": "object",
     "properties": {
@@ -107,7 +121,8 @@ class ReportDraftingService:
     def __init__(self, gateway, *, prompt_version_id: str, model: LLMModel, clock: Callable[[], datetime]):
         self._gateway, self._prompt, self._model, self._clock = gateway, prompt_version_id, model, clock
 
-    def draft(self, facts: list[dict], context: str, style: str = "") -> ReportDraft:
+    def draft(self, facts: list[dict], context: str, style: str = "", evidence: tuple = ()) -> ReportDraft:
+        """`evidence`: re-verified library references as dicts with number, quote, direction and study."""
         if not facts:
             raise ReportDraftRejected("Confirme os fatos clínicos antes de redigir o relatório.")
         ids = {f"F{n}": fact for n, fact in enumerate(facts, 1)}
@@ -116,6 +131,11 @@ class ReportDraftingService:
         fields = [StructuredField(fid, f"[{f['category_label']}] {f['statement']} (fonte: “{f['quote']}”)", "confirmed-fact")
                   for fid, f in ids.items()]
         fields.append(StructuredField(CONTEXT_ID, context or "(sem contexto)", "physician-request"))
+        articles = {f"E{int(e['number'])}": e for e in evidence if str(e.get("quote") or "").strip()}
+        for eid, e in articles.items():
+            support[eid] = e["quote"]
+            kind = "; ".join(x for x in (e.get("study") or "Artigo", DIRECTION_PT.get(e.get("direction"), "")) if x)
+            fields.append(StructuredField(eid, f"[{kind}] “{e['quote']}”", "verified-evidence"))
         if style.strip():
             fields.append(StructuredField(STYLE_ID, style.strip()[:MAX_STYLE_CHARS], "physician-format-example"))
         dto = CanonicalStructuredDTO("medical-report-input", "1", tuple(fields), POLICY, ("confirmed-facts",))
@@ -147,9 +167,12 @@ class ReportDraftingService:
                 cited = tuple(dict.fromkeys(str(i).strip().upper() for i in sentence.get("fact_ids") or []))
                 valid = text and cited and all(i in support for i in cited)
                 allowed = set().union(*(_numbers(support[i]) for i in cited)) if valid else set()
-                if not valid or not _numbers(text) <= allowed:
+                cites = [i for i in cited if i in articles]
+                if not valid or not _numbers(text) <= allowed or (key == EVIDENCE_SECTION and not cites):
                     dropped += 1
                     continue
+                if cites:  # reference markers follow the request's numbering, added after the number check
+                    text = text.rstrip() + " [" + ",".join(i[1:] for i in cites) + "]"
                 by_key[key].append(DraftSentence(text, cited))
         gaps = tuple(" ".join(str(g).split())[:300] for g in data.get("gaps") or [] if str(g).strip())[:12]
         # Default order, or the order the physician's model produced; sections not emitted follow.

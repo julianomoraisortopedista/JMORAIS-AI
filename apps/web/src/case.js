@@ -2,6 +2,7 @@
 import {el} from './view.js';
 import {DIRECTIONS,box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
 import {dictation} from './dictation.js';
+import {readiness} from './readiness.js';
 import {templatePicker} from './catalog.js';
 import {applyLetterhead,practice,prescriptionPage,printModeSelect} from './letterhead.js';
 
@@ -459,17 +460,16 @@ export function quickPage(client){
       done=step('Separando os fatos comprovados e o CID');
       const icd=(view.icd10_suggestions||[]).map((/** @type {any} */ c)=>c.code).filter((/** @type {string} */ c)=>/^[A-Z]\d{2}(\.\d{1,2})?$/.test(c));
       view=await client.caseConfirm(id,{fact_ids:view.facts.map((/** @type {any} */ f)=>f.fact_id),edits:{},icd10:icd});current.view=view;done();
-      done=step('Redigindo o relatório no formato do seu modelo');
+      done=step('Redigindo o relatório e a fundamentação com os artigos aprovados (conferidos agora no PubMed)');
       view=await client.caseReport(id,{procedure:draft.procedure,laterality:draft.laterality,template_id:draft.templateId});
       for(let i=0;i<90&&view.report&&view.report.status==='RUNNING';i++){await pause(2000);view=await client.caseGet(id);}
       if(!view.report||view.report.status!=='READY')throw new Error((view.report&&view.report.error)||'Falha ao redigir o relatório.');
+      science=view.report.science&&view.report.science.references.length?view.report.science:null;
       current.view=view;draft.reportSections=view.report.sections.map((/** @type {any} */ sec)=>[sec.title,sec.sentences.map((/** @type {any} */ x)=>x.text).join(' ')]).filter((/** @type {any} */ x)=>x[1]);
       done();
       /** @type {any} */ let check=null;
-      if(draft.templateId){done=step('Conferindo com a SBOT e o prazo da ANS');check=await client.caseCheck(id,{template_id:draft.templateId,regime:draft.regime}).catch(()=>null);done();
-        done=step('Conferindo os artigos da biblioteca desta cirurgia no PubMed e no Crossref');
-        science=await client.libraryReferences(draft.templateId).catch(()=>null);done(science&&science.references.length?'✓':'!');}
-      else science=null;
+      done(science?'✓':'!');
+      if(draft.templateId){done=step('Conferindo com a SBOT e o prazo da ANS');check=await client.caseCheck(id,{template_id:draft.templateId,regime:draft.regime}).catch(()=>null);done();}
       say(status,'Pronto. Revise o relatório e a solicitação abaixo antes de imprimir.','ok');
       result.replaceChildren(...quickResult(client,view,check).children);
     }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
@@ -480,6 +480,7 @@ export function quickPage(client){
 /** Review screen of the one-click flow. @param {import('./evidence.js').EvidenceClient} client @param {Record<string,any>} view @param {any} check */
 function quickResult(client,view,check){
   const wrap=box('div','page-grid');
+  wrap.append(readinessCard(client,view,check));
   const review=box('section','card');
   review.append(box('h2','card-title','3. Revise e imprima'),
     box('div','alert alert-warn','Os fatos e o CID sugerido foram aceitos automaticamente para agilizar. Confira o texto abaixo; se algo estiver errado, corrija aqui ou ajuste os fatos em "Pedido médico".'));
@@ -493,7 +494,7 @@ function quickResult(client,view,check){
   draft.reportSections.forEach((sec,n)=>{const t=textarea('');t.rows=Math.max(3,Math.min(12,Math.ceil(sec[1].length/110)));t.value=sec[1];t.oninput=()=>{draft.reportSections[n]=[sec[0],t.value];};review.append(field(sec[0],t));});
   wrap.append(review);
   const sci=box('section','card');sci.append(box('h2','card-title','Fundamentação científica'));
-  if(science&&science.references.length){sci.append(box('p','muted',`${science.references.length} artigo(s) da biblioteca desta cirurgia, conferidos agora no PubMed e no Crossref. Entram no pedido com o trecho literal e a referência em Vancouver.`));
+  if(science&&science.references.length){sci.append(box('p','muted',`${science.references.length} artigo(s) da biblioteca desta cirurgia, conferidos agora no PubMed e no Crossref. A seção "Fundamentação científica" do relatório cita cada um como [n]; o pedido traz os trechos literais e as referências em Vancouver.`));
     for(const r of science.references)sci.append(box('p','',`[${r.number}] ${DIRECTIONS[/** @type {keyof typeof DIRECTIONS} */(r.direction)]||r.direction}${r.study?' · '+r.study:''} — ${r.vancouver}`));}
   else sci.append(box('div','alert alert-warn','Esta cirurgia ainda não tem artigos aprovados. Em "Modelos de cirurgia", use "Montar artigos com o Claude" uma vez; os próximos pedidos já saem com a fundamentação.'));
   for(const e of (science&&science.excluded)||[])sci.append(box('p','muted',`PMID ${e.pmid} não entrou: ${e.reason}`));
@@ -509,6 +510,24 @@ function quickResult(client,view,check){
   save.onclick=()=>busy(save,async()=>download('relatorio-e-solicitacao.html',await build(),'text/html'));
   tcle.onclick=()=>busy(tcle,async()=>{try{const html=await consentForm(client,draft.templateId,draft.procedure,draft.laterality);const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('termo-consentimento.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){say(st,e instanceof Error?e.message:'Falha.');}});
   wrap.append(out);return wrap;
+}
+
+/** "Pronto para o convênio": what is still missing before sending. @param {import('./evidence.js').EvidenceClient} client @param {Record<string,any>} view @param {any} check */
+function readinessCard(client,view,check){
+  const card=box('section','card');card.append(box('h2','card-title','Pronto para o convênio?'));
+  const body=box('div','');card.append(body);
+  client.catalog().catch(()=>({templates:[]})).then((/** @type {any} */ catalog)=>{
+    const template=(catalog.templates||[]).find((/** @type {any} */ x)=>x.template_id===draft.templateId)||null;
+    const confirmed=view.confirmed||{};
+    const items=readiness({facts:confirmed.facts||[],icd10:confirmed.icd10||[],gaps:(view.report&&view.report.gaps)||[],science,
+      template,schedule:draft.schedule,checks:(check&&check.checks)||[]});
+    const missing=items.filter(i=>!i.ok),blocking=missing.filter(i=>i.blocking);
+    body.append(box('div','alert alert-'+(blocking.length?'error':missing.length?'warn':'ok'),
+      blocking.length?`Ainda não envie: ${blocking.length} item(ns) costumam causar negativa.`:missing.length?`Pode enviar; ${missing.length} item(ns) fortaleceriam o pedido.`:'Tudo o que o auditor costuma exigir está no pedido.'));
+    for(const i of items){const row=box('div','row');const m=box('div','row-main');
+      m.append(box('strong','',(i.ok?'✓ ':i.blocking?'✗ ':'! ')+i.label));if(!i.ok)m.append(box('span','muted',i.fix));row.append(m);body.append(row);}
+  });
+  return card;
 }
 
 /** Medical report + surgery and material request, assembled in the browser.
@@ -547,10 +566,10 @@ async function combinedDocument(client,check){
   if(brands.length){add('p','Fornecedores indicados, de fabricantes diferentes (CFM 1.956/2010, art. 5º):'+(s.supplier?` preferência: ${s.supplier}.`:''));
     for(const b of brands){add('p',b.label).style.fontWeight='bold';if(b.materials.length)table(b.materials.map((/** @type {any} */ m)=>[t.opme[m.item_index]?.description||'',`${m.tuss_code} ${m.term}`,m.manufacturer,m.anvisa]),['Item','Material (TUSS 19)','Fabricante','Anvisa']);}}
   if(science&&science.references.length){
-    add('h2','Fundamentação científica');
-    add('p',`Afirmação clínica: ${science.claim}`);
+    add('h2','Trechos citados dos artigos');
+    add('p',`Afirmação clínica avaliada: ${science.claim}`);
     for(const r of science.references)add('p',`[${r.number}] ${DIRECTIONS[/** @type {keyof typeof DIRECTIONS} */(r.direction)]||r.direction}${r.study?` (${r.study})`:''}: "${r.quote}"`);
-    add('p','Referências (Vancouver):');const ol=doc.createElement('ol');for(const r of science.references)add('li',r.vancouver,ol);doc.body.append(ol);
+    add('h2','Referências bibliográficas');const ol=doc.createElement('ol');for(const r of science.references)add('li',r.vancouver,ol);doc.body.append(ol);
     add('p','Trechos literais dos resumos publicados; artigos classificados com confirmação do médico e metadados verificados no PubMed e no Crossref.').className='small';}
   if(t&&t.sbot_entry)add('p',`Codificação conforme SBOT, Manual de Diretrizes de Codificação, procedimento ${t.sbot_entry}.`).className='small';
   if(check&&check.deadline)add('p',check.deadline).className='small';

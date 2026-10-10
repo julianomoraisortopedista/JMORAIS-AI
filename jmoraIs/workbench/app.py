@@ -523,11 +523,19 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
 
         def run():
             try:
+                try:  # the library re-verified now, same numbering as the printed references
+                    science = library_draft(body.template_id) if body.template_id else None
+                except (JustificationRejected, ValueError):
+                    science = None
+                evidence = tuple(dict(number=r.number, quote=r.quote, direction=r.direction.value, study=r.study_label)
+                                 for r in (science.references if science else ()))
                 with TenantContextBinder().bind_tenant(tenant(principal)):
-                    draft = factory().draft(list(confirmed["facts"]), context, (report_style.load() if report_style else None) or "")
+                    draft = factory().draft(list(confirmed["facts"]), context, (report_style.load() if report_style else None) or "",
+                                            evidence)
                 case["report"] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "model": draft.model_id,
                                   "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, fact_ids=list(x.fact_ids)) for x in ss])
-                                               for k, t, ss in draft.sections]}
+                                               for k, t, ss in draft.sections],
+                                  "science": references_out(science)}
             except ReportDraftRejected as exc:
                 case["report"] = {"status": "ERROR", "error": str(exc)}
             except Exception as exc:  # provider failure: no provider text exposed
@@ -993,24 +1001,33 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         need_evidence_library().remove(template_id, pmid)
         return library_view(template_id)
 
-    @app.post("/api/library/{template_id}/justification")
-    def library_justification(template_id: str):
-        """Re-verified references of the surgery's library, for the request assembled in the browser."""
-        saved = need_evidence_library().get(template_id)
+    def library_draft(template_id: str):
+        """The surgery library re-verified now (PubMed/Crossref, literal quotes); None without a library."""
+        saved = evidence_library.get(template_id) if evidence_library is not None else None
         if not saved:
-            return {"claim": "", "references": [], "excluded": []}
+            return None
         packages = ScientificEvidencePackagePort(catalog=InMemoryPackageCatalogRepository(), clock=clock)
         pipeline = AuthoritativeReconciliationPipeline(pubmed=pubmed, crossref=crossref, packages=packages, clock=clock)
-        try:
-            draft = build_justification(saved["claim"], saved["records"], pubmed=pubmed, pipeline=pipeline,
-                                        packages=packages, clock=clock)
-        except (JustificationRejected, ValueError) as exc:
-            bad(str(exc))
+        return build_justification(saved["claim"], saved["records"], pubmed=pubmed, pipeline=pipeline,
+                                   packages=packages, clock=clock)
+
+    def references_out(draft) -> dict:
+        if draft is None:
+            return {"claim": "", "references": [], "excluded": []}
         return {"claim": draft.claim,
                 "references": [dict(number=r.number, pmid=r.pmid, direction=r.direction.value, quote=r.quote,
                                     vancouver=r.vancouver, study=r.study_label, high_level=r.high_level)
                                for r in draft.references],
                 "excluded": [dict(pmid=e.pmid, reason=e.reason) for e in draft.excluded]}
+
+    @app.post("/api/library/{template_id}/justification")
+    def library_justification(template_id: str):
+        """Re-verified references of the surgery's library, for the request assembled in the browser."""
+        need_evidence_library()
+        try:
+            return references_out(library_draft(template_id))
+        except (JustificationRejected, ValueError) as exc:
+            bad(str(exc))
 
     @app.post("/api/document")
     def document(body: DocumentIn, request: Request):

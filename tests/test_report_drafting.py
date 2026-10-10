@@ -28,10 +28,10 @@ def service(output):
     return ReportDraftingService(gateway, prompt_version_id=version.prompt_version_id, model=model(LLMProvider.MOCK), clock=lambda: NOW), adapter
 
 
-def draft(output, facts=FACTS, context="Procedimento: ATJ. OPME: 1x Componente femoral"):
+def draft(output, facts=FACTS, context="Procedimento: ATJ. OPME: 1x Componente femoral", evidence=()):
     svc, adapter = service(output)
     with TenantContextBinder().bind_tenant(TENANT):
-        return svc.draft(facts, context), adapter
+        return svc.draft(facts, context, "", evidence), adapter
 
 
 def test_only_grounded_sentences_survive_and_gaps_are_kept():
@@ -92,3 +92,38 @@ def test_report_endpoint_requires_confirmation_then_runs(tmp_path):
         time.sleep(0.05)
     assert view["report"]["status"] == "READY" and view["report"]["sections"][0]["sentences"][0]["text"] == "Dor EVA 8/10."
     assert view["report"]["gaps"] == ["Exame físico ausente."]
+
+
+EVIDENCE = (dict(number=1, quote="Total knee replacement followed by nonsurgical treatment was more effective than nonsurgical "
+                 "treatment alone in providing pain relief and improving function after 12 months.",
+                 direction="SUPPORTING", study="Ensaio clínico randomizado"),
+            dict(number=2, quote="No difference in 10-year outcomes was found.", direction="NEUTRAL", study=""))
+
+
+def test_scientific_section_cites_verified_articles_only_and_gets_reference_markers():
+    output = {"sections": [
+        {"section": "evidencias", "sentences": [
+            {"text": "Em ensaio randomizado, a artroplastia foi mais eficaz que o tratamento não cirúrgico isolado em 12 meses.",
+             "fact_ids": ["E1"]},
+            {"text": "A artroplastia reduz a mortalidade em 50%.", "fact_ids": ["E1"]},          # number not in the quote
+            {"text": "O paciente já fez fisioterapia por 6 meses.", "fact_ids": ["F2"]},         # no article cited here
+            {"text": "Estudo inexistente confirma a indicação.", "fact_ids": ["E7"]},            # unknown article
+            {"text": "Não houve diferença em 10 anos; o caso, com fisioterapia por 6 meses, mantém a indicação.",
+             "fact_ids": ["E2", "F2"]}]},
+        {"section": "indicacao", "sentences": [{"text": "Indicação com dor EVA 8/10 e evidência favorável.", "fact_ids": ["F1", "E1"]}]}],
+        "gaps": []}
+    result, adapter = draft(output, evidence=EVIDENCE)
+    sections = {k: [s.text for s in ss] for k, _, ss in result.sections}
+    assert sections["evidencias"] == [
+        "Em ensaio randomizado, a artroplastia foi mais eficaz que o tratamento não cirúrgico isolado em 12 meses. [1]",
+        "Não houve diferença em 10 anos; o caso, com fisioterapia por 6 meses, mantém a indicação. [2]"]
+    assert sections["indicacao"] == ["Indicação com dor EVA 8/10 e evidência favorável. [1]"] and result.dropped == 3
+    payload = json.loads(adapter.requests[0].canonical_payload)
+    assert [f["name"] for f in payload["fields"]] == ["F1", "F2", "CTX", "E1", "E2"]
+    assert "Ensaio clínico randomizado; a favor" in payload["fields"][3]["value"]
+
+
+def test_without_articles_the_scientific_section_stays_empty():
+    output = {"sections": [{"section": "evidencias", "sentences": [{"text": "A literatura apoia.", "fact_ids": ["F1"]}]}], "gaps": []}
+    result, _ = draft(output)
+    assert dict((k, ss) for k, _, ss in result.sections)["evidencias"] == () and result.dropped == 1

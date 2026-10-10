@@ -28,3 +28,23 @@ opposing and neutral articles keep their direction; nothing is filtered by direc
 **Suppliers**: the request lists every named supplier of the template (with or without
 per-item TUSS 19 materials) and the Pedido rápido refuses to assemble a request when a
 template with OPME has fewer than three suppliers (CFM 1.956/2010, art. 5º).
+
+## From the selected articles to the medical justification
+
+**Report** (`/api/case/{id}/report` with `template_id`): the library is re-verified in the report
+job and passed to the report writer as E1, E2... (reference number, verbatim quote, direction,
+study type). The new section "Fundamentação científica" links the case facts (F) to the articles
+(E): every sentence must cite at least one article, numbers must appear in the cited quote or
+facts, and opposing or neutral articles are to be mentioned, not hidden. Cited articles become
+the marker "[n]", the same numbering as the printed references (`report.science`). The
+"indicação" section may cite articles too. Without a library the section stays empty.
+
+**Pronto para o convênio** (`apps/web/src/readiness.js`, Pedido rápido review): checks what an
+auditor usually requires — conservative treatment documented, imaging report, physical exam,
+pain/function scale, ICD-10, supporting verified evidence (and at least one guideline,
+meta-analysis or RCT), no report gaps, no SBOT blocking finding, confirmed TUSS codes, three
+suppliers when there is OPME, hospital and date. Blocking items say "Ainda não envie" with the
+fix; the rest strengthen the request.
+
+**Printed request**: the report (with "[n]" markers), then "Trechos citados dos artigos" (literal
+quotes with direction and study type) and "Referências bibliográficas" (Vancouver).
