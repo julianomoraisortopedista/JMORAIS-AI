@@ -1,5 +1,6 @@
 /** Contestations: draft a point-by-point reply to an insurer and keep a library of past ones. */
 import {el} from './view.js';
+import {legalPanel} from './legal.js';
 import {box,button,busy,download,field,input,say,select,session,textarea} from './evidence.js';
 import {templatePicker} from './catalog.js';
 import {applyLetterhead,practice,printModeSelect} from './letterhead.js';
@@ -63,7 +64,7 @@ function renderDraft(client,target,job,kind,procedure,caseContext,reloadLibrary)
     const ids=[...new Set(sec.sentences.flatMap((/** @type {any} */ s)=>s.source_ids))];
     target.append(field(sec.title,t,ids.length?'Fontes — '+ids.map(i=>`${i}: ${job.sources[i]||''}`).join(' · '):'Sem conteúdo com fonte — escreva se necessário'));areas.push([sec.title,t]);}
   const open=button('Abrir contestação'),save=button('Baixar (.html)','ghost'),keep=button('Salvar na biblioteca','ghost');const st=box('div','status-area');
-  const a=box('div','actions');a.append(printModeSelect(),open,save,keep);target.append(a,st);
+  const a=box('div','actions');a.append(printModeSelect(),open,save,keep);target.append(legalPanel(client,()=>areas.map(([,t])=>t.value).join('\n')),a,st);
   const build=async()=>{const {letterhead,profile}=await practice(client);const p=caseContext().patient;
     const doc=document.implementation.createHTMLDocument('Contestação');const meta=doc.createElement('meta');meta.setAttribute('charset','utf-8');doc.head.prepend(meta);
     const style=doc.createElement('style');style.textContent='body{font-family:Georgia,serif;max-width:780px;margin:28px auto;padding:0 16px;color:#111;line-height:1.55;font-size:14px}h1{text-align:center;font-size:17px}h2{font-size:13.5px;margin:18px 0 4px;text-transform:uppercase}td{padding:2px 6px}.sign{margin-top:48px;text-align:center}.draft{border:1px solid #b45309;color:#b45309;padding:6px 10px;font-size:12px}@media print{.draft{display:none}}';doc.head.append(style);

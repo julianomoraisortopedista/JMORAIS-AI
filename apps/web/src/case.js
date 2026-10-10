@@ -3,6 +3,7 @@ import {el} from './view.js';
 import {DIRECTIONS,box,button,busy,download,field,input,pill,say,select,session,textarea} from './evidence.js';
 import {dictation} from './dictation.js';
 import {readiness} from './readiness.js';
+import {legalPanel} from './legal.js';
 import {templatePicker} from './catalog.js';
 import {applyLetterhead,practice,prescriptionPage,printModeSelect} from './letterhead.js';
 
@@ -528,6 +529,7 @@ function readinessCard(client,view,check){
       blocking.length?`Ainda não envie: ${blocking.length} item(ns) costumam causar negativa.`:missing.length?`Pode enviar; ${missing.length} item(ns) fortaleceriam o pedido.`:'Tudo o que o auditor costuma exigir está no pedido.'));
     for(const i of items){const row=box('div','row');const m=box('div','row-main');
       m.append(box('strong','',(i.ok?'✓ ':i.blocking?'✗ ':'! ')+i.label));if(!i.ok)m.append(box('span','muted',i.fix));row.append(m);body.append(row);}
+    body.append(legalPanel(client,()=>draft.reportSections.map(([,txt])=>txt).join('\n')));
   });
   return card;
 }

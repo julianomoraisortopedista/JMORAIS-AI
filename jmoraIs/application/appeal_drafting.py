@@ -44,6 +44,27 @@ SECONDARY_SOURCES = {  # norms not fetched from the official site: citation carr
     "L-RN566-ART3-XIII": ("RN ANS nº 566/2022, art. 3º, XIII (" + GUIDE + ")",
                           "Atendimento em regime de internação eletiva: em até 21 (vinte e um) dias úteis."),
 }
+ANS_PARECER = "ANS, Parecer Técnico nº 24/GEAS/GGRAS/DIPRO/2021 (publicado em 01/04/2021), síntese da norma pela ANS"
+ANS_PARECER_URL = ("https://www.gov.br/ans/pt-br/arquivos/acesso-a-informacao/transparencia-institucional/"
+                   "pareceres-tecnicos-da-ans/2020/parecer_tecnico_no_24_2021_orteses_proteses_e_materiais_especiais_opme.pdf")
+SECONDARY_SOURCES.update({  # wording as published by the ANS in its OPME technical opinion (checked 2026-10-10)
+    "L-RN424-ART7": ("RN ANS nº 424/2017, art. 7º, I e II (" + ANS_PARECER + ")",
+                     "O artigo 7º, inciso I, da RN n.º 424/2017 estipula que cabe ao profissional assistente a prerrogativa "
+                     "de determinar as características (tipo, matéria-prima e dimensões) das OPME necessários à execução "
+                     "dos procedimentos contidos no Rol de Procedimentos e Eventos em Saúde. Já o inciso II do mesmo "
+                     "dispositivo institui que o profissional requisitante deve, quando assim solicitado pela operadora, "
+                     "justificar clinicamente a sua indicação e oferecer pelo menos três marcas de produtos de fabricantes "
+                     "diferentes, quando disponíveis, dentre aquelas regularizadas junto à ANVISA, que atendam às "
+                     "características especificadas."),
+    "L-RN465-ART8-III": ("RN ANS nº 465/2021, art. 8º, III (" + ANS_PARECER + ")",
+                         "Os materiais necessários para a execução dos procedimentos e eventos em saúde contemplados pelo "
+                         "Rol possuem cobertura obrigatória, desde que estejam regularizadas e/ou registradas e suas "
+                         "indicações constem da bula/manual perante a ANVISA ou disponibilizado pelo fabricante."),
+    "L-ANS-CONDUTA": ("ANS, Parecer Técnico nº 24/GEAS/GGRAS/DIPRO/2021 (publicado em 01/04/2021)",
+                      "O profissional assistente tem a prerrogativa de determinar a conduta diagnóstica e terapêutica para "
+                      "os agravos à saúde sob sua responsabilidade, indicando em cada caso, a conduta e os procedimentos "
+                      "mais adequados da prática clínica, inclusive quanto às quantidades solicitadas."),
+})
 INSTRUCTIONS = (
     "Você é um ortopedista sênior redigindo a contestação de uma {kind} enviada por uma operadora de plano de "
     "saúde. Escreva em português formal, técnico e respeitoso, em primeira pessoa do médico assistente. Responda "

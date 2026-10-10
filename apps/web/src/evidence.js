@@ -80,6 +80,7 @@ export class EvidenceClient {
   catalog(){return this.call('catalog');}
   /** @param {Record<string,unknown>} t */ catalogSave(t){return this.call('catalog',t,'PUT');}
   /** @param {string} id */ catalogDelete(id){return this.call('catalog/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {string} text */ legalCheck(text){return this.call('legal/check',{text});}
   /** @param {string} id */ libraryGet(id){return this.call('library/'+encodeURIComponent(id));}
   /** @param {string} id @param {string} claim */ librarySave(id,claim){return this.call('library/'+encodeURIComponent(id),{claim},'PUT');}
   /** @param {string} id @param {string} pmid */ libraryRemove(id,pmid){return this.call('library/'+encodeURIComponent(id)+'/'+encodeURIComponent(pmid),undefined,'DELETE');}

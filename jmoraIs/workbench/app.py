@@ -139,6 +139,10 @@ class OpmeIn(BaseModel):
     quantity: int = Field(1, ge=1, le=50)
 
 
+class LegalCheckIn(BaseModel):
+    text: str = Field(max_length=60000)
+
+
 class LibraryIn(BaseModel):
     claim: str = Field(min_length=10, max_length=600)
 
@@ -1028,6 +1032,12 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             return references_out(library_draft(template_id))
         except (JustificationRejected, ValueError) as exc:
             bad(str(exc))
+
+    @app.post("/api/legal/check")
+    def legal_check(body: LegalCheckIn):
+        """Norms cited in the physician's text: in the verified legal library or not."""
+        from jmoraIs.application.legal_check import check_citations
+        return {"citations": check_citations(body.text)}
 
     @app.post("/api/document")
     def document(body: DocumentIn, request: Request):
