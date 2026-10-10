@@ -178,3 +178,21 @@ def test_scan_endpoint_reads_identifiers_without_ai_or_storage():
     found = c.post("/api/case/scan", headers=H, json=doc).json()["identifiers"]
     assert found["name"] == "JOSÉ CARLOS DA SILVA"
     assert c.post("/api/case/scan", headers=H, json={**doc, "name": "rx.jpg"}).status_code == 400
+
+
+def test_prose_names_and_record_numbers_are_removed_without_being_supplied():
+    text = ("PACIENTE: X DATA NASC.: 01/02/1990\nMÉDICO SOLIC.: Dr. Fulano PRONTUÁRIO: 8219652\n"
+            "A paciente Raisa Marx Nascimento apresenta dor. Negativa para o paciente Luís Claudio Marchesi, portador "
+            "de gonartrose. Sra. Maria da Silva relata melhora. O paciente apresenta EVA 8.")
+    out = deidentify(text).text
+    for leaked in ("Raisa", "Marchesi", "Luís", "Maria da Silva", "8219652"):
+        assert leaked not in out
+    assert "O paciente apresenta EVA 8." in out and "gonartrose" in out
+    from jmoraIs.application.deidentification import detect_identifiers
+    assert detect_identifiers("A paciente Raisa Marx Nascimento apresenta dor.")["name"] == "Raisa Marx Nascimento"
+    assert detect_identifiers(deidentify("Endereço: Rua A, 10   Tel x").text) == {}
+
+
+def test_anvisa_registration_is_kept_but_a_valid_cpf_is_not():
+    out = deidentify("Kit EasyBlock - Registro ANVISA nº 81420899005. CPF 123.456.789-09. ANVISA 52998224725").text
+    assert "81420899005" in out and "123.456.789-09" not in out and "52998224725" not in out

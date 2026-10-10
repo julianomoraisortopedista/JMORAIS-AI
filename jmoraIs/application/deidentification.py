@@ -50,9 +50,15 @@ _LABELLED = [  # label followed by the identifying value on the same line
     ("MAE", r"(?im)(?<!\w)(?P<label>(?:nome\s+da\s+m[aã]e|m[aã]e|respons[aá]vel)\s*[:\-])[^\n]*?(?=\s{2,}|$)"),
     ("NOME", r"(?im)(?<!\w)(?P<label>(?:nome(?:\s+do\s+paciente)?|paciente|benefici[aá]rio|titular)\s*[:\-])[^\n]*?(?=\s{2,}|\s+(?:idade|sexo|data|dn|conv[eê]nio)\b|$)"),
     ("CARTEIRINHA", r"(?im)(?P<label>(?:carteir(?:a|inha)|matr[ií]cula|c[oó]d(?:igo)?\.?\s+(?:do\s+)?benefici[aá]rio|cart[aã]o(?:\s+(?:do\s+)?conv[eê]nio)?)\s*(?:n[ºo°.]*)?\s*[:\-]?)\s*[A-Z]{0,4}\d(?:[\d.\-/]| (?=\d))*"),
+    ("PRONTUARIO", r"(?im)(?P<label>prontu[aá]rio\s*(?:n[ºo°.]*)?\s*[:\-]?)\s*[A-Z]{0,4}\d[\d.\-/]*"),
     ("NASCIMENTO", r"(?im)(?P<label>(?:data\s+de\s+)?nasc(?:imento)?\.?\s*[:\-]?)\s*\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}"),
     ("ENDERECO", r"(?im)(?<!\w)(?P<label>(?:endere[cç]o|resid[eê]ncia|logradouro)\s*[:\-])[^\n]*?(?=\s{2,}|\s+cep\b|$)"),
 ]
+_UP, _LOW = "A-ZÁÉÍÓÚÂÊÔÃÕÇ", "a-záéíóúâêôãõçü"
+# A name written in prose right after "paciente"/"Sr."/"Sra." (no colon): two or more capitalized words,
+# e.g. "A paciente Maria Souza apresenta" (found in real contestations that labelled-line rules missed).
+_PROSE_NAME = (r"(?<![\w])(?P<label>(?:[Oo]\s+|[Aa]\s+)?(?:paciente|Paciente|benefici[aá]ri[oa]|Sr\.?|Sra\.?))\s+"
+               rf"[{_UP}][{_LOW}]+(?:\s+(?:d[aeo]s?\s+|e\s+)?[{_UP}][{_LOW}]+){{1,5}}")
 _PATTERNS = [
     ("CPF", r"\b\d{3}\.?\d{3}\.?\d{3}\s?-?\s?\d{2}\b"),
     ("CNS", r"\b[1-9]\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\b"),
@@ -78,7 +84,18 @@ def deidentify(text: str, identifiers: Optional[PatientIdentifiers] = None) -> D
 
     for category, pattern in _LABELLED:
         sub(category, pattern)
+    sub("NOME", _PROSE_NAME)
     for category, pattern in _PATTERNS:
+        if category == "CPF":
+            # ANVISA registrations also have 11 digits: kept only when labelled ANVISA and not a valid CPF.
+            def keep_anvisa(m):
+                if re.search(r"(?i)anvisa", out_before[max(0, m.start() - 40):m.start()]) and not _cpf_valid(m.group(0)):
+                    return m.group(0)
+                removed["CPF"] = removed.get("CPF", 0) + 1
+                return "[CPF REMOVIDO]"
+            out_before = out
+            out = re.sub(pattern, keep_anvisa, out)
+            continue
         sub(category, pattern)
     # Supplied identifiers, by exact digits or accent-insensitive words.
     for category, value in (("CPF", ids.cpf), ("RG", ids.rg), ("CARTEIRINHA", ids.card_number), ("TELEFONE", ids.phone)):
@@ -153,9 +170,15 @@ def detect_identifiers(text: str) -> dict[str, str]:
                 continue
             if key == "cpf" and not _cpf_valid(value):
                 continue
+            if re.fullmatch(r"\[[A-Z]+ REMOVIDO\]", value):  # already removed: a placeholder is not an identifier
+                continue
             if len(value) >= 3 and re.search(r"[^\W_]", value):  # blank form lines ("____") are not values
                 found[key] = value[:200]
                 break
+    if "name" not in found:
+        m = re.search(_PROSE_NAME, text or "")
+        if m:
+            found["name"] = " ".join(m.group(0)[m.end("label") - m.start():].split())[:200]
     for key, pattern in (("email", dict(_PATTERNS)["EMAIL"]), ("phone", dict(_PATTERNS)["TELEFONE"])):
         m = re.search(pattern, text or "")
         if m:

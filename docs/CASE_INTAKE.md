@@ -31,6 +31,9 @@ Platform page **Pedido médico** (http://localhost/ after login).
    patterns (CPF, CNS, RG, phone, e-mail, CEP) and the supplied identifiers
    (accent/case-insensitive name parts, digit sequences). A final check refuses the
    text if a supplied identifier survives. Ages, exam dates, scores and findings are kept.
+   Also removed without being supplied: names written in prose after "paciente", "Sr." or "Sra."
+   (two or more capitalized words) and medical record numbers ("Prontuário"). An 11-digit number
+   labelled ANVISA that is not a valid CPF is kept (OPME registrations); a valid CPF is always removed.
    The physician sees the exact de-identified text before AI processing.
 4. **Consent**: an explicit "consentimento do paciente registrado (LGPD)" is required.
 5. **Extraction** (`jmoraIs/application/case_intake.py`): de-identified text only, via the
