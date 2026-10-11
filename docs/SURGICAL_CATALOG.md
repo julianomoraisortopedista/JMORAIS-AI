@@ -48,3 +48,16 @@ checked against ANS Parecer Técnico nº 24/2021 — and CFM 2.318/2022, art. 8�
 suppliers and contacts, equivalent brands and ANVISA reference, the conclusion, request data
 (procedure, ICD-10, TUSS, OPME, hospital and date), cited quotes, references and signature.
 The report writer is told not to write the normative block itself.
+
+## Material specification and imaging guidance (blocks)
+
+Learned from 17 real denials: insurers approve the nerve blocks but replace the requested
+kit with a generic cannula, and hospital packages may supply cheaper material. Templates now
+carry, as written by the physician: `material_specs` (characteristics, one per line),
+`imaging_guidance` (ultrasound, fluoroscopy with radiopaque grid, nerve stimulation) and
+`material_justification`. Each supplier carries `product` and an 11-digit `anvisa`
+registration. The printed request adds "Especificação técnica do material" (RN 424/2017
+art. 7º I; CFM 2.318/2022 arts. 2º and 8º, the physician may refuse inadequate material and
+offer three brands) and a supplier table (company, product, ANVISA, contact). The readiness
+panel blocks a request whose suppliers lack ANVISA numbers or that carries both 31403026 and
+31602118, and warns on microneurolysis codes (denied 6 of 6).

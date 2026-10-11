@@ -41,6 +41,16 @@ class SupplierMaterial(BaseModel):
 class Supplier(BaseModel):
     label: str = Field(min_length=2, max_length=120)               # e.g. "Zimmer Biomet"
     contact: str = Field("", max_length=160)                       # supplier e-mail/phone printed in the request
+    product: str = Field("", max_length=160)                       # product/model offered by this supplier
+    anvisa: str = Field("", max_length=20)                         # ANVISA registration of that product (11 digits)
+
+    @field_validator("anvisa")
+    @classmethod
+    def _anvisa(cls, value):
+        value = re.sub(r"\D", "", value or "")
+        if value and len(value) != 11:
+            raise ValueError("Registro ANVISA deve ter 11 dígitos")
+        return value
     materials: list[SupplierMaterial] = Field(default_factory=list, max_length=50)
 
 
@@ -63,6 +73,9 @@ class ProcedureTemplate(BaseModel):
     opme: list[OpmeItem] = Field(default_factory=list, max_length=50)
     equivalent_brands: list[str] = Field(default_factory=list, max_length=6)   # technically equivalent brands, stated by the physician
     anvisa_reference: str = Field("", max_length=120)              # ANVISA registration cited for the OPME kit
+    material_specs: list[str] = Field(default_factory=list, max_length=12)     # characteristics defined by the physician
+    imaging_guidance: list[str] = Field(default_factory=list, max_length=4)    # e.g. ultrasound, fluoroscopy with radiopaque grid
+    material_justification: str = Field("", max_length=3000)        # why these characteristics, written by the physician
     suppliers: list[Supplier] = Field(default_factory=list, max_length=5)
     packages: list[HospitalPackage] = Field(default_factory=list, max_length=20)
     notes: str = Field("", max_length=1000)

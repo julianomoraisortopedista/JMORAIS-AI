@@ -6,9 +6,9 @@ import {libraryPanel} from './library.js';
 
 /** @typedef {{description:string,quantity:number}} Item */
 /** @typedef {{item_index:number,tuss_code:string,term?:string,manufacturer?:string,anvisa?:string}} Material */
-/** @typedef {{label:string,contact?:string,materials:Material[]}} Supplier */
+/** @typedef {{label:string,contact?:string,product?:string,anvisa?:string,materials:Material[]}} Supplier */
 /** @typedef {{network:string,package_code:string,description:string,includes_opme:boolean|null,notes:string}} Package */
-/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],equivalent_brands?:string[],anvisa_reference?:string,suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[],sbot_entry?:string,icu_days?:number|null,ward_days?:number|null,anesthesia?:string,consent_definition?:string,consent_risks?:string[]}} Template */
+/** @typedef {{template_id:string,name:string,region:string,tuss_codes:string[],tuss_terms:Record<string,string>,codes_confirmed:boolean,regime:string,opme:Item[],equivalent_brands?:string[],anvisa_reference?:string,material_specs?:string[],imaging_guidance?:string[],material_justification?:string,suppliers:Supplier[],packages:Package[],notes:string,warnings?:string[],sbot_entry?:string,icu_days?:number|null,ward_days?:number|null,anesthesia?:string,consent_definition?:string,consent_risks?:string[]}} Template */
 
 /** @param {import('./evidence.js').EvidenceClient} client */
 export function catalogPage(client){
@@ -40,7 +40,7 @@ function templateCard(client,t,reload,list){
   if(!t.codes_confirmed)card.append(pill('Códigos a confirmar','PENDENTE'));
   if(t.opme.length)card.append(box('p','muted','OPME: '+t.opme.map(i=>`${i.quantity}× ${i.description}`).join(', ')));
   for(const s of t.suppliers){
-    const line=box('p','muted',`${s.label}: `+(s.materials.length?s.materials.map(m=>`${t.opme[m.item_index]?.description||''} → ${m.term} (Anvisa ${m.anvisa})`).join('; '):'materiais ainda não escolhidos'));
+    const line=box('p','muted',`${s.label}${s.product?' — '+s.product:''}${s.anvisa?' (ANVISA '+s.anvisa+')':''}: `+(s.materials.length?s.materials.map(m=>`${t.opme[m.item_index]?.description||''} → ${m.term} (Anvisa ${m.anvisa})`).join('; '):'materiais ainda não escolhidos'));
     card.append(line);
   }
   for(const p of t.packages)card.append(box('p','muted',`Pacote ${p.network}${p.package_code?' '+p.package_code:''}: ${p.description}`));
@@ -91,6 +91,12 @@ function editor(client,t,reload){
   const brandsIn=input('Ex.: Evereast, Renova, MedFactor',(t.equivalent_brands||[]).join(', '));
   const anvisaIn=input('Registro ANVISA de referência',t.anvisa_reference||'');
   card.append(kit,addItem,field('Marcas tecnicamente equivalentes',brandsIn,'aparecem na justificativa da OPME'),field('ANVISA de referência',anvisaIn));
+  // Characteristics defined by the physician (RN 424/2017 art. 7º I; CFM 2.318/2022 arts. 2º and 8º) and imaging guidance.
+  const specsIn=textarea('Uma característica por linha. Ex.: Cânula ecogênica (sonovisível)\nIsolada, para neuroestimulação\nTela radiopaca para marcação cutânea\nCalibre 21G, comprimento 100 mm');specsIn.rows=4;specsIn.value=(t.material_specs||[]).join('\n');
+  const GUIDES=['Ultrassonografia','Radioscopia com tela radiopaca','Neuroestimulação'];const guideBoxes=GUIDES.map(g=>{const c=document.createElement('input');c.type='checkbox';c.checked=(t.imaging_guidance||[]).includes(g);const l=box('label','chip');l.append(c,el('span',g));return {g,c,l};});
+  const guides=box('div','chips');for(const x of guideBoxes)guides.append(x.l);
+  const justIn=textarea('Por que estas características (segurança, visualização da ponta, menos punções, menos radiação)');justIn.rows=4;justIn.value=t.material_justification||'';
+  card.append(field('Especificação técnica do material',specsIn,'impressa no pedido; o hospital não pode trocar por material sem estas características'),field('Guia de imagem e localização',guides),field('Justificativa técnica do material',justIn));
 
   // Suppliers: official TUSS 19 material per kit item.
   card.append(box('h3','section-title','Fornecedores (3 fabricantes diferentes)'),box('p','muted','Para cada fornecedor, escolha na tabela TUSS 19 o material de cada item. O fabricante e o registro Anvisa vêm da tabela oficial.'));
@@ -124,6 +130,7 @@ function editor(client,t,reload){
   const save=button('Salvar modelo'),cancel=button('Cancelar','quiet');const status=box('div','status-area');const a=box('div','actions');a.append(save,cancel);card.append(a,status);
   cancel.onclick=()=>reload();
   save.onclick=()=>busy(save,async()=>{
+    t.material_specs=specsIn.value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,12);t.imaging_guidance=guideBoxes.filter(x=>x.c.checked).map(x=>x.g);t.material_justification=justIn.value.trim();
     t.equivalent_brands=brandsIn.value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,6);t.anvisa_reference=anvisaIn.value.trim();
     t.name=name.value;t.region=region.value;t.regime=regime.value;t.notes=notes.value;t.codes_confirmed=confirm.checked;
     t.anesthesia=anesthesia.value;t.consent_definition=definition.value;t.consent_risks=risks.value.split('\n').map(x=>x.trim()).filter(Boolean).slice(0,40);
@@ -139,7 +146,10 @@ function supplierBox(client,t,s,sn,rerender){
   const wrap=box('div','card');const label=input('Fornecedor / fabricante (ex.: Zimmer Biomet)',s.label);label.oninput=()=>{s.label=label.value;};
   const rm=button('Remover fornecedor','quiet');rm.onclick=()=>{t.suppliers.splice(sn,1);rerender();};
   const contact=input('Contato impresso no pedido (e-mail ou telefone)',s.contact||'');contact.oninput=()=>{s.contact=contact.value;};
-  wrap.append(field(`Fornecedor ${sn+1}`,label),field('Contato',contact));
+  const product=input('Produto / modelo (ex.: Kit cânula ecogênica para bloqueio)',s.product||'');product.oninput=()=>{s.product=product.value;};
+  const anvisa=input('Registro ANVISA do produto (11 dígitos)',s.anvisa||'');anvisa.oninput=()=>{s.anvisa=anvisa.value;};
+  const grid=box('div','form-grid');grid.append(field('Produto',product),field('ANVISA',anvisa));
+  wrap.append(field(`Fornecedor ${sn+1}`,label),field('Contato',contact),grid);
   t.opme.forEach((item,n)=>{
     const current=s.materials.find(m=>m.item_index===n);
     const row=box('div','row');const m=box('div','row-main');m.append(box('strong','',item.description||`Item ${n+1}`),

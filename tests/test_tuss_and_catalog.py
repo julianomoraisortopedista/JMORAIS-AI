@@ -141,3 +141,15 @@ def test_supplier_contact_equivalent_brands_and_anvisa_reference_persist(tmp_pat
     loaded = next(t for t in store.load() if t.template_id == saved.template_id)
     assert loaded.suppliers[0].contact == "vendas@a.example" and loaded.equivalent_brands == ["Marca 1", "Marca 2"]
     assert loaded.anvisa_reference == "80000000001"
+
+
+def test_supplier_product_anvisa_and_material_specification_persist():
+    import pytest
+    from jmoraIs.application.surgical_catalog import Supplier, ProcedureTemplate
+    s = Supplier(label="Empresa A", product="Kit cânula ecogênica", anvisa="814.208.990-05")
+    assert s.anvisa == "81420899005"
+    with pytest.raises(ValueError):
+        Supplier(label="Empresa B", anvisa="123")
+    t = ProcedureTemplate(name="Bloqueio de nervos geniculares", material_specs=["Cânula ecogênica"],
+                          imaging_guidance=["Ultrassonografia", "Radioscopia com tela radiopaca"], material_justification="Segurança")
+    assert t.imaging_guidance[1] == "Radioscopia com tela radiopaca"
