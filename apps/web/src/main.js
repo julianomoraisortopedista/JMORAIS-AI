@@ -69,6 +69,8 @@ async function shell(){
  const layout=box('div','layout');layout.append(side,main);root.replaceChildren(layout);
  /** @type {HTMLElement|undefined} */ let patientsView;
  const counts={decisions:0};
+ /** Pages kept alive while signed in, so switching sections never loses what was typed. @type {Record<string,HTMLElement>} */
+ const views={};
  /** @param {string} key */
  const go=(key)=>{
    for(const [k,b] of Object.entries(items))b.setAttribute('aria-current',k===key?'page':'false');
@@ -77,10 +79,10 @@ async function shell(){
    else if(key==='patients'){patientsView=patientsView||patients(client);content.replaceChildren(patientsView);}
    else if(key==='evidence')content.replaceChildren(evidencePage(evidence,n=>{counts.decisions=n;}));
    else if(key==='case')content.replaceChildren(casePage(evidence));
-   else if(key==='quick')content.replaceChildren(quickPage(evidence));
+   else if(key==='quick'){views.quick=views.quick||quickPage(evidence);content.replaceChildren(views.quick);}
    else if(key==='rx')content.replaceChildren(prescription(evidence));
    else if(key==='finance')content.replaceChildren(financePage(evidence));
-   else if(key==='appeals')content.replaceChildren(appealsPage(evidence,caseContext,dictation));
+   else if(key==='appeals'){views.appeals=views.appeals||appealsPage(evidence,caseContext,dictation);content.replaceChildren(views.appeals);}
    else if(key==='catalog')content.replaceChildren(catalogPage(evidence));
    else if(key==='insurers')content.replaceChildren(insurersPage(evidence));
    else content.replaceChildren(documentPage(evidence));

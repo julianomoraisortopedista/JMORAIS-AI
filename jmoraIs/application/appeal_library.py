@@ -37,6 +37,9 @@ class AppealEntry(BaseModel):
     outcome: str = Field("PENDENTE", pattern="^(DEFERIDA|PARCIAL|INDEFERIDA|PENDENTE)$")
     text: str = Field(min_length=100, max_length=MAX_APPEAL_CHARS + 2000)
     created_at: str = ""
+    insurer_id: str = Field("", max_length=40)           # authorization playbook insurer, when recognised
+    reasons: list[str] = Field(default_factory=list, max_length=10)
+    case_id: str = Field("", max_length=20)              # linked playbook case, kept in step with the outcome
 
 
 def _fold(value: str) -> set[str]:
@@ -78,6 +81,11 @@ class AppealLibrary:
             self._write(entries + [saved])
         return saved
 
+    def link_case(self, appeal_id: str, case_id: str) -> None:
+        with self._lock:
+            entries = self.entries()
+            self._write([e.model_copy(update={"case_id": case_id}) if e.appeal_id == appeal_id else e for e in entries])
+
     def set_outcome(self, appeal_id: str, outcome: str) -> AppealEntry:
         if outcome not in OUTCOMES:
             raise AppealLibraryRejected("Resultado inválido.")
@@ -94,11 +102,14 @@ class AppealLibrary:
         with self._lock:
             self._write([e for e in self.entries() if e.appeal_id != appeal_id])
 
-    def examples(self, kind: str, procedure: str, limit: int = 2) -> list[AppealEntry]:
-        """Most useful references: granted first, same kind, closest procedure; never INDEFERIDA."""
+    def examples(self, kind: str, procedure: str, limit: int = 2, insurer_id: str = "",
+                 reasons: tuple = ()) -> list[AppealEntry]:
+        """Most useful references: granted first, same insurer and reasons, same kind, closest procedure;
+        never INDEFERIDA."""
         words = _fold(procedure)
         weight = {"DEFERIDA": 3, "PARCIAL": 2, "PENDENTE": 1}
-        scored = [(weight[e.outcome] * 10 + (5 if e.kind == kind else 0) + len(words & _fold(e.procedure)), e)
+        scored = [(weight[e.outcome] * 10 + (8 if insurer_id and e.insurer_id == insurer_id else 0)
+                   + 3 * len(set(reasons) & set(e.reasons)) + (5 if e.kind == kind else 0) + len(words & _fold(e.procedure)), e)
                   for e in self.entries() if e.outcome in weight]
         scored.sort(key=lambda x: (-x[0], x[1].created_at), reverse=False)
         return [e for _, e in scored[:limit]]

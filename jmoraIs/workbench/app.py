@@ -141,6 +141,9 @@ class OpmeIn(BaseModel):
     quantity: int = Field(1, ge=1, le=50)
 
 
+APPEAL_TO_CASE = {"DEFERIDA": "REVERTIDO", "PARCIAL": "APROVADO_PARCIAL", "INDEFERIDA": "MANTIDO", "PENDENTE": "PENDENTE"}
+
+
 class AppealFileIn(BaseModel):
     file: "ScanIn"
     identifiers: IdentifiersIn
@@ -222,6 +225,9 @@ class AppealSaveIn(BaseModel):
     outcome: str = Field("PENDENTE", pattern="^(DEFERIDA|PARCIAL|INDEFERIDA|PENDENTE)$")
     text: str = Field(min_length=100, max_length=16000)
     confirmed: bool
+    insurer_id: str = Field("", max_length=40)
+    reasons: list[str] = Field(default_factory=list, max_length=10)
+    guidance: str = Field("", max_length=3000)
 
 
 class OutcomeIn(BaseModel):
@@ -734,17 +740,42 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         if not body.confirmed:
             bad("Confirme que a contestação não tem dados de paciente.")
         try:
-            saved = need_library().add(AppealEntry(kind=body.kind, procedure=body.procedure, outcome=body.outcome, text=body.text))
+            saved = need_library().add(AppealEntry(kind=body.kind, procedure=body.procedure, outcome=body.outcome, text=body.text,
+                                                   insurer_id=body.insurer_id, reasons=body.reasons))
         except (AppealLibraryRejected, DeidentificationRejected) as exc:
             bad(str(exc))
-        return {"appeal_id": saved.appeal_id}
+        case_id = ""
+        if playbook is not None and body.insurer_id:
+            # Every saved contestation becomes a playbook case, so outcomes feed the insurer's track record.
+            from jmoraIs.application.authorization_playbook import today as _today
+            book = playbook.load()
+            known = {r.reason_id for r in book.reasons}
+            if any(i.insurer_id == body.insurer_id for i in book.insurers):
+                try:
+                    case = playbook.add_case(PlaybookCase(
+                        insurer_id=body.insurer_id, on=_today(), stage="contestação", region="",
+                        reasons=[r for r in body.reasons if r in known], outcome=APPEAL_TO_CASE[body.outcome],
+                        notes=f"Contestação {saved.appeal_id}: {body.procedure}"[:300]))
+                    case_id = case.case_id
+                    need_library().link_case(saved.appeal_id, case_id)
+                    if body.guidance.strip():
+                        playbook.add_preference(body.insurer_id, deidentify(body.guidance).text)
+                except (PlaybookRejected, DeidentificationRejected):
+                    pass  # the contestation is saved; the playbook link is best effort and never stores identifiers
+        return {"appeal_id": saved.appeal_id, "case_id": case_id}
 
     @app.patch("/api/appeals/{appeal_id}")
     def appeals_outcome(appeal_id: str, body: OutcomeIn):
         try:
-            return need_library().set_outcome(appeal_id, body.outcome).model_dump(exclude={"text"})
+            updated = need_library().set_outcome(appeal_id, body.outcome)
         except AppealLibraryRejected as exc:
             bad(str(exc), 404)
+        if playbook is not None and updated.case_id:
+            try:
+                playbook.set_outcome(updated.case_id, APPEAL_TO_CASE[updated.outcome])
+            except PlaybookRejected:
+                pass
+        return updated.model_dump(exclude={"text"})
 
     @app.delete("/api/appeals/{appeal_id}")
     def appeals_delete(appeal_id: str):
@@ -791,8 +822,11 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             sbot = sbot_summary(entry) if entry is not None else ""
         elif procedure:
             context = f"Procedimento: {procedure}."
-        examples = [e.text for e in appeal_library.examples(body.kind, procedure)] if appeal_library is not None else []
         analysis = playbook_analyze(playbook.load(), denial) if playbook is not None else None
+        examples = ([e.text for e in appeal_library.examples(
+            body.kind, procedure, insurer_id=(analysis or {}).get("insurer_id") or "",
+            reasons=tuple(r["reason_id"] for r in (analysis or {}).get("reasons") or []))]
+            if appeal_library is not None else [])
         strategy = playbook_strategy(analysis) if analysis else ""
         job_id = "apl-job-" + secrets.token_hex(6)
         jobs = state_of(request).appeals

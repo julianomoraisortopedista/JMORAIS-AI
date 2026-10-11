@@ -81,6 +81,7 @@ class Insurer(BaseModel):
     responses: list[str] = Field(default_factory=list, max_length=20)
     reviewers: list[Reviewer] = Field(default_factory=list, max_length=40)
     rules: list[Rule] = Field(default_factory=list, max_length=20)
+    preferences: list[str] = Field(default_factory=list, max_length=10)  # the physician's own orders for this insurer, newest first
 
 
 class Line(BaseModel):
@@ -159,6 +160,21 @@ class PlaybookStore:
             self._write(book)
         return saved
 
+    def add_preference(self, insurer_id: str, text: str) -> None:
+        """Keep the physician's latest orders for this insurer (newest first, de-identified, at most 5)."""
+        text = " ".join((text or "").split())[:1500]
+        if not text:
+            return
+        _clean([text])
+        with self._lock:
+            book = self.load()
+            for n, insurer in enumerate(book.insurers):
+                if insurer.insurer_id == insurer_id:
+                    prefs = [text] + [p for p in insurer.preferences if p != text]
+                    book.insurers[n] = insurer.model_copy(update={"preferences": prefs[:5]})
+                    self._write(book)
+                    return
+
     def set_outcome(self, case_id: str, outcome: str, notes: str = "") -> Case:
         if outcome not in OUTCOMES:
             raise PlaybookRejected("Resultado inválido.")
@@ -198,7 +214,8 @@ def advice(book: Playbook, insurer_name: str, codes: list[str]) -> dict:
     labels = {r.reason_id: r for r in book.reasons}
     top = [dict(reason_id=k, label=labels[k].label, count=v, prevention=labels[k].prevention)
            for k, v in sorted(counts.items(), key=lambda x: -x[1])[:5] if k in labels]
-    return {"insurer": insurer.name, "route": insurer.route, "warnings": warnings, "record": record, "top_reasons": top}
+    return {"insurer": insurer.name, "insurer_id": insurer.insurer_id, "route": insurer.route, "warnings": warnings,
+            "record": record, "top_reasons": top, "preferences": insurer.preferences}
 
 
 def analyze(book: Playbook, text: str, codes: Optional[list[str]] = None) -> dict:
@@ -218,6 +235,8 @@ def strategy_text(analysis: dict) -> str:
     lines = []
     if analysis.get("insurer"):
         lines.append(f"Convênio: {analysis['insurer']}. " + " ".join(analysis.get("insurer_responses") or []))
+        if analysis.get("preferences"):
+            lines.append("Como o médico costuma conduzir com este convênio: " + analysis["preferences"][0])
     for r in analysis.get("reasons") or []:
         lines.append(f"Motivo '{r['label']}': " + " ".join(r["response"]))
     return "\n".join(line for line in lines if line.strip())[:4000]

@@ -28,6 +28,7 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
   const card=box('section','card');
   card.append(box('h2','card-title','Nova contestação'),
     box('p','muted','Cole ou anexe a negativa, a glosa ou o parecer da junta. Os dados do paciente são removidos antes da IA. O Claude responde a cada argumento usando os fatos do caso, a SBOT e as normas da plataforma, e segue as suas contestações deferidas da biblioteca como modelo.'));
+  /** @type {any} */ let analysis=null;
   const kind=select(KINDS);const procedure=input('Ex.: Artroplastia total do joelho direito');
   /** @type {string|null} */ let templateId=null;
   const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;if(t&&!procedure.value)procedure.value=t.name;});
@@ -42,7 +43,7 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
   const status=box('div','status-area');const result=box('div','');const rxb=button('Receituário de OPME','ghost');const a=box('div','actions');a.append(go,rxb);
   rxb.onclick=()=>busy(rxb,async()=>{try{await openOpmeRx(client,templateId,caseContext().patient.name||'');}catch(e){say(status,e instanceof Error?e.message:'Falha.');}});
   card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Anexe os e-mails e documentos da negativa (vários arquivos: PDF, Word, texto ou foto)',file),found,field('Como você quer a contestação (sua ordem e opinião)',guidance),dictation(guidance),caseLabel,a,status,result);
-  file.onchange=()=>readFiles(client,file,denial,found,caseContext);
+  file.onchange=()=>readFiles(client,file,denial,found,caseContext).then(a=>{if(a){analysis=a;if(!guidance.value.trim()&&(a.preferences||[]).length)guidance.value=a.preferences[0];}});
   go.onclick=()=>busy(go,async()=>{
     result.replaceChildren();
     try{
@@ -54,14 +55,14 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
       for(let i=0;i<90&&job.status==='RUNNING';i++){await new Promise(r=>setTimeout(r,2000));job=await client.appealDraftGet(job.job_id);}
       if(job.status!=='READY')throw new Error(job.error||'Falha ao redigir.');
       say(status,`Contestação redigida${job.examples?` usando ${job.examples} contestação(ões) sua(s) da biblioteca como modelo`:''}.${job.dropped?` ${job.dropped} frase(s) sem fonte foram descartadas.`:''} Revise antes de enviar.`,'ok');
-      renderDraft(client,result,job,kind.value,procedure.value,caseContext,reloadLibrary);
+      renderDraft(client,result,job,kind.value,procedure.value,caseContext,reloadLibrary,{insurer_id:(job.analysis||analysis||{}).insurer_id||'',reasons:((job.analysis||analysis||{}).reasons||[]).map((/** @type {any} */ r)=>r.reason_id),guidance:guidance.value});
     }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
   });
   return card;
 }
 
 /** Every attached file is read (photos and scans locally), de-identified and appended; then the insurer and reasons are recognised.
- * @param {import('./evidence.js').EvidenceClient} client @param {HTMLInputElement} file @param {HTMLTextAreaElement} denial @param {HTMLElement} found @param {()=>CaseContext} caseContext */
+ * @param {import('./evidence.js').EvidenceClient} client @param {HTMLInputElement} file @param {HTMLTextAreaElement} denial @param {HTMLElement} found @param {()=>CaseContext} caseContext @returns {Promise<any>} */
 async function readFiles(client,file,denial,found,caseContext){
   const list=Array.from(file.files||[]).slice(0,8);if(!list.length)return;
   const c=caseContext();
@@ -73,7 +74,8 @@ async function readFiles(client,file,denial,found,caseContext){
     catch(e){parts.push(`--- ${f.name}: não foi possível ler (${e instanceof Error?e.message:'erro'}) ---`);}
   }
   denial.value=[denial.value.trim(),...parts].filter(Boolean).join('\n\n');file.value='';
-  try{showAnalysis(found,await client.appealAnalyze(denial.value));}catch{say(found,'Arquivos lidos. Não consegui identificar o convênio automaticamente.','info');}
+  try{const a=await client.appealAnalyze(denial.value);showAnalysis(found,a);return a;}catch{say(found,'Arquivos lidos. Não consegui identificar o convênio automaticamente.','info');}
+  return null;
 }
 
 /** @param {HTMLElement} target @param {any} a */
@@ -92,8 +94,8 @@ function showAnalysis(target,a){
   target.append(box_);
 }
 
-/** @param {import('./evidence.js').EvidenceClient} client @param {HTMLElement} target @param {any} job @param {string} kind @param {string} procedure @param {()=>CaseContext} caseContext @param {()=>void} reloadLibrary */
-function renderDraft(client,target,job,kind,procedure,caseContext,reloadLibrary){
+/** @param {import('./evidence.js').EvidenceClient} client @param {HTMLElement} target @param {any} job @param {string} kind @param {string} procedure @param {()=>CaseContext} caseContext @param {()=>void} reloadLibrary @param {{insurer_id:string,reasons:string[],guidance:string}} [meta] */
+function renderDraft(client,target,job,kind,procedure,caseContext,reloadLibrary,meta={insurer_id:'',reasons:[],guidance:''}){
   /** @type {[string,HTMLTextAreaElement][]} */ const areas=[];
   for(const g of job.gaps||[])target.append(box('div','alert alert-warn','Lacuna: '+g));
   for(const sec of job.sections){const t=textarea('');t.value=sec.sentences.map((/** @type {any} */ s)=>s.text).join(' ');t.rows=Math.max(3,Math.min(12,Math.ceil(t.value.length/110)));
@@ -117,7 +119,7 @@ function renderDraft(client,target,job,kind,procedure,caseContext,reloadLibrary)
   open.onclick=()=>busy(open,async()=>{const html=await build();const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('contestacao.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);});
   save.onclick=()=>busy(save,async()=>download('contestacao.html',await build(),'text/html'));
   keep.onclick=()=>busy(keep,async()=>{try{const text=areas.filter(([,t])=>t.value.trim()).map(([title,t])=>`${title}\n${t.value.trim()}`).join('\n\n');
-    await client.appealSave({kind,procedure,outcome:'PENDENTE',text,confirmed:true});say(st,'Salva na biblioteca como "Pendente". Atualize o resultado quando a operadora responder.','ok');reloadLibrary();}
+    await client.appealSave({kind,procedure,outcome:'PENDENTE',text,confirmed:true,...meta});say(st,'Salva na biblioteca como "Pendente". Atualize o resultado quando a operadora responder.','ok');reloadLibrary();}
     catch(e){say(st,e instanceof Error?e.message:'Falha ao salvar.');}});
 }
 
