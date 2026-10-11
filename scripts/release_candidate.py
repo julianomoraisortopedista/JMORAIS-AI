@@ -61,6 +61,12 @@ def test_database():
         with admin.connect() as c:
             version = c.execute(text('SHOW server_version_num')).scalar_one()
             if not version.startswith('16'):raise GateFailure('FIXTURE','PostgreSQL 16 required','Start the approved PostgreSQL 16 service')
+            # Earlier runs leave their isolated databases behind; on the size-limited local test service
+            # they eventually fill the disk. Only this gate's own pilot_release_<hex> databases are dropped.
+            import re
+            for (old,) in c.execute(text("SELECT datname FROM pg_database WHERE datname LIKE 'pilot\\_release\\_%'")).all():
+                if re.fullmatch(r'pilot_release_[0-9a-f]{32}', old):
+                    c.execute(text(f'DROP DATABASE "{old}" WITH (FORCE)'))
             name = 'pilot_release_'+uuid4().hex
             c.execute(text('CREATE DATABASE '+name))
     finally:admin.dispose()
