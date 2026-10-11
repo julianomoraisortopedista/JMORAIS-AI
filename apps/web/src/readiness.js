@@ -15,6 +15,8 @@ export function readiness(r){
   /** @type {ReadinessItem[]} */ const items=[
     {ok:has('TRATAMENTO_CONSERVADOR'),blocking:true,label:'Tratamento conservador documentado (tipo e tempo)',fix:'Anexe ou dite fisioterapia, medicação, infiltrações e por quanto tempo. É o motivo mais comum de negativa.'},
     {ok:has('ACHADO_IMAGEM'),blocking:true,label:'Exame de imagem com laudo',fix:'Anexe o laudo (foto ou PDF) da radiografia, ressonância ou tomografia.'},
+    {ok:has('EVOLUCAO'),blocking:false,label:'Data do diagnóstico e tempo de evolução',fix:'Informe desde quando há dor e há quanto tempo dura o tratamento (ex.: diagnóstico em 25/01/2025, 20 meses de tratamento). Os pedidos aprovados traziam isso explícito.'},
+    {ok:has('INDICACAO'),blocking:false,label:'Por que este procedimento agora (e não cirurgia ou só conservador)',fix:'Diga por que não há indicação cirúrgica no momento e por que o conservador falhou. Responde ao argumento "não trata a causa primária".'},
     {ok:has('EXAME_FISICO'),blocking:false,label:'Exame físico descrito',fix:'Descreva amplitude de movimento, deformidade, estabilidade e testes.'},
     {ok:has('ESCALA_FUNCIONAL'),blocking:false,label:'Escala de dor ou função (EVA, KOOS, WOMAC…)',fix:'Registre ao menos a EVA; escalas tornam a indicação objetiva.'},
     {ok:r.icd10.length>0,blocking:true,label:'CID-10 informado',fix:'Confirme o CID em "Pedido médico".'},

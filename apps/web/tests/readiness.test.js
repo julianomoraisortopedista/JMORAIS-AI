@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readiness} from '../src/readiness.js';
 
-const facts=['TRATAMENTO_CONSERVADOR','ACHADO_IMAGEM','EXAME_FISICO','ESCALA_FUNCIONAL'].map(category=>({category}));
+const facts=['TRATAMENTO_CONSERVADOR','ACHADO_IMAGEM','EXAME_FISICO','ESCALA_FUNCIONAL','EVOLUCAO','INDICACAO'].map(category=>({category}));
 const template={codes_confirmed:true,opme:[{description:'Componente femoral',quantity:1}],material_specs:['Cânula ecogênica'],suppliers:[{label:'A',anvisa:'81420899005'},{label:'B',anvisa:'82510399002'},{label:'C',anvisa:'81086970041'}]};
 const science={references:[{direction:'SUPPORTING',high_level:true}]};
 const full={facts,icd10:['M17.1'],gaps:[],science,template,schedule:{hospital:'H',date:'2026-10-20'},checks:[]};
