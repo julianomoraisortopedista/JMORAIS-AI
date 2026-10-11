@@ -18,12 +18,14 @@ export function launchReference(raw) {
   return /** @type {LaunchReference} */(r);
 }
 export class WorkspaceClient {
-  /** @param {()=>string} bearer @param {typeof fetch} request */
+  /** @param {()=>string|Promise<string>} bearer @param {typeof fetch} request */
   constructor(bearer,request=(/** @type {RequestInfo|URL} */ input,/** @type {RequestInit|undefined} */ init)=>fetch(input,init)){this.bearer=bearer;this.request=request;}
   /** @param {string} path @param {unknown} body @param {AbortSignal|undefined} signal */
   async read(path,body=undefined,signal=undefined){
+    /** @type {string} */ let token;
+    try{token=await this.bearer();}catch{throw new ApiError(401);}
     const r=await this.request('/internal/api/v1/workspace/'+path,{method:body===undefined?'GET':'POST',
-      headers:{Authorization:'Bearer '+this.bearer(),...(body===undefined?{}:{'Content-Type':'application/json'})},
+      headers:{Authorization:'Bearer '+token,...(body===undefined?{}:{'Content-Type':'application/json'})},
       body:body===undefined?undefined:JSON.stringify(body),signal,cache:'no-store',credentials:'omit',redirect:'error'});
     if(!r.ok) throw new ApiError(r.status);
     return r.json();

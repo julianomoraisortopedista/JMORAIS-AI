@@ -9,7 +9,7 @@ const json=x=>new Response(JSON.stringify(x),{headers:{'Content-Type':'applicati
 async function fixture(){
  const pair=await crypto.subtle.generateKey({name:'RSASSA-PKCS1-v1_5',modulusLength:2048,publicExponent:new Uint8Array([1,0,1]),hash:'SHA-256'},true,['sign','verify']);
  const jwk={...await crypto.subtle.exportKey('jwk',pair.publicKey),kid:'fixture',alg:'RS256',use:'sig'};
- const storage=new Storage();let nonce='';let exchange;let tokenNonce;
+ const storage=new Storage();let nonce='';let exchange;let tokenNonce;const refreshes=[];
  const request=async(url,options)=>{
   if(url.endsWith('openid-configuration'))return json({issuer:config.issuer,authorization_endpoint:config.issuer+'/authorize',token_endpoint:config.issuer+'/token',jwks_uri:config.issuer+'/jwks',response_types_supported:['code'],code_challenge_methods_supported:['S256'],id_token_signing_alg_values_supported:['RS256']});
   if(url.endsWith('/jwks'))return json({keys:[jwk]});
@@ -17,13 +17,14 @@ async function fixture(){
    exchange=options;const now=Math.floor(Date.now()/1000);
    const input=b64(JSON.stringify({alg:'RS256',kid:'fixture'}))+'.'+b64(JSON.stringify({iss:config.issuer,aud:config.client_id,sub:'doctor',nonce:tokenNonce??nonce,iat:now,exp:now+300}));
    const signature=await crypto.subtle.sign('RSASSA-PKCS1-v1_5',pair.privateKey,Buffer.from(input));
-   return json({access_token:'local_test_only_browser_token',token_type:'Bearer',expires_in:300,id_token:input+'.'+b64(signature)});
+   if(options.body.get('grant_type')==='refresh_token'){refreshes.push(options.body.get('refresh_token'));return json({access_token:'renewed_'+refreshes.length,token_type:'Bearer',expires_in:300,refresh_token:'rt_'+(refreshes.length+1)});}
+   return json({access_token:'local_test_only_browser_token',token_type:'Bearer',expires_in:300,refresh_token:'rt_1',id_token:input+'.'+b64(signature)});
   }
   throw new Error('Unexpected fixture request');
  };
  const auth=new BrowserAuth(validateConfig(config,'https://workspace.example'),storage,request);
  const url=new URL(await auth.begin());nonce=url.searchParams.get('nonce');
- return {auth,storage,url,get exchange(){return exchange;},set tokenNonce(v){tokenNonce=v;}};
+ return {auth,storage,url,refreshes,get exchange(){return exchange;},set tokenNonce(v){tokenNonce=v;}};
 }
 test('password change reuses the PKCE round trip and allows only that action',async()=>{
  const f=await fixture();assert.equal(f.url.searchParams.has('kc_action'),false);
@@ -62,4 +63,18 @@ test('wrong state/nonce rejected, logout clears auth state',async()=>{
 test('scalar launch reconstruction denied; server errors sanitized',async()=>{
  assert.throws(()=>launchReference({launch_id:'alone'}));
  for(const status of [401,403,409,500,503]){const c=new WorkspaceClient(()=> 'test-fixture',async()=>new Response('SECRET CLINICAL ERROR',{status}));await assert.rejects(c.context(),e=>e.status===status&&!e.message.includes('SECRET'));}
+});
+
+test('an expiring access token is renewed with the rotating refresh token, once at a time',async()=>{
+ const f=await fixture();const t=JSON.parse([...f.storage.data.values()][0]);
+ await f.auth.callback(new URL(config.redirect_uri+'?code=one-use&state='+t.state),()=>{});
+ assert.equal(await f.auth.token(),'local_test_only_browser_token');assert.equal(f.refreshes.length,0);
+ const realNow=Date.now;Date.now=()=>realNow()+280000;  // inside the 60 s renewal window
+ try{
+   const [a,b]=await Promise.all([f.auth.token(),f.auth.token()]);
+   assert.equal(a,'renewed_1');assert.equal(b,'renewed_1');assert.deepEqual(f.refreshes,['rt_1']);
+   Date.now=()=>realNow()+280000+280000;
+   assert.equal(await f.auth.token(),'renewed_2');assert.deepEqual(f.refreshes,['rt_1','rt_2']);
+ }finally{Date.now=realNow;}
+ f.auth.logout();await assert.rejects(()=>f.auth.token());
 });

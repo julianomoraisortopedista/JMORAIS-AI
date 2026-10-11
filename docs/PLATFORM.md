@@ -80,3 +80,10 @@ stops forwarding it. `make local-pilot-watchdog` installs a macOS launch agent
 running and the page does not answer, it runs the repair (log:
 `~/.local/share/jmorais-local-pilot/watchdog.log`). It never starts Docker by itself.
 `make local-pilot-watchdog-off` removes it.
+
+Session: access tokens last 5 minutes (realm hardening). The browser keeps the rotating
+refresh token in memory only and renews the access token 60 s before it expires, one renewal
+at a time, so long requests (local OCR, AI extraction, report drafting) no longer send the
+physician back to the login page. The identity session still ends after 30 minutes without
+use (refresh token lifetime) and the app signs out after 20 minutes idle; a failed renewal
+signs out and returns to login.

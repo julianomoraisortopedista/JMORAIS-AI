@@ -11,12 +11,14 @@ export class EvidenceError extends Error {
 }
 
 export class EvidenceClient {
-  /** @param {()=>string} bearer @param {typeof fetch} request */
+  /** @param {()=>string|Promise<string>} bearer @param {typeof fetch} request */
   constructor(bearer,request=(/** @type {RequestInfo|URL} */ input,/** @type {RequestInit|undefined} */ init)=>fetch(input,init)){this.bearer=bearer;this.request=request;}
   /** @param {string} path @param {unknown} [body] @param {string} [method] @returns {Promise<any>} */
   async call(path,body=undefined,method=body===undefined?'GET':'POST'){
+    /** @type {string} */ let token;
+    try{token=await this.bearer();}catch{throw new EvidenceError(401);}  // expired session: the shell signs in again
     const r=await this.request('/internal/evidence/api/'+path,{method,cache:'no-store',credentials:'omit',redirect:'error',
-      headers:{Authorization:'Bearer '+this.bearer(),...(body===undefined?{}:{'Content-Type':'application/json'})},
+      headers:{Authorization:'Bearer '+token,...(body===undefined?{}:{'Content-Type':'application/json'})},
       body:body===undefined?undefined:JSON.stringify(body)});
     let data=null;try{data=await r.json();}catch{data=null;}
     if(!r.ok){const d=data && data.detail;throw new EvidenceError(r.status,typeof d==='string'?d:Array.isArray(d)?d.map(x=>x.msg).join('; '):undefined);}

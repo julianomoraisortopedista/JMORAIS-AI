@@ -44,8 +44,8 @@ function login(){
 async function shell(){
  if(!auth)return;
  const current=auth;
- const client=new WorkspaceClient(()=>current.bearer());
- const evidence=new EvidenceClient(()=>current.bearer());
+ const client=new WorkspaceClient(()=>current.token());
+ const evidence=new EvidenceClient(()=>current.token());
  const context=await client.context();
  try{session.model=Boolean((await evidence.status()).model_configured);}catch{session.model=false;}
  document.body.className='is-app';

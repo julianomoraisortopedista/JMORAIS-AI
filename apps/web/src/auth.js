@@ -22,10 +22,14 @@ export function validateConfig(input, origin) {
   return /** @type {AuthConfig} */ (c);
 }
 
-/** Public client: one-use PKCE transaction survives redirect, tokens never do. */
+/** Public client: one-use PKCE transaction survives redirect, tokens never do.
+ * Access tokens are short-lived; while the identity session is alive they are renewed with the
+ * (rotating) refresh token kept only in memory, so long requests do not sign the physician out. */
 export class BrowserAuth {
   /** @type {string|null} */ #token = null;
   #expires = 0;
+  /** @type {string|null} */ #refresh = null;
+  /** @type {Promise<string>|null} */ #renewing = null;
   /** @param {AuthConfig} config @param {Storage} storage @param {typeof fetch} request */
   constructor(config, storage, request = (/** @type {RequestInfo|URL} */ input, /** @type {RequestInit|undefined} */ init) => fetch(input, init)) { this.config=config; this.storage=storage; this.request=request; }
   async discovery() {
@@ -75,6 +79,7 @@ export class BrowserAuth {
           !Number.isFinite(result.expires_in) || result.expires_in<=0) throw new AuthError();
       await this.verifyIdentity(result.id_token,t.nonce,d.jwks_uri);
       this.#token=result.access_token; this.#expires=Date.now()+result.expires_in*1000;
+      this.#refresh=typeof result.refresh_token==='string' && result.refresh_token ? result.refresh_token : null;
     } catch { this.logout(); throw new AuthError(); }
   }
   /** @param {string} token @param {string} nonce @param {string} jwks */
@@ -98,5 +103,29 @@ export class BrowserAuth {
     if(!await crypto.subtle.verify('RSASSA-PKCS1-v1_5',key,decode(parts[2]),new TextEncoder().encode(parts[0]+'.'+parts[1]))) throw new AuthError();
   }
   bearer() { if(!this.#token || Date.now()>=this.#expires){this.logout();throw new AuthError();} return this.#token; }
-  logout() { this.#token=null; this.#expires=0; this.storage.removeItem(transactionKey); }
+  /** A valid access token, renewed 60 s before expiry when a refresh token exists; one renewal at a time. */
+  /** @returns {Promise<string>} */
+  async token() {
+    if(this.#token && Date.now()<this.#expires-60000) return this.#token;
+    if(!this.#refresh){ return this.bearer(); }
+    this.#renewing=this.#renewing || this.#renew().finally(()=>{this.#renewing=null;});
+    return this.#renewing;
+  }
+  /** @returns {Promise<string>} */
+  async #renew() {
+    try {
+      const d=await this.discovery();
+      const r=await this.request(d.token_endpoint,{method:'POST',cache:'no-store',credentials:'omit',redirect:'error',
+        headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'refresh_token',
+          client_id:this.config.client_id,refresh_token:/** @type {string} */(this.#refresh)})});
+      if(!r.ok) throw new AuthError();
+      const result=await r.json();
+      if(typeof result.access_token!=='string' || !result.access_token || String(result.token_type).toLowerCase()!=='bearer' ||
+          !Number.isFinite(result.expires_in) || result.expires_in<=0) throw new AuthError();
+      this.#token=result.access_token; this.#expires=Date.now()+result.expires_in*1000;
+      if(typeof result.refresh_token==='string' && result.refresh_token) this.#refresh=result.refresh_token;
+      return result.access_token;
+    } catch { this.logout(); throw new AuthError(); }
+  }
+  logout() { this.#token=null; this.#expires=0; this.#refresh=null; this.storage.removeItem(transactionKey); }
 }
