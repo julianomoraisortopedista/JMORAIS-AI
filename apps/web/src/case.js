@@ -4,6 +4,7 @@ import {DIRECTIONS,box,button,busy,download,field,input,pill,say,select,session,
 import {dictation} from './dictation.js';
 import {readiness} from './readiness.js';
 import {legalPanel} from './legal.js';
+import {opmePrescription} from './opmerx.js';
 import {templatePicker} from './catalog.js';
 import {applyLetterhead,practice,prescriptionPage,printModeSelect} from './letterhead.js';
 
@@ -507,10 +508,12 @@ function quickResult(client,view,check){
     for(const f of check.checks||[])c.append(box('div','alert alert-'+(f.level==='BLOQUEIO'?'error':f.level==='OK'?'ok':'warn'),`${f.level==='BLOQUEIO'?'Corrigir':f.level==='OK'?'OK':'Atenção'} · ${f.topic}: ${f.message}`));
     if(check.deadline)c.append(box('p','muted',check.deadline));wrap.append(c);}
   const out=box('section','card');const open=button('Abrir relatório e solicitação'),save=button('Baixar (.html)','ghost'),tcle=button('Termo de consentimento','ghost');
-  const a=box('div','actions');a.append(printModeSelect(),open,save,tcle);const st=box('div','status-area');out.append(box('p','muted','O documento é montado aqui com os dados do paciente. Imprima ou salve em PDF pelo navegador.'),a,st);
+  const rxb=button('Receituário de OPME','ghost');
+  const a=box('div','actions');a.append(printModeSelect(),open,save,tcle,rxb);const st=box('div','status-area');out.append(box('p','muted','O documento é montado aqui com os dados do paciente. Imprima ou salve em PDF pelo navegador.'),a,st);
   const build=async()=>combinedDocument(client,check);
   open.onclick=()=>busy(open,async()=>{const html=await build();const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('relatorio-e-solicitacao.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);});
   save.onclick=()=>busy(save,async()=>download('relatorio-e-solicitacao.html',await build(),'text/html'));
+  rxb.onclick=()=>busy(rxb,async()=>{try{await openOpmeRx(client,draft.templateId,patient.name);}catch(e){say(st,e instanceof Error?e.message:'Falha.');}});
   tcle.onclick=()=>busy(tcle,async()=>{try{const html=await consentForm(client,draft.templateId,draft.procedure,draft.laterality);const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('termo-consentimento.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){say(st,e instanceof Error?e.message:'Falha.');}});
   wrap.append(out);return wrap;
 }
@@ -616,7 +619,28 @@ async function combinedDocument(client,check){
 }
 
 /** Prescription pad with the patient's name from this session. @param {import('./evidence.js').EvidenceClient} client */
-export function prescription(client){return prescriptionPage(client,patient,dictation,download);}
+export function prescription(client){
+  const root=prescriptionPage(client,patient,dictation,download);
+  const card=box('section','card');
+  card.append(box('h2','card-title','Receituário de OPME'),box('p','muted','Seu nome e CRM no timbre, o paciente, o material com a especificação, as 3 empresas com marca e registro ANVISA e a justificativa, a partir do modelo de cirurgia. Montado aqui no seu computador.'));
+  /** @type {string|null} */ let tid=draft.templateId;
+  const picker=templatePicker(client,(t)=>{tid=t?t.template_id:null;},tid||'');
+  const name=input('Nome do paciente',patient.name);name.oninput=()=>{patient.name=name.value;};
+  const go=button('Abrir receituário de OPME');const st=box('div','status-area');
+  go.onclick=()=>busy(go,async()=>{try{await openOpmeRx(client,tid,name.value);}catch(e){say(st,e instanceof Error?e.message:'Falha.');}});
+  card.append(picker,field('Paciente',name),go,st);root.append(card);return root;
+}
+
+/** Shared by the Receituário page, the Pedido rápido review and Contestações.
+ * @param {import('./evidence.js').EvidenceClient} client @param {string|null} templateId @param {string} patientName */
+export async function openOpmeRx(client,templateId,patientName){
+  if(!templateId)throw new Error('Escolha o modelo de cirurgia com o material.');
+  if(!patientName.trim())throw new Error('Informe o nome do paciente.');
+  const catalog=await client.catalog();const t=(catalog.templates||[]).find((/** @type {any} */ x)=>x.template_id===templateId);
+  if(!t)throw new Error('Modelo não encontrado.');
+  const html=await opmePrescription(client,t,patientName,new Date().toLocaleDateString('pt-BR'));
+  const url=URL.createObjectURL(new Blob([html],{type:'text/html'}));if(!window.open(url,'_blank'))download('receituario-opme.html',html,'text/html');setTimeout(()=>URL.revokeObjectURL(url),60000);
+}
 
 /** What the contestation page may use from the open case: ids for removal, patient data for the local header only. */
 export function caseContext(){

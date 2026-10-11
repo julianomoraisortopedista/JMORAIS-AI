@@ -104,3 +104,15 @@ def test_strategy_reaches_the_writer_but_cannot_be_cited():
                           sbot="", examples=[], strategy="Motivo 'kit': pedir a doutrina por escrito")
     assert "ESTRATEGIA" in adapter.requests[0].canonical_payload
     assert [s.text for k, _, ss in draft.sections if k == "sintese" for s in ss] == ["A operadora negou por ausência de tratamento conservador."]
+
+
+def test_physician_guidance_reaches_the_writer_deidentified_and_not_citable():
+    from jmoraIs.tenancy.context import TenantContextBinder
+    from tests.test_appeals import DENIAL, service
+    from tests.test_report_drafting import TENANT
+    out = {"sections": [{"section": "pedido", "sentences": [{"text": "Conforme orientado.", "source_ids": ["ORIENTACAO"]}]}], "gaps": []}
+    svc, adapter = service(out)
+    with TenantContextBinder().bind_tenant(TENANT):
+        draft = svc.draft(kind="NEGATIVA", denial_text=DENIAL.replace("123.456.789-09", "[CPF REMOVIDO]"), facts=[], context="",
+                          sbot="", examples=[], guidance="Aceite 1 bloqueio por joelho e mantenha o kit")
+    assert "ORIENTACAO" in adapter.requests[0].canonical_payload and draft.dropped == 1

@@ -72,7 +72,9 @@ INSTRUCTIONS = (
     "(CTX), o Manual de Codificação da SBOT (SBOT) e os textos normativos fornecidos (L-...). Cada frase deve citar "
     "os ids que a sustentam. Não invente fatos, números, escalas, datas, artigos, leis, resoluções ou "
     "jurisprudência: cite só o que foi fornecido, pelo id. Se faltar dado para rebater um argumento, diga isso em "
-    "'gaps'. ESTRATEGIA (quando houver) resume o que já funcionou contra este convênio e estes motivos: use como "
+    "'gaps'. ORIENTACAO (quando houver) é a ordem do médico assistente sobre como fazer esta contestação: siga-a "
+    "na estrutura, no tom e na ênfase, mas não a cite como fonte e não afirme nada que os ids citados não sustentem. "
+    "ESTRATEGIA (quando houver) resume o que já funcionou contra este convênio e estes motivos: use como "
     "linha de argumentação, nunca como fonte, e só afirme o que os ids citados sustentam. Os EXEMPLOS são contestações anteriores do próprio médico que deram certo: use como modelo de "
     "estrutura, tom e linha de argumentação, nunca como fonte, e nunca copie dados deles. Em 'pedido', peça a "
     "reconsideração e, se cabível, a junta médica. Responda somente com o JSON solicitado."
@@ -139,7 +141,7 @@ class AppealDraftingService:
         self._gateway, self._prompt, self._model, self._clock = gateway, prompt_version_id, model, clock
 
     def draft(self, *, kind: str, denial_text: str, facts: list[dict], context: str, sbot: str,
-              examples: list[str], strategy: str = "") -> AppealDraft:
+              examples: list[str], strategy: str = "", guidance: str = "") -> AppealDraft:
         denial = denial_sentences(denial_text)
         if not denial:
             raise AppealDraftRejected("Cole ou anexe o texto da negativa da operadora.")
@@ -164,6 +166,8 @@ class AppealDraftingService:
         for sid, (citation, excerpt) in legal_sources().items():
             support[sid], labels[sid] = f"{citation} {excerpt}", citation
             fields.append(StructuredField(sid, f"{citation}: “{excerpt}”", "legal-text"))
+        if guidance.strip():  # the physician's own instruction: shapes structure and emphasis, never citable
+            fields.append(StructuredField("ORIENTACAO", guidance.strip()[:3000], "physician-instruction"))
         if strategy.strip():  # playbook guidance: argument lines only, never in `support`, so never citable
             fields.append(StructuredField("ESTRATEGIA", strategy.strip()[:4000], "physician-playbook"))
         for n, example in enumerate(examples[:2], 1):

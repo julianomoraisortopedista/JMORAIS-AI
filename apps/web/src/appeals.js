@@ -3,7 +3,7 @@ import {el} from './view.js';
 import {legalPanel} from './legal.js';
 import {box,button,busy,download,field,input,say,select,session,textarea} from './evidence.js';
 import {templatePicker} from './catalog.js';
-import {prepared} from './case.js';
+import {openOpmeRx,prepared} from './case.js';
 import {applyLetterhead,practice,printModeSelect} from './letterhead.js';
 
 const KINDS=/** @type {[string,string][]} */ ([['NEGATIVA','Negativa de autorização'],['GLOSA','Glosa'],['JUNTA_MEDICA','Junta médica / divergência técnica']]);
@@ -32,14 +32,16 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
   /** @type {string|null} */ let templateId=null;
   const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;if(t&&!procedure.value)procedure.value=t.name;});
   const denial=textarea('Cole aqui o texto da negativa / glosa / parecer da operadora');denial.rows=8;
+  const guidance=textarea('Sua orientação ao Claude: o que enfatizar, o que aceitar, o tom. Ex.: "Aceite 1 bloqueio por joelho, mas mantenha o kit; cobre a doutrina do auditor; tom firme e cordial."');guidance.rows=4;
   const file=document.createElement('input');file.type='file';file.multiple=true;file.accept='.pdf,.docx,.txt,.jpg,.jpeg,.png,.heic,image/*';
   const found=box('div','');
   const ctx=caseContext();const useCase=document.createElement('input');useCase.type='checkbox';useCase.checked=ctx.hasFacts;useCase.disabled=!ctx.hasFacts;
   const caseLabel=box('label','chip');caseLabel.append(useCase,el('span',ctx.hasFacts?'Usar os fatos confirmados do caso aberto em Pedido médico':'Nenhum caso com fatos confirmados (opcional: abra em Pedido médico)'));
   const grid=box('div','form-grid');grid.append(field('Tipo',kind),field('Procedimento',procedure));
   const go=button(session.model?'Redigir contestação com o Claude':'IA não configurada');go.disabled=!session.model;
-  const status=box('div','status-area');const result=box('div','');const a=box('div','actions');a.append(go);
-  card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Anexe os e-mails e documentos da negativa (vários arquivos: PDF, Word, texto ou foto)',file),found,caseLabel,a,status,result);
+  const status=box('div','status-area');const result=box('div','');const rxb=button('Receituário de OPME','ghost');const a=box('div','actions');a.append(go,rxb);
+  rxb.onclick=()=>busy(rxb,async()=>{try{await openOpmeRx(client,templateId,caseContext().patient.name||'');}catch(e){say(status,e instanceof Error?e.message:'Falha.');}});
+  card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Anexe os e-mails e documentos da negativa (vários arquivos: PDF, Word, texto ou foto)',file),found,field('Como você quer a contestação (sua ordem e opinião)',guidance),dictation(guidance),caseLabel,a,status,result);
   file.onchange=()=>readFiles(client,file,denial,found,caseContext);
   go.onclick=()=>busy(go,async()=>{
     result.replaceChildren();
@@ -47,7 +49,7 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
       if(denial.value.trim().length<20)throw new Error('Cole ou anexe o texto da operadora.');
       const c=caseContext();
       say(status,'O Claude está redigindo a contestação…','info');
-      let job=await client.appealDraft({kind:kind.value,denial_text:denial.value,denial_file:null,
+      let job=await client.appealDraft({kind:kind.value,denial_text:denial.value,denial_file:null,guidance:guidance.value,
         identifiers:c.identifiers,case_id:useCase.checked?c.caseId:null,template_id:templateId,procedure:procedure.value});
       for(let i=0;i<90&&job.status==='RUNNING';i++){await new Promise(r=>setTimeout(r,2000));job=await client.appealDraftGet(job.job_id);}
       if(job.status!=='READY')throw new Error(job.error||'Falha ao redigir.');

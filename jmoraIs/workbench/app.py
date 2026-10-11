@@ -231,6 +231,7 @@ class OutcomeIn(BaseModel):
 class AppealDraftIn(BaseModel):
     kind: str = Field(pattern="^(NEGATIVA|GLOSA|JUNTA_MEDICA)$")
     denial_text: str = Field("", max_length=40000)
+    guidance: str = Field("", max_length=3000)
     denial_file: Optional["ScanIn"] = None
     identifiers: IdentifiersIn
     case_id: Optional[str] = Field(None, max_length=40)
@@ -772,6 +773,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 bad(str(exc) if isinstance(exc, CaseIntakeRejected) else "Arquivo da negativa inválido.")
         try:
             denial = deidentify(text[:MAX_DOCUMENT_CHARS], identifiers(body.identifiers)).text
+            guidance = deidentify(body.guidance, identifiers(body.identifiers)).text if body.guidance.strip() else ""
         except DeidentificationRejected as exc:
             bad(str(exc))
         facts = []
@@ -801,7 +803,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             try:
                 with TenantContextBinder().bind_tenant(tenant(principal)):
                     draft = factory().draft(kind=body.kind, denial_text=denial, facts=facts, context=context, sbot=sbot,
-                                            examples=examples, strategy=strategy)
+                                            examples=examples, strategy=strategy, guidance=guidance)
                 jobs[job_id] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "sources": draft.sources,
                                 "examples": len(examples), "model": draft.model_id, "analysis": analysis,
                                 "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, source_ids=list(x.source_ids)) for x in ss])

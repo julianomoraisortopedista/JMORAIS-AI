@@ -32,3 +32,16 @@ identifiers plus the generic rules, and is appended to the denial text for revie
 draft runs, the same analysis becomes an ESTRATEGIA field for the writer: argument lines only,
 never a citable source, so every sentence still cites the denial, the case facts, the context,
 SBOT or a verified legal text.
+
+## Physician guidance and the OPME prescription
+
+Contestações has a field "Como você quer a contestação": the physician's order and opinion
+(what to concede, what to keep, tone). It is de-identified with the case identifiers and goes
+to the writer as ORIENTACAO, shaping structure and emphasis but never citable.
+
+"Receituário de OPME" (Receituário page, Pedido rápido review, Contestações) prints, on the
+physician's letterhead with name, CRM and RQE, the patient's name (browser only), the
+procedure and TUSS codes, the OPME items, the material specification and imaging guidance,
+the justification, the equivalent brands and a table of the three suppliers (company,
+product/brand, ANVISA, contact), with RN 424/2017 art. 7º I–II and CFM 2.318/2022 arts. 2º,
+4º and 8º. It refuses a template without three suppliers with 11-digit ANVISA numbers.
