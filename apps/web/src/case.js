@@ -32,7 +32,7 @@ const MAX_UPLOAD=700000;
 const ACCEPT='.pdf,.txt,.docx,.jpg,.jpeg,.png,.heic,application/pdf,text/plain,image/*';
 /** Photos of reports are redrawn here as a smaller JPEG (no location/EXIF) and read on the server by local OCR, never by the AI.
  * @param {File} f @returns {Promise<{name:string,content_base64:string}>} */
-async function prepared(f){
+export async function prepared(f){
   if(!f.type.startsWith('image/')&&!/\.(jpe?g|png|heic|heif)$/i.test(f.name)){
     if(f.size>MAX_UPLOAD)throw new Error(`"${f.name}" passa de 700 KB. Envie o PDF do laudo, uma foto ou copie o texto na história.`);
     return {name:f.name,content_base64:await base64(f)};}

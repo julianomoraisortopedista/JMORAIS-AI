@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field, SecretStr
 
 from jmoraIs.application.coverage_document import RequestDetails, render_coverage_html
 from jmoraIs.application.authorization_playbook import Case as PlaybookCase, PlaybookRejected, PlaybookStore, advice as playbook_advice
+from jmoraIs.application.authorization_playbook import analyze as playbook_analyze, strategy_text as playbook_strategy
 from jmoraIs.application.evidence_library import EvidenceLibrary, EvidenceLibraryRejected
 from jmoraIs.application.evidence_packages import ScientificEvidencePackagePort
 from jmoraIs.application.evidence_query import EvidenceQueryRejected, PICOQuestion, build_pubmed_query
@@ -140,6 +141,11 @@ class OpmeIn(BaseModel):
     quantity: int = Field(1, ge=1, le=50)
 
 
+class AppealFileIn(BaseModel):
+    file: "ScanIn"
+    identifiers: IdentifiersIn
+
+
 class PlaybookOutcomeIn(BaseModel):
     outcome: str = Field(max_length=20)
     notes: str = Field("", max_length=1500)
@@ -224,7 +230,7 @@ class OutcomeIn(BaseModel):
 
 class AppealDraftIn(BaseModel):
     kind: str = Field(pattern="^(NEGATIVA|GLOSA|JUNTA_MEDICA)$")
-    denial_text: str = Field("", max_length=20000)
+    denial_text: str = Field("", max_length=40000)
     denial_file: Optional["ScanIn"] = None
     identifiers: IdentifiersIn
     case_id: Optional[str] = Field(None, max_length=40)
@@ -784,6 +790,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         elif procedure:
             context = f"Procedimento: {procedure}."
         examples = [e.text for e in appeal_library.examples(body.kind, procedure)] if appeal_library is not None else []
+        analysis = playbook_analyze(playbook.load(), denial) if playbook is not None else None
+        strategy = playbook_strategy(analysis) if analysis else ""
         job_id = "apl-job-" + secrets.token_hex(6)
         jobs = state_of(request).appeals
         jobs[job_id] = {"status": "RUNNING", "examples": len(examples)}
@@ -793,9 +801,9 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             try:
                 with TenantContextBinder().bind_tenant(tenant(principal)):
                     draft = factory().draft(kind=body.kind, denial_text=denial, facts=facts, context=context, sbot=sbot,
-                                            examples=examples)
+                                            examples=examples, strategy=strategy)
                 jobs[job_id] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "sources": draft.sources,
-                                "examples": len(examples), "model": draft.model_id,
+                                "examples": len(examples), "model": draft.model_id, "analysis": analysis,
                                 "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, source_ids=list(x.source_ids)) for x in ss])
                                              for k, t, ss in draft.sections]}
             except AppealDraftRejected as exc:
@@ -804,6 +812,24 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 jobs[job_id] = {"status": "ERROR", "error": f"Falha ao consultar o modelo ({type(exc).__name__})."}
         __import__("threading").Thread(target=run, daemon=True).start()
         return dict(jobs[job_id], job_id=job_id)
+
+    @app.post("/api/appeal/extract")
+    def appeal_extract(body: AppealFileIn):
+        """One denial file (PDF, Word, text or photo, read locally) -> de-identified text for the contestation."""
+        import base64
+        try:
+            text = extract_text(body.file.name, base64.b64decode(body.file.content_base64, validate=True))[:MAX_DOCUMENT_CHARS]
+            cleaned = deidentify(text, identifiers(body.identifiers))
+        except (ValueError, CaseIntakeRejected, DeidentificationRejected) as exc:
+            bad(str(exc) if isinstance(exc, (CaseIntakeRejected, DeidentificationRejected)) else "Arquivo inválido.")
+        return {"name": body.file.name, "text": cleaned.text, "removed": cleaned.removed}
+
+    @app.post("/api/appeal/analyze")
+    def appeal_analyze(body: LegalCheckIn):
+        """Insurer and denial reasons recognised in the (de-identified) denial text, with what worked before."""
+        if playbook is None:
+            return {"insurer": None, "reasons": [], "warnings": [], "record": {}, "codes": []}
+        return playbook_analyze(playbook.load(), body.text)
 
     @app.get("/api/appeal/draft/{job_id}")
     def appeal_draft_get(job_id: str, request: Request):

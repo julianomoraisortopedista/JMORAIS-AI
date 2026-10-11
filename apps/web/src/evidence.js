@@ -70,6 +70,8 @@ export class EvidenceClient {
   /** @param {Record<string,unknown>} body */ appealSave(body){return this.call('appeals',body);}
   /** @param {string} id @param {string} outcome */ appealOutcome(id,outcome){return this.call('appeals/'+encodeURIComponent(id),{outcome},'PATCH');}
   /** @param {string} id */ appealDelete(id){return this.call('appeals/'+encodeURIComponent(id),undefined,'DELETE');}
+  /** @param {Record<string,unknown>} body */ appealExtract(body){return this.call('appeal/extract',body);}
+  /** @param {string} text */ appealAnalyze(text){return this.call('appeal/analyze',{text});}
   /** @param {Record<string,unknown>} body */ appealDraft(body){return this.call('appeal/draft',body);}
   /** @param {string} id */ appealDraftGet(id){return this.call('appeal/draft/'+encodeURIComponent(id));}
   letterheadGet(){return this.call('letterhead');}

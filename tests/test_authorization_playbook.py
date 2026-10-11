@@ -61,3 +61,46 @@ def test_playbook_endpoints(tmp_path):
     bad = c.post("/api/playbook/cases", headers=H, json={"insurer_id": "bradesco", "on": "2026-10-11", "notes": "Paciente: José Carlos da Silva"})
     assert bad.status_code == 400
     assert c.patch(f"/api/playbook/cases/{added.json()['case_id']}", headers=H, json={"outcome": "REVERTIDO"}).json()["outcome"] == "REVERTIDO"
+
+
+def test_denial_text_reveals_insurer_reasons_and_codes():
+    from jmoraIs.application.authorization_playbook import analyze, strategy_text
+    b = book()
+    b = b.model_copy(update={"reasons": [b.reasons[0].model_copy(update={"keywords": ["sem estímulo", "cânula convencional"],
+                                                                          "response": ["Pedir a doutrina por escrito"]})],
+                             "insurers": [b.insurers[0].model_copy(update={"responses": ["Orizon aprovou o kit"]})]})
+    text = "Falo em nome da operadora Bradesco Saúde. 2x 31403026. Kit substituído por cânula convencional SEM ESTÍMULO."
+    a = analyze(b, text)
+    assert a["insurer"] == "Bradesco Saúde" and [r["reason_id"] for r in a["reasons"]] == ["kit_substituido"]
+    assert a["codes"] == ["31403026"] and a["warnings"]
+    s = strategy_text(a)
+    assert "Pedir a doutrina por escrito" in s and "Orizon aprovou o kit" in s
+    assert analyze(b, "Unimed nega por falta de laudo.")["insurer"] is None
+
+
+def test_appeal_files_are_read_one_by_one_deidentified_and_analysed(tmp_path):
+    import base64
+    store = PlaybookStore(tmp_path / "playbook.json")
+    store.replace(book())
+    c = TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), clock=lambda: NOW, token=TOKEN, playbook=store),
+                   base_url="http://127.0.0.1:8770")
+    mail = "Bradesco Saúde. Paciente: Maria Aparecida Souza. A paciente Maria Aparecida Souza teve o kit negado."
+    r = c.post("/api/appeal/extract", headers=H, json={"file": {"name": "email.txt", "content_base64": base64.b64encode(mail.encode()).decode()},
+                                                        "identifiers": {"name": "Maria Aparecida Souza"}})
+    assert r.status_code == 200 and "Maria" not in r.json()["text"] and "Bradesco" in r.json()["text"]
+    assert c.post("/api/appeal/analyze", headers=H, json={"text": r.json()["text"]}).json()["insurer"] == "Bradesco Saúde"
+
+
+def test_strategy_reaches_the_writer_but_cannot_be_cited():
+    from jmoraIs.tenancy.context import TenantContextBinder
+    from tests.test_appeals import DENIAL, service
+    from tests.test_report_drafting import TENANT
+    out = {"sections": [{"section": "sintese", "sentences": [
+        {"text": "A operadora negou por ausência de tratamento conservador.", "source_ids": ["N2"]},
+        {"text": "Já revertemos isso antes.", "source_ids": ["ESTRATEGIA"]}]}], "gaps": []}
+    svc, adapter = service(out)
+    with TenantContextBinder().bind_tenant(TENANT):
+        draft = svc.draft(kind="NEGATIVA", denial_text=DENIAL.replace("123.456.789-09", "[CPF REMOVIDO]"), facts=[], context="",
+                          sbot="", examples=[], strategy="Motivo 'kit': pedir a doutrina por escrito")
+    assert "ESTRATEGIA" in adapter.requests[0].canonical_payload
+    assert [s.text for k, _, ss in draft.sections if k == "sintese" for s in ss] == ["A operadora negou por ausência de tratamento conservador."]

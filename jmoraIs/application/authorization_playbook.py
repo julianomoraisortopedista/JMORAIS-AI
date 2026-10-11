@@ -49,6 +49,7 @@ class Reason(BaseModel):
     response: list[str] = Field(default_factory=list, max_length=12)
     legal: list[str] = Field(default_factory=list, max_length=12)       # ids in the verified legal library
     evidence: list[str] = Field(default_factory=list, max_length=20)    # PubMed ids
+    keywords: list[str] = Field(default_factory=list, max_length=20)    # phrases that reveal this reason in a denial
 
     @field_validator("evidence")
     @classmethod
@@ -198,6 +199,28 @@ def advice(book: Playbook, insurer_name: str, codes: list[str]) -> dict:
     top = [dict(reason_id=k, label=labels[k].label, count=v, prevention=labels[k].prevention)
            for k, v in sorted(counts.items(), key=lambda x: -x[1])[:5] if k in labels]
     return {"insurer": insurer.name, "route": insurer.route, "warnings": warnings, "record": record, "top_reasons": top}
+
+
+def analyze(book: Playbook, text: str, codes: Optional[list[str]] = None) -> dict:
+    """Which insurer wrote this denial and which known reasons it uses (deterministic, local)."""
+    folded = _fold(text)
+    insurer = match_insurer(book, text)
+    reasons = [r for r in book.reasons if any(_fold(k) in folded for k in r.keywords)]
+    found_codes = sorted(set(re.findall(r"(?<!\d)([34]\d{7})(?!\d)", text or "")) | set(codes or []))
+    base = advice(book, insurer.name, found_codes) if insurer else {"insurer": None, "warnings": [], "record": {}, "top_reasons": []}
+    return {**base, "codes": found_codes, "insurer_responses": insurer.responses if insurer else [],
+            "reasons": [dict(reason_id=r.reason_id, label=r.label, response=r.response, prevention=r.prevention,
+                             legal=r.legal, evidence=r.evidence) for r in reasons]}
+
+
+def strategy_text(analysis: dict) -> str:
+    """Argument lines for the contestation writer: guidance only, never a citable source."""
+    lines = []
+    if analysis.get("insurer"):
+        lines.append(f"Convênio: {analysis['insurer']}. " + " ".join(analysis.get("insurer_responses") or []))
+    for r in analysis.get("reasons") or []:
+        lines.append(f"Motivo '{r['label']}': " + " ".join(r["response"]))
+    return "\n".join(line for line in lines if line.strip())[:4000]
 
 
 def today() -> str:

@@ -20,3 +20,15 @@ record and most frequent reasons; the Pedido rápido readiness card shows them w
 insurer field is filled. The insurer name is not a patient identifier. The initial content
 was built from 21 real cases (Bradesco, Amil, Mediservice, SulAmérica, Care Plus) analysed
 on 2026-10-11; the seed script lives with the private data, not in the repository.
+
+## Contestations from several files
+
+The Contestações page accepts several files at once (insurer e-mails, letters, junta
+decisions; PDF, Word, text or photo). Each file goes alone to `POST /api/appeal/extract`
+(inside the 1 MB body limit; photos and scans read locally), is de-identified with the case
+identifiers plus the generic rules, and is appended to the denial text for review.
+`POST /api/appeal/analyze` recognises the insurer (aliases) and the denial reasons (reason
+`keywords`) and shows the responses that worked, the verified norms and the PMIDs. When the
+draft runs, the same analysis becomes an ESTRATEGIA field for the writer: argument lines only,
+never a citable source, so every sentence still cites the denial, the case facts, the context,
+SBOT or a verified legal text.

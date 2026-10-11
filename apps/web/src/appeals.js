@@ -3,6 +3,7 @@ import {el} from './view.js';
 import {legalPanel} from './legal.js';
 import {box,button,busy,download,field,input,say,select,session,textarea} from './evidence.js';
 import {templatePicker} from './catalog.js';
+import {prepared} from './case.js';
 import {applyLetterhead,practice,printModeSelect} from './letterhead.js';
 
 const KINDS=/** @type {[string,string][]} */ ([['NEGATIVA','Negativa de autorização'],['GLOSA','Glosa'],['JUNTA_MEDICA','Junta médica / divergência técnica']]);
@@ -31,21 +32,22 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
   /** @type {string|null} */ let templateId=null;
   const picker=templatePicker(client,(t)=>{templateId=t?t.template_id:null;if(t&&!procedure.value)procedure.value=t.name;});
   const denial=textarea('Cole aqui o texto da negativa / glosa / parecer da operadora');denial.rows=8;
-  const file=document.createElement('input');file.type='file';file.accept='.pdf,.docx,.txt';
+  const file=document.createElement('input');file.type='file';file.multiple=true;file.accept='.pdf,.docx,.txt,.jpg,.jpeg,.png,.heic,image/*';
+  const found=box('div','');
   const ctx=caseContext();const useCase=document.createElement('input');useCase.type='checkbox';useCase.checked=ctx.hasFacts;useCase.disabled=!ctx.hasFacts;
   const caseLabel=box('label','chip');caseLabel.append(useCase,el('span',ctx.hasFacts?'Usar os fatos confirmados do caso aberto em Pedido médico':'Nenhum caso com fatos confirmados (opcional: abra em Pedido médico)'));
   const grid=box('div','form-grid');grid.append(field('Tipo',kind),field('Procedimento',procedure));
   const go=button(session.model?'Redigir contestação com o Claude':'IA não configurada');go.disabled=!session.model;
   const status=box('div','status-area');const result=box('div','');const a=box('div','actions');a.append(go);
-  card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Ou anexe o documento da operadora',file),caseLabel,a,status,result);
+  card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Anexe os e-mails e documentos da negativa (vários arquivos: PDF, Word, texto ou foto)',file),found,caseLabel,a,status,result);
+  file.onchange=()=>readFiles(client,file,denial,found,caseContext);
   go.onclick=()=>busy(go,async()=>{
     result.replaceChildren();
     try{
-      const f=file.files?.[0];if(f&&f.size>700000)throw new Error('Arquivo acima de 700 KB.');
-      if(!f&&denial.value.trim().length<20)throw new Error('Cole ou anexe o texto da operadora.');
+      if(denial.value.trim().length<20)throw new Error('Cole ou anexe o texto da operadora.');
       const c=caseContext();
       say(status,'O Claude está redigindo a contestação…','info');
-      let job=await client.appealDraft({kind:kind.value,denial_text:denial.value,denial_file:f?{name:f.name,content_base64:await base64(f)}:null,
+      let job=await client.appealDraft({kind:kind.value,denial_text:denial.value,denial_file:null,
         identifiers:c.identifiers,case_id:useCase.checked?c.caseId:null,template_id:templateId,procedure:procedure.value});
       for(let i=0;i<90&&job.status==='RUNNING';i++){await new Promise(r=>setTimeout(r,2000));job=await client.appealDraftGet(job.job_id);}
       if(job.status!=='READY')throw new Error(job.error||'Falha ao redigir.');
@@ -54,6 +56,38 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
     }catch(e){say(status,e instanceof Error?e.message:'Falha.');}
   });
   return card;
+}
+
+/** Every attached file is read (photos and scans locally), de-identified and appended; then the insurer and reasons are recognised.
+ * @param {import('./evidence.js').EvidenceClient} client @param {HTMLInputElement} file @param {HTMLTextAreaElement} denial @param {HTMLElement} found @param {()=>CaseContext} caseContext */
+async function readFiles(client,file,denial,found,caseContext){
+  const list=Array.from(file.files||[]).slice(0,8);if(!list.length)return;
+  const c=caseContext();
+  if(!Object.values(c.identifiers).some(v=>String(v||'').trim()))say(found,'Dica: preencha o nome do paciente em Pedido médico para ele ser removido dos arquivos. Nomes no texto também são removidos automaticamente.','info');
+  const parts=[];
+  for(const [n,f] of list.entries()){
+    say(found,`Lendo e removendo identificação: arquivo ${n+1} de ${list.length}…`,'info');
+    try{const r=await client.appealExtract({file:await prepared(f),identifiers:c.identifiers});parts.push(`--- ${r.name} ---\n${r.text}`);}
+    catch(e){parts.push(`--- ${f.name}: não foi possível ler (${e instanceof Error?e.message:'erro'}) ---`);}
+  }
+  denial.value=[denial.value.trim(),...parts].filter(Boolean).join('\n\n');file.value='';
+  try{showAnalysis(found,await client.appealAnalyze(denial.value));}catch{say(found,'Arquivos lidos. Não consegui identificar o convênio automaticamente.','info');}
+}
+
+/** @param {HTMLElement} target @param {any} a */
+function showAnalysis(target,a){
+  target.replaceChildren();
+  if(!a.insurer&&!a.reasons.length){say(target,'Arquivos lidos. Convênio e motivos não reconhecidos no banco de táticas; o Claude responde ponto a ponto mesmo assim.','info');return;}
+  const box_=box('div','card');
+  box_.append(box('h3','section-title',a.insurer?`Convênio identificado: ${a.insurer}`:'Convênio não identificado'));
+  if(a.route)box_.append(box('p','muted',a.route));
+  for(const r of a.reasons){const d=document.createElement('details');d.open=true;const s=document.createElement('summary');s.textContent='Motivo: '+r.label;d.append(s);
+    for(const x of r.response)d.append(box('p','','→ '+x));
+    if(r.evidence.length)d.append(box('p','muted','Artigos (PMID): '+r.evidence.join(' ')));
+    if(r.legal.length)d.append(box('p','muted','Normas conferidas: '+r.legal.join(', ')));box_.append(d);}
+  for(const w of a.warnings||[])box_.append(box('div','alert alert-warn',w.message));
+  box_.append(box('p','muted','A contestação do Claude seguirá essa linha de argumentação, citando só a negativa, os fatos do caso e as normas conferidas.'));
+  target.append(box_);
 }
 
 /** @param {import('./evidence.js').EvidenceClient} client @param {HTMLElement} target @param {any} job @param {string} kind @param {string} procedure @param {()=>CaseContext} caseContext @param {()=>void} reloadLibrary */

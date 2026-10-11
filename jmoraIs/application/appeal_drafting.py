@@ -72,7 +72,8 @@ INSTRUCTIONS = (
     "(CTX), o Manual de Codificação da SBOT (SBOT) e os textos normativos fornecidos (L-...). Cada frase deve citar "
     "os ids que a sustentam. Não invente fatos, números, escalas, datas, artigos, leis, resoluções ou "
     "jurisprudência: cite só o que foi fornecido, pelo id. Se faltar dado para rebater um argumento, diga isso em "
-    "'gaps'. Os EXEMPLOS são contestações anteriores do próprio médico que deram certo: use como modelo de "
+    "'gaps'. ESTRATEGIA (quando houver) resume o que já funcionou contra este convênio e estes motivos: use como "
+    "linha de argumentação, nunca como fonte, e só afirme o que os ids citados sustentam. Os EXEMPLOS são contestações anteriores do próprio médico que deram certo: use como modelo de "
     "estrutura, tom e linha de argumentação, nunca como fonte, e nunca copie dados deles. Em 'pedido', peça a "
     "reconsideração e, se cabível, a junta médica. Responda somente com o JSON solicitado."
 )
@@ -138,7 +139,7 @@ class AppealDraftingService:
         self._gateway, self._prompt, self._model, self._clock = gateway, prompt_version_id, model, clock
 
     def draft(self, *, kind: str, denial_text: str, facts: list[dict], context: str, sbot: str,
-              examples: list[str]) -> AppealDraft:
+              examples: list[str], strategy: str = "") -> AppealDraft:
         denial = denial_sentences(denial_text)
         if not denial:
             raise AppealDraftRejected("Cole ou anexe o texto da negativa da operadora.")
@@ -163,6 +164,8 @@ class AppealDraftingService:
         for sid, (citation, excerpt) in legal_sources().items():
             support[sid], labels[sid] = f"{citation} {excerpt}", citation
             fields.append(StructuredField(sid, f"{citation}: “{excerpt}”", "legal-text"))
+        if strategy.strip():  # playbook guidance: argument lines only, never in `support`, so never citable
+            fields.append(StructuredField("ESTRATEGIA", strategy.strip()[:4000], "physician-playbook"))
         for n, example in enumerate(examples[:2], 1):
             fields.append(StructuredField(f"EXEMPLO{n}", example[:6000], "physician-past-contestation"))
         dto = CanonicalStructuredDTO("insurer-contestation-input", "1", tuple(fields), POLICY, ("insurer-denial",))

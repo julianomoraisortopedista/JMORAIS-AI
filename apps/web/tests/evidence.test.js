@@ -55,8 +55,9 @@ test('patient identification only goes to the de-identifying routes, never to th
   assert.ok(all>=3 && all===allowed);
   // contestations: identifiers go only to the drafting route (for removal); patient data only into the local document
   const appeals=await readFile('src/appeals.js','utf8');
-  assert.equal((appeals.match(/identifiers:c\./g)||[]).length,1);
+  assert.equal((appeals.match(/identifiers:c\./g)||[]).length,2);
   assert.ok(/client\.appealDraft\(\{[^;]*identifiers:c\.identifiers/.test(appeals));
+  assert.ok(/client\.appealExtract\(\{[^;]*identifiers:c\.identifiers/.test(appeals));
   assert.ok(!/client\.\w+\([^)]*patient/.test(appeals));
   assert.ok(src.includes("doc.querySelectorAll('[data-ident]')"));
 });
