@@ -40,7 +40,7 @@ class RequestDetails:
     opme: tuple[tuple[str, str, int], ...] = ()       # (description, anvisa registration, quantity)
     laterality: str = ""
     regime: str = ""
-    # Alternatives per CFM 1.956/2010 art. 5: (supplier label, ((item, qty, official term, manufacturer, anvisa, tuss), ...))
+    # Alternatives per CFM 2.318/2022 art. 8: (supplier label, ((item, qty, official term, manufacturer, anvisa, tuss), ...))
     brands: tuple = ()
     schedule: tuple[tuple[str, str], ...] = ()       # hospital scheduling (label, value), stated by the physician
     deadline: str = ""                                # ANS maximum care deadline (RN 566/2022)
@@ -103,7 +103,7 @@ def render_coverage_html(draft: JustificationDraft, legal: LegalSection, context
             out += [f"<tr><td>{escape(d)}</td><td>{escape(a)}</td><td>{q}</td></tr>" for d, a, q in request.opme]
             out.append("</table>")
         if request.brands:
-            out.append("<h3>Marcas indicadas (fabricantes diferentes, registro Anvisa — CFM 1.956/2010, art. 5º)</h3>")
+            out.append("<h3>Marcas indicadas (fabricantes diferentes, registro Anvisa — CFM 2.318/2022, art. 8º)</h3>")
             for label, materials in request.brands:
                 out.append(f"<p><strong>{escape(label)}</strong></p>")
                 if not materials:

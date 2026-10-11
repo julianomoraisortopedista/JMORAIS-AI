@@ -15,7 +15,7 @@ export function catalogPage(client){
   const root=box('div','page-grid');
   const head=box('section','card');
   head.append(box('h2','card-title','Modelos de cirurgia'),
-    box('p','muted','Cada modelo reúne o procedimento com códigos da tabela TUSS oficial da ANS, o kit de OPME com quantidades, três fornecedores de fabricantes diferentes (CFM 1.956/2010, art. 5º) e os pacotes das redes. Códigos e materiais vêm da tabela oficial; nada é inventado.'));
+    box('p','muted','Cada modelo reúne o procedimento com códigos da tabela TUSS oficial da ANS, o kit de OPME com quantidades, três fornecedores de fabricantes diferentes (CFM 2.318/2022, art. 8º) e os pacotes das redes. Códigos e materiais vêm da tabela oficial; nada é inventado.'));
   const add=button('Novo modelo');const actions=box('div','actions');actions.append(add);const status=box('div','status-area');head.append(actions,status);
   const list=box('div','page-grid');root.append(profileCard(client),letterheadCard(client),sbotCard(client,()=>reload()),head,list,styleCard(client),consentCard(client));
   const reload=async()=>{

@@ -12,6 +12,7 @@ export function legalPanel(client,text){
         if(c.status==='VERIFIED'){const d=document.createElement('details');const s=document.createElement('summary');
           s.textContent=`✓ ${c.cited} — conferida. Compare a frase com o texto oficial:`;d.append(s);
           for(const src of c.sources)d.append(box('p','muted',`${src.citation}: "${src.excerpt}"`));out.append(d);}
+        else if(c.status==='REVOKED')out.append(box('div','alert alert-error',`Norma revogada: ${c.cited} (${c.note}). Troque a citação: "${c.sentence}"`));
         else out.append(box('div','alert alert-warn',`Não conferida: ${c.cited}. Confirme no texto oficial ou retire: "${c.sentence}"`));}
     }catch{out.replaceChildren(box('p','muted','Conferência indisponível agora.'));}
   };

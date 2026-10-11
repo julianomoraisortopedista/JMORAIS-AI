@@ -67,28 +67,45 @@ LEGAL_SOURCES: dict[str, LegalSource] = {s.source_id: s for s in (
         "cdc-art47", "Lei nº 8.078/1990 (CDC), art. 47",
         "As cláusulas contratuais serão interpretadas de maneira mais favorável ao consumidor.",
         "https://www.planalto.gov.br/ccivil_03/leis/l8078compilado.htm"),
+    # CFM 2.318/2022 (DOU 17/10/2022) revoked CFM 1.956/2010; verbatim from the CFM PDF, checked 2026-10-11.
     LegalSource(
-        "cfm1956-art1", "CFM, Resolução nº 1.956/2010, art. 1º",
-        "Cabe ao médico assistente determinar as características (tipo, matéria-prima, dimensões) das órteses, "
-        "próteses e materiais especiais implantáveis, bem como o instrumental compatível, necessário e adequado à "
-        "execução do procedimento.",
-        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2010/1956_2010.pdf"),
+        "cfm2318-art2", "CFM, Resolução nº 2.318/2022, art. 2º",
+        "Cabe ao médico assistente determinar as características das órteses, próteses e materiais especiais "
+        "implantáveis bem como o instrumental compatível com o seu treinamento necessário e adequado à execução do "
+        "procedimento.",
+        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2022/2318_2022.pdf"),
     LegalSource(
-        "cfm1956-art3", "CFM, Resolução nº 1.956/2010, art. 3º",
-        "É vedado ao médico assistente requisitante exigir fornecedor ou marca comercial exclusivos.",
-        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2010/1956_2010.pdf"),
+        "cfm2318-art3", "CFM, Resolução nº 2.318/2022, art. 3º",
+        "O médico assistente requisitante deve justificar clinicamente a sua indicação, observadas as práticas "
+        "cientificamente reconhecidas e as legislações vigentes no país.",
+        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2022/2318_2022.pdf"),
     LegalSource(
-        "cfm1956-art4", "CFM, Resolução nº 1.956/2010, art. 4º",
-        "As autorizações ou negativas devem ser acompanhadas de parecer identificado com o nome e número de "
-        "inscrição no Conselho Regional de Medicina do médico responsável pelo mesmo.",
-        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2010/1956_2010.pdf"),
+        "cfm2318-art4", "CFM, Resolução nº 2.318/2022, art. 4º",
+        "É vedado ao médico assistente requisitante exigir fornecedor ou marca comercial exclusivos. Parágrafo único. "
+        "Caso o implante seja produzido por poucos ou um único fabricante, cabe ao médico assistente justificar sua "
+        "indicação.",
+        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2022/2318_2022.pdf"),
     LegalSource(
-        "cfm1956-art5", "CFM, Resolução nº 1.956/2010, art. 5º",
-        "O médico assistente requisitante pode, quando julgar inadequado ou deficiente o material implantável, bem "
-        "como o instrumental disponibilizado, recusá-los e oferecer à operadora ou instituição pública pelo menos "
-        "três marcas de produtos de fabricantes diferentes, quando disponíveis, regularizados juntos à Anvisa e que "
-        "atendam às características previamente especificadas.",
-        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2010/1956_2010.pdf"),
+        "cfm2318-art6", "CFM, Resolução nº 2.318/2022, art. 6º",
+        "As autorizações ou negativas do médico auditor devem ser acompanhadas de parecer identificado com o seu nome "
+        "e número de inscrição no Conselho Regional de Medicina do médico responsável por elas. § 1º O parecer, além "
+        "da identificação prevista no caput, deverá conter a citação expressa da doutrina que fundamentou a negativa "
+        "em questão; § 2º O parecer deverá ser disponibilizado na sua integralidade ao médico assistente e ao paciente.",
+        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2022/2318_2022.pdf"),
+    LegalSource(
+        "cfm2318-art8", "CFM, Resolução nº 2.318/2022, art. 8º",
+        "O médico assistente requisitante, quando julgar inadequado ou deficiente o material implantável, ou o "
+        "instrumental disponibilizado, e quando não possuir treinamento adequado para sua utilização, pode recusá-los "
+        "e oferecer à operadora ou instituição pública pelo menos três marcas de produtos de fabricantes diferentes, "
+        "quando disponíveis, desde que regularizados pela Anvisa e que atendam às características previamente "
+        "especificadas.",
+        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2022/2318_2022.pdf"),
+    LegalSource(
+        "cfm2318-art9", "CFM, Resolução nº 2.318/2022, art. 9º, § 3º",
+        "O médico que atua como árbitro, deverá ser membro integrante da câmara técnica ou detentor de RQE da "
+        "sociedade da especialidade em questão e/ou da câmara arbitral, prevista em normativa da ANS, e ter direito "
+        "a remuneração como previsto no CEM.",
+        "https://sistemas.cfm.org.br/normas/arquivos/resolucoes/BR/2022/2318_2022.pdf"),
 )}
 
 # The five cumulative requirements as summarized in the CNJ guide on ADI 7.265.
@@ -240,11 +257,11 @@ def build_legal_section(context: CoverageContext, draft: JustificationDraft) -> 
         caveat = "" if context.self_managed_plan is False else " (confirmar que o plano não é de autogestão)"
         closing.append(f"Relação de consumo{caveat}: {_quote('stj-sumula608')} {_quote('cdc-art47')}")
     if context.opme_requested:
-        used += ["cfm1956-art1", "cfm1956-art3", "cfm1956-art5", "cfm1956-art4"]
+        used += ["cfm2318-art2", "cfm2318-art3", "cfm2318-art4", "cfm2318-art8", "cfm2318-art6"]
         closing.append("OPME: as características dos materiais foram definidas pelo médico assistente e são "
                        "indicadas marcas de fabricantes diferentes, sem exigência de fornecedor exclusivo. "
-                       f"{_quote('cfm1956-art1')} {_quote('cfm1956-art3')} {_quote('cfm1956-art5')} "
-                       f"Em caso de negativa: {_quote('cfm1956-art4')}")
+                       f"{_quote('cfm2318-art2')} {_quote('cfm2318-art3')} {_quote('cfm2318-art4')} {_quote('cfm2318-art8')} "
+                       f"Em caso de negativa: {_quote('cfm2318-art6')}")
     opposing = len(draft.by_direction(SupportDirection.OPPOSING))
     if opposing:
         closing.append(f"Em respeito à transparência, a fundamentação científica inclui {opposing} evidência(s) "

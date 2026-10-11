@@ -7,7 +7,7 @@ from tests.test_workbench import H, TOKEN, SearchablePubMed
 
 
 def test_verified_library_includes_the_ans_published_opme_norms():
-    assert {"RN 424/2017", "RN 465/2021", "LEI 9656/1998", "CFM 1956/2010", "ADI 7265"} <= verified_keys()
+    assert {"RN 424/2017", "RN 465/2021", "LEI 9656/1998", "CFM 2318/2022", "ADI 7265"} <= verified_keys()
 
 
 def test_unknown_norms_are_flagged_and_known_ones_show_their_excerpt():
@@ -25,3 +25,8 @@ def test_legal_check_endpoint():
                    base_url="http://127.0.0.1:8770")
     r = c.post("/api/legal/check", headers=H, json={"text": "RDC 999/2021 exige"}).json()
     assert r["citations"][0]["norm"] == "RDC 999/2021" and r["citations"][0]["status"] == "NOT_VERIFIED"
+
+
+def test_revoked_cfm_resolution_is_flagged_with_its_replacement():
+    found = check_citations("Conforme a Resolução CFM nº 1.956/2010, art. 5º, o médico indica três marcas.")
+    assert found[0]["status"] == "REVOKED" and "2.318/2022" in found[0]["note"]

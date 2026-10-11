@@ -20,7 +20,7 @@ to an official TUSS 19 material (term, manufacturer and Anvisa copied from the t
 network packages (network, code, description, OPME included, notes) and notes.
 
 Warnings: fewer than three suppliers, suppliers not from three different manufacturers
-(CFM Res. 1.956/2010 art. 5), kit items without an official material, codes not confirmed. A
+(CFM Res. 2.318/2022 art. 8), kit items without an official material, codes not confirmed. A
 template can be used in a request only after its codes are confirmed. No technical
 equivalence between suppliers is inferred; the physician chooses each material.
 
@@ -35,7 +35,7 @@ genicular nerve block 31403026 (alt. 31602118).
 
 With a template, the request lists the official TUSS codes and terms, the kit, a table of the
 three brands with TUSS 19 code, manufacturer and Anvisa, and the legal section quotes CFM
-Res. 1.956/2010 arts. 1, 3, 4 and 5 (verbatim from the CFM PDF).
+Res. 2.318/2022 arts. 2, 3, 4, 6, 8 and 9 (which revoked Res. 2.318/2022) (verbatim from the CFM PDF).
 
 ## Printed request in the physician's format
 
@@ -44,7 +44,7 @@ technically equivalent brands and an ANVISA reference, all stated by the physici
 Pedido rápido document follows the physician's own request: place and date, "RELATÓRIO
 MÉDICO", physician line, patient and insurer, the report sections in the order of the saved
 report model, then "Fundamentação normativa" (ANS RN 424/2017, art. 7º, I and II — wording
-checked against ANS Parecer Técnico nº 24/2021 — and CFM 1.956/2010, art. 5º) with the three
+checked against ANS Parecer Técnico nº 24/2021 — and CFM 2.318/2022, art. 8º) with the three
 suppliers and contacts, equivalent brands and ANVISA reference, the conclusion, request data
 (procedure, ICD-10, TUSS, OPME, hospital and date), cited quotes, references and signature.
 The report writer is told not to write the normative block itself.

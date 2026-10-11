@@ -23,6 +23,12 @@ PATTERNS = (
 )
 
 
+REVOKED = {  # norm -> what replaced it (official text checked)
+    "CFM 1956/2010": "revogada pela Resolução CFM nº 2.318/2022 (DOU de 17/10/2022)",
+    "CFM 1804/2006": "revogada pela Resolução CFM nº 2.318/2022 (DOU de 17/10/2022)",
+}
+
+
 def _year(value: str) -> str:
     return value if len(value) == 4 else ("19" + value if int(value) > 30 else "20" + value)
 
@@ -58,7 +64,8 @@ def check_citations(text: str) -> list[dict]:
         seen.add(key)
         sentence = re.split(r"(?<=[.!?])\s+", (text or "")[max(0, start - 200):start + 300])
         context = next((s for s in sentence if cited in s), cited)
-        out.append({"norm": key, "cited": cited, "status": "VERIFIED" if key in known else "NOT_VERIFIED",
+        status = "REVOKED" if key in REVOKED else "VERIFIED" if key in known else "NOT_VERIFIED"
+        out.append({"norm": key, "cited": cited, "status": status, "note": REVOKED.get(key, ""),
                     "sentence": " ".join(context.split())[:400],
                     "sources": [dict(citation=c, excerpt=e) for c, e in known.get(key, [])][:3]})
     return out

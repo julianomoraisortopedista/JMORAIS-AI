@@ -564,11 +564,11 @@ async function combinedDocument(client,check){
   for(const [title,txt] of draft.reportSections)if(title!==draft.conclusionTitle)section(title,txt);
   const s=draft.schedule;
   const brands=t?(t.suppliers||[]).filter((/** @type {any} */ x)=>x.label):[];
-  if(t&&t.opme.length&&brands.length<3)throw new Error(`O modelo "${t.name}" tem ${brands.length} empresa(s) de material. Cadastre 3, de fabricantes diferentes, em Modelos de cirurgia (CFM 1.956/2010).`);
+  if(t&&t.opme.length&&brands.length<3)throw new Error(`O modelo "${t.name}" tem ${brands.length} empresa(s) de material. Cadastre 3, de fabricantes diferentes, em Modelos de cirurgia (CFM 2.318/2022).`);
   if(t&&t.opme.length){
-    // Verified wording: ANS RN 424/2017, art. 7º, I and II (ANS Parecer Técnico 24/2021); CFM 1.956/2010, art. 5º.
+    // Verified wording: ANS RN 424/2017, art. 7º, I and II (ANS Parecer Técnico 24/2021); CFM 2.318/2022, art. 8º.
     add('h2','Fundamentação normativa');
-    add('p','Conforme o art. 7º da RN nº 424/2017 da ANS, cabe ao profissional assistente determinar as características (tipo, matéria-prima e dimensões) das OPME necessárias à execução do procedimento (inciso I) e, quando solicitado pela operadora, justificar clinicamente a indicação e oferecer pelo menos três marcas de produtos de fabricantes diferentes, quando disponíveis, regularizadas na ANVISA (inciso II). No mesmo sentido, a Resolução CFM nº 1.956/2010, art. 5º. Seguem três opções de fabricantes/fornecedores:'+(s.supplier?` (preferência: ${s.supplier})`:''));
+    add('p','Conforme o art. 7º da RN nº 424/2017 da ANS, cabe ao profissional assistente determinar as características (tipo, matéria-prima e dimensões) das OPME necessárias à execução do procedimento (inciso I) e, quando solicitado pela operadora, justificar clinicamente a indicação e oferecer pelo menos três marcas de produtos de fabricantes diferentes, quando disponíveis, regularizadas na ANVISA (inciso II). No mesmo sentido, a Resolução CFM nº 2.318/2022: cabe ao médico assistente determinar as características dos materiais e o instrumental compatível (art. 2º), justificar clinicamente a indicação (art. 3º), sem exigir fornecedor ou marca exclusivos (art. 4º), oferecendo pelo menos três marcas de fabricantes diferentes regularizadas pela Anvisa (art. 8º). Seguem três opções de fabricantes/fornecedores:'+(s.supplier?` (preferência: ${s.supplier})`:''));
     const ul=doc.createElement('ul');for(const b of brands)add('li',[b.label,b.contact].filter(Boolean).join(' – '),ul);doc.body.append(ul);
     if((t.equivalent_brands||[]).length)add('p',`Marcas tecnicamente equivalentes: ${t.equivalent_brands.join(', ')}.`);
     if(t.anvisa_reference)add('p',`ANVISA de referência: ${t.anvisa_reference}.`);

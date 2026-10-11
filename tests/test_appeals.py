@@ -78,7 +78,7 @@ def test_contestation_keeps_only_grounded_sentences():
     assert draft.dropped == 3 and text["clinico"] == ["A paciente fez fisioterapia por 6 meses."]
     assert text["normativo"] and text["pedido"] and "L-RN424" in draft.sources and draft.gaps == ("Sem laudo de RM anexado.",)
     payload = adapter.requests[0].canonical_payload
-    assert "EXEMPLO1" in payload and "L-CFM1956-ART5" in payload
+    assert "EXEMPLO1" in payload and "L-CFM2318-ART8" in payload
     with pytest.raises(AppealDraftRejected):
         svc.draft(kind="GLOSA", denial_text="  ", facts=[], context="", sbot="", examples=[])
     assert denial_sentences("Negado. Falta laudo de imagem do joelho; sem justificativa do OPME.") == [

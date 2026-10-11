@@ -106,5 +106,5 @@ and lets the physician edit); report drafted in the physician's saved model form
 in the browser, the combined "Relatório médico e solicitação de procedimento cirúrgico":
 physician header from the profile, patient identification, report sections, request table
 (procedure and side, ICD-10, character, regime and stay, hospital and date, anesthesia),
-TUSS codes, OPME kit, suppliers per CFM 1.956/2010, SBOT reference, deadline, signature.
+TUSS codes, OPME kit, suppliers per CFM 2.318/2022, SBOT reference, deadline, signature.
 The report model limit is 14,000 characters.

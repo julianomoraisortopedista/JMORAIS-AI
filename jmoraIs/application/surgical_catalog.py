@@ -3,7 +3,7 @@
 Catalog data (no patient data). Every TUSS procedure code and every supplier material is
 validated against the official ANS TUSS index (tables 22 and 19) when saved; the stored
 material copies the official term, manufacturer and Anvisa registration. Suppliers are
-alternatives chosen by the physician (CFM Res. 1.956/2010 art. 5: at least three brands
+alternatives chosen by the physician (CFM Res. 2.318/2022 art. 8: at least three brands
 from different manufacturers, when available); no technical equivalence is inferred.
 Stored as a JSON file owned by the installation.
 """
@@ -114,9 +114,9 @@ def supplier_warnings(template: ProcedureTemplate) -> list[str]:
         manufacturers = {m.manufacturer for s in template.suppliers for m in s.materials if m.manufacturer}
         complete = [s for s in template.suppliers if s.materials]
         if len(template.suppliers) < 3:
-            warnings.append("Indique três fornecedores (CFM 1.956/2010, art. 5º), quando disponíveis.")
+            warnings.append("Indique três fornecedores (CFM 2.318/2022, art. 8º), quando disponíveis.")
         elif len(complete) >= 3 and len(manufacturers) < 3:
-            warnings.append("Os fornecedores devem ser de fabricantes diferentes (CFM 1.956/2010, art. 5º).")
+            warnings.append("Os fornecedores devem ser de fabricantes diferentes (CFM 2.318/2022, art. 8º).")
         for supplier in template.suppliers:
             missing = [i.description for n, i in enumerate(template.opme)
                        if not any(m.item_index == n for m in supplier.materials)]

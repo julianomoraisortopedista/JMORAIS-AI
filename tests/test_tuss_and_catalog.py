@@ -117,7 +117,7 @@ def test_catalog_endpoints_and_template_in_request_document(index, tmp_path):
     c.put("/api/catalog", headers=H, json={**saved, "codes_confirmed": True})
     html = c.post("/api/document", headers=H, json=doc).json()["html"]
     assert "30726034" in html and "Artroplastia total de joelho com implantes" in html
-    assert "FABRICANTE TRES SA" in html and "10000000002" in html and "CFM, Resolução nº 1.956/2010, art. 5º" in html
+    assert "FABRICANTE TRES SA" in html and "10000000002" in html and "CFM, Resolução nº 2.318/2022, art. 8º" in html
     assert c.delete(f"/api/catalog/{saved['template_id']}", headers=H).status_code == 200
     assert TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), token=TOKEN), base_url="http://127.0.0.1:8770").get(
         "/api/catalog", headers=H).status_code == 503

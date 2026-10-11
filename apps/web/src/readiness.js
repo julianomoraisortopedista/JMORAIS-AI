@@ -25,7 +25,7 @@ export function readiness(r){
   ];
   if(t){
     items.push({ok:Boolean(t.codes_confirmed),blocking:true,label:'Códigos TUSS confirmados',fix:'Confirme os códigos no modelo de cirurgia.'});
-    if((t.opme||[]).length)items.push({ok:suppliers>=3,blocking:true,label:'OPME com 3 empresas de fabricantes diferentes',fix:'Cadastre 3 empresas no modelo (CFM 1.956/2010).'});
+    if((t.opme||[]).length)items.push({ok:suppliers>=3,blocking:true,label:'OPME com 3 empresas de fabricantes diferentes',fix:'Cadastre 3 empresas no modelo (CFM 2.318/2022).'});
   }
   items.push({ok:Boolean(r.schedule.hospital&&r.schedule.date),blocking:false,label:'Hospital e data da cirurgia',fix:'Diga o hospital e a data no pedido.'});
   return items;

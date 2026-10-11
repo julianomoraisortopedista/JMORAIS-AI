@@ -34,11 +34,13 @@ def context(**changes):
 
 
 # Excerpts were checked verbatim against the official sources on 2026-10-05
-# (Planalto, CNJ guide on ADI 7.265, STJ, CFM PDF of Res. 1.956/2010). Re-verify there before changing any text.
+# (Planalto, CNJ guide on ADI 7.265, STJ); CFM Res. 2.318/2022 (which revoked 1.956/2010) from the CFM PDF on
+# 2026-10-11. Re-verify there before changing any text.
 PINNED = {
     "lei9656-art10-p12": "c8aad90b", "lei9656-art10-p13": "30a60ccc", "lei9656-art35c": "4b251613",
     "stf-adi7265": "c3a9f4e4", "stj-sumula608": "69ed5d16", "cdc-art47": "24348632",
-    "cfm1956-art1": "be8d5b30", "cfm1956-art3": "1ae89a16", "cfm1956-art4": "a5b1cdb5", "cfm1956-art5": "24715312",
+    "cfm2318-art2": "2e372d61", "cfm2318-art3": "4f730799", "cfm2318-art4": "a45f94aa", "cfm2318-art6": "9bba72be",
+    "cfm2318-art8": "fc4b9b98", "cfm2318-art9": "1a42c8fc",
 }
 
 

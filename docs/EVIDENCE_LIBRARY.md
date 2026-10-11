@@ -27,7 +27,7 @@ opposing and neutral articles keep their direction; nothing is filtered by direc
 
 **Suppliers**: the request lists every named supplier of the template (with or without
 per-item TUSS 19 materials) and the Pedido rápido refuses to assemble a request when a
-template with OPME has fewer than three suppliers (CFM 1.956/2010, art. 5º).
+template with OPME has fewer than three suppliers (CFM 2.318/2022, art. 8º).
 
 ## From the selected articles to the medical justification
 
