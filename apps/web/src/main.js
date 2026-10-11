@@ -8,6 +8,7 @@ import {appealsPage} from './appeals.js';
 import {financePage} from './finance.js';
 import {dictation} from './dictation.js';
 import {catalogPage} from './catalog.js';
+import {insurersPage} from './insurers.js';
 /** @typedef {import('./client.js').Viewer} Viewer */
 const app=document.querySelector('main');
 if(!app)throw new Error('Application shell missing');
@@ -51,7 +52,7 @@ async function shell(){
  const side=box('aside','sidebar');side.append(brand());
  const menu=el('nav');menu.setAttribute('aria-label','Seções da plataforma');menu.className='menu';
  /** @type {[string,string,string][]} */
- const pages=[['overview','Visão geral','home'],['quick','Pedido rápido','upload'],['case','Pedido médico','clipboard'],['rx','Receituário','file'],['appeals','Contestações','clipboard'],['finance','Cirurgias e repasses','home'],['catalog','Modelos de cirurgia','file'],['patients','Pacientes','user'],['evidence','Evidências','search'],['document','Documento ao convênio','file']];
+ const pages=[['overview','Visão geral','home'],['quick','Pedido rápido','upload'],['case','Pedido médico','clipboard'],['rx','Receituário','file'],['appeals','Contestações','clipboard'],['insurers','Convênios','search'],['finance','Cirurgias e repasses','home'],['catalog','Modelos de cirurgia','file'],['patients','Pacientes','user'],['evidence','Evidências','search'],['document','Documento ao convênio','file']];
  /** @type {Record<string,HTMLButtonElement>} */ const items={};
  for(const [key,label,ic] of pages){const b=button('','quiet');b.className='menu-item';b.dataset.page=key;b.setAttribute('aria-label',label);b.append(icon(ic),el('span',label));items[key]=b;menu.append(b);}
  const who=box('div','side-foot');who.append(box('strong','',context.caller_id),box('span','muted',context.organization_id+' · '+(ROLE[context.role]||context.role)));
@@ -81,6 +82,7 @@ async function shell(){
    else if(key==='finance')content.replaceChildren(financePage(evidence));
    else if(key==='appeals')content.replaceChildren(appealsPage(evidence,caseContext,dictation));
    else if(key==='catalog')content.replaceChildren(catalogPage(evidence));
+   else if(key==='insurers')content.replaceChildren(insurersPage(evidence));
    else content.replaceChildren(documentPage(evidence));
  };
  for(const [k,b] of Object.entries(items))b.onclick=()=>go(k);

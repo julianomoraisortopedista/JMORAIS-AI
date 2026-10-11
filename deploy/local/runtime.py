@@ -83,6 +83,7 @@ def create():
     from jmoraIs.workbench.app import create_app as create_workbench, default_case_extractor_factory, default_classifier_factory, default_question_translator_factory, default_report_writer_factory, default_request_parser_factory, default_appeal_writer_factory
     from jmoraIs.application.appeal_library import AppealLibrary
     from jmoraIs.application.evidence_library import EvidenceLibrary
+    from jmoraIs.application.authorization_playbook import PlaybookStore
     from jmoraIs.practice_finance.store import FinanceStore
     from jmoraIs.application.report_style import ReportStyleStore
     from jmoraIs.application.practice_documents import PracticeStore
@@ -99,6 +100,7 @@ def create():
         sbot_index=_sbot_index(), practice=PracticeStore(Path('/catalog/practice.json')),
         appeal_library=AppealLibrary(Path('/catalog/appeals.json')),
         evidence_library=EvidenceLibrary(Path('/catalog/evidence_library.json')),
+        playbook=PlaybookStore(Path('/catalog/playbook.json')),
         finance=FinanceStore(Path('/catalog/finance.sqlite')),
         resolve_appeal_writer=lambda: default_appeal_writer_factory(os.environ, keychain=lambda: None),
         authenticate=iam_authenticator(canonical.operational_services)))

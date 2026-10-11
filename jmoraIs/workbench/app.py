@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field, SecretStr
 
 from jmoraIs.application.coverage_document import RequestDetails, render_coverage_html
+from jmoraIs.application.authorization_playbook import Case as PlaybookCase, PlaybookRejected, PlaybookStore, advice as playbook_advice
 from jmoraIs.application.evidence_library import EvidenceLibrary, EvidenceLibraryRejected
 from jmoraIs.application.evidence_packages import ScientificEvidencePackagePort
 from jmoraIs.application.evidence_query import EvidenceQueryRejected, PICOQuestion, build_pubmed_query
@@ -137,6 +138,11 @@ class OpmeIn(BaseModel):
     description: str = Field(min_length=2, max_length=200)
     anvisa: str = Field("", max_length=40)
     quantity: int = Field(1, ge=1, le=50)
+
+
+class PlaybookOutcomeIn(BaseModel):
+    outcome: str = Field(max_length=20)
+    notes: str = Field("", max_length=1500)
 
 
 class LegalCheckIn(BaseModel):
@@ -278,7 +284,8 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                sbot_index=None, practice: Optional[PracticeStore] = None,
                appeal_library: Optional[AppealLibrary] = None,
                resolve_appeal_writer: Optional[Callable[[], Optional[Callable]]] = None,
-               finance=None, evidence_library: Optional[EvidenceLibrary] = None) -> FastAPI:
+               finance=None, evidence_library: Optional[EvidenceLibrary] = None,
+               playbook: Optional[PlaybookStore] = None) -> FastAPI:
     """`pubmed`/`crossref` are composed by the entry point (scripts/workbench.py).
     `resolve_classifier` re-checks credentials per request (so a key saved while running
     is picked up); `save_key` stores a pasted key in the macOS Keychain.
@@ -1031,6 +1038,33 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         try:
             return references_out(library_draft(template_id))
         except (JustificationRejected, ValueError) as exc:
+            bad(str(exc))
+
+    def need_playbook() -> PlaybookStore:
+        if playbook is None:
+            bad("Banco de táticas não configurado.", 503)
+        return playbook
+
+    @app.get("/api/playbook")
+    def playbook_get():
+        return need_playbook().load().model_dump()
+
+    @app.get("/api/playbook/advice")
+    def playbook_advice_get(insurer: str = Query("", max_length=120), codes: str = Query("", max_length=200)):
+        return playbook_advice(need_playbook().load(), insurer, [c.strip() for c in codes.split(",") if c.strip()])
+
+    @app.post("/api/playbook/cases")
+    def playbook_case_add(body: PlaybookCase):
+        try:
+            return need_playbook().add_case(body).model_dump()
+        except PlaybookRejected as exc:
+            bad(str(exc))
+
+    @app.patch("/api/playbook/cases/{case_id}")
+    def playbook_case_outcome(case_id: str, body: PlaybookOutcomeIn):
+        try:
+            return need_playbook().set_outcome(case_id, body.outcome, body.notes).model_dump()
+        except PlaybookRejected as exc:
             bad(str(exc))
 
     @app.post("/api/legal/check")

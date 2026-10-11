@@ -529,6 +529,12 @@ function readinessCard(client,view,check){
       blocking.length?`Ainda não envie: ${blocking.length} item(ns) costumam causar negativa.`:missing.length?`Pode enviar; ${missing.length} item(ns) fortaleceriam o pedido.`:'Tudo o que o auditor costuma exigir está no pedido.'));
     for(const i of items){const row=box('div','row');const m=box('div','row-main');
       m.append(box('strong','',(i.ok?'✓ ':i.blocking?'✗ ':'! ')+i.label));if(!i.ok)m.append(box('span','muted',i.fix));row.append(m);body.append(row);}
+    if(patient.operadora.trim())client.playbookAdvice(patient.operadora,template?template.tuss_codes:[]).then((/** @type {any} */ a)=>{
+      if(!a.insurer)return;
+      const w=box('div','');w.append(box('h3','section-title',`O que a ${a.insurer} costuma fazer`));
+      for(const r of a.warnings)w.append(box('div','alert alert-'+(r.blocking?'error':'warn'),r.message));
+      for(const r of a.top_reasons)w.append(box('p','muted',`Motivo frequente (${r.count}x): ${r.label}. Prevenir: ${r.prevention.join('; ')}`));
+      body.append(w);}).catch(()=>{});
     body.append(legalPanel(client,()=>draft.reportSections.map(([,txt])=>txt).join('\n')));
   });
   return card;
