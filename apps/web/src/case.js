@@ -111,6 +111,7 @@ function documentsCard(client,root){
     for(const f of Array.from(files.files||[])){
       try{const r=await client.caseScan(await prepared(f));
         for(const [k,v] of Object.entries(r.identifiers||{})){const box_=identityInputs[k];if(box_&&!box_.value.trim()&&typeof v==='string'){box_.value=v;/** @type {Record<string,string>} */(patient)[k]=v;filled.add(k);}}
+        if(r.insurer&&!patient.operadora.trim()){patient.operadora=r.insurer;const ob=identityInputs.operadora;if(ob)ob.value=r.insurer;filled.add('operadora');}
       }catch{/* unreadable file: reported when sending */}
     }
     say(found,filled.size?'Identificação lida dos documentos (no seu computador, sem IA). Confira os campos acima antes de enviar.':'Nenhuma identificação encontrada nos arquivos. Preencha ao menos o nome acima.',filled.size?'ok':'info');
@@ -412,6 +413,15 @@ async function consentForm(client,templateId,procedure,side){
  * @param {import('./evidence.js').EvidenceClient} client */
 export function quickPage(client){
   const root=box('div','page-grid');
+  const protocol=box('section','card');protocol.append(box('h2','card-title','Protocolo do pedido'));
+  const steps_=el('ol');
+  for(const s of ['Diga o procedimento, o lado, o hospital, o dia e o horário (fale ou escreva).',
+    'Anexe a foto da carteirinha: nome, número e convênio são lidos no seu computador, sem IA.',
+    'Anexe os laudos e fotos dos exames e escreva ou dite a história: diagnóstico com data, meses de tratamento, cada tratamento feito, exame físico, por que não é cirurgia agora.',
+    'O sistema remove a identificação, o Claude extrai os fatos com trecho comprovado e redige no seu modelo, com os artigos aprovados da cirurgia.',
+    'Confira o painel "Pronto para o convênio?": itens que causam negativa e as táticas do convênio identificado.',
+    'Revise e imprima o relatório e a solicitação e o receituário de OPME (3 empresas com ANVISA). Depois registre o resultado em Convênios.'])steps_.append(el('li',s));
+  protocol.append(steps_);root.append(protocol);
   const ask=box('section','card');
   ask.append(box('h2','card-title','1. O que você quer solicitar'),
     box('p','muted','Fale ou escreva: procedimento, lado, fornecedor, hospital, dia e horário. Ou escolha o modelo de cirurgia abaixo. Não diga o nome do paciente aqui.'));
@@ -448,7 +458,8 @@ export function quickPage(client){
       if(!draft.procedure&&!draft.templateId)throw new Error('Diga o procedimento ou escolha o modelo de cirurgia.');
       let done=step('Lendo a identificação nos documentos (no seu computador)');
       for(const f of ready){try{const r=await client.caseScan(f);
-        for(const [k,v] of Object.entries(r.identifiers||{})){const rec=/** @type {Record<string,string>} */(patient);if(!rec[k]&&typeof v==='string')rec[k]=v;}}catch{/* reported on upload */}}
+        for(const [k,v] of Object.entries(r.identifiers||{})){const rec=/** @type {Record<string,string>} */(patient);if(!rec[k]&&typeof v==='string')rec[k]=v;}
+        if(r.insurer&&!patient.operadora)patient.operadora=r.insurer;}catch{/* reported on upload */}}
       done();
       if(!patient.name.trim())throw new Error('Não encontrei o nome do paciente nos documentos. Digite-o em "Pedido médico" > Identificação e tente de novo.');
       done=step('Removendo a identificação e enviando');

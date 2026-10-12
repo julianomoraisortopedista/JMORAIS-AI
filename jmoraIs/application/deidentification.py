@@ -156,6 +156,31 @@ def _cpf_valid(value: str) -> bool:
     return True
 
 
+_CARD_WORDS = {"SAUDE", "SAÚDE", "BRADESCO", "AMIL", "SULAMERICA", "SULAMÉRICA", "UNIMED", "PLANO", "NACIONAL", "CARTAO",
+               "CARTÃO", "VALIDADE", "ENFERMARIA", "APARTAMENTO", "EMPRESARIAL", "TOP", "SEGURO", "SEGUROS", "CARE", "PLUS",
+               "MEDISERVICE", "PORTO", "HAPVIDA", "NOTREDAME", "INTERMEDICA", "OMINT", "CASSI", "ALLIANZ", "GOLDEN", "CROSS",
+               "PREVENT", "SENIOR", "REDE", "FLEX", "QUARTO", "COLETIVO", "INDIVIDUAL", "TITULAR", "DEPENDENTE", "ANS",
+               "ACOMODACAO", "ACOMODAÇÃO", "PRODUTO", "CONTRATANTE", "VIA", "CNS", "CPF", "NOME", "BENEFICIARIO", "BENEFICIÁRIO"}
+
+
+def detect_card_fields(text: str) -> dict[str, str]:
+    """Insurance-card photos rarely label their fields: a 15–20 digit card number and a name line in capitals.
+    Only for pre-filling the identification the physician confirms; never used to decide what is clinical."""
+    found: dict[str, str] = {}
+    for m in re.finditer(r"(?<!\d)\d[\d .]{13,26}\d(?!\d)", text or ""):
+        digits = _digits(m.group(0))
+        if 15 <= len(digits) <= 20:
+            found["card_number"] = " ".join(m.group(0).split())
+            break
+    for line in (text or "").splitlines():
+        words = re.findall(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ]{2,}", line)
+        if 2 <= len(words) <= 7 and not any(w in _CARD_WORDS for w in words) and \
+                re.fullmatch(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ ]+", " ".join(line.split())):
+            found["name"] = " ".join(line.split()).title().replace(" Da ", " da ").replace(" De ", " de ").replace(" Do ", " do ").replace(" Dos ", " dos ").replace(" Das ", " das ")
+            break
+    return found
+
+
 def detect_identifiers(text: str) -> dict[str, str]:
     """Find the patient's identifiers in a document so the physician need not type them.
 

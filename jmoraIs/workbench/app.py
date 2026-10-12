@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import os
 from pathlib import Path
+import re
 import secrets
 from typing import Callable, Optional
 
@@ -34,7 +35,7 @@ from jmoraIs.application.scientific_verification import AuthoritativeReconciliat
 from jmoraIs.application.case_intake import (
     CATEGORY_PT, MAX_DOCUMENT_CHARS, CaseDocument, CaseIntakeRejected, extract_text, prepare_documents,
 )
-from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify, detect_identifiers
+from jmoraIs.application.deidentification import DeidentificationRejected, PatientIdentifiers, deidentify, detect_card_fields, detect_identifiers
 from jmoraIs.application.question_translation import QuestionTranslationRejected
 from jmoraIs.application.report_drafting import ReportDraftRejected
 from jmoraIs.application.ans_deadlines import deadline_for
@@ -445,8 +446,20 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
             content = base64.b64decode(body.content_base64, validate=True)
             text = extract_text(body.name, content)[:MAX_DOCUMENT_CHARS]
         except (ValueError, CaseIntakeRejected):
-            bad("Não foi possível ler este arquivo (envie PDF com texto ou .txt).")
-        return {"identifiers": detect_identifiers(text)}
+            bad("Não foi possível ler este arquivo (PDF, Word, texto ou foto).")
+        found = detect_identifiers(text)
+        if "card_number" not in found or "name" not in found:  # card photos: unlabelled number and name line
+            found = {**detect_card_fields(text), **found}
+        insurer = ""
+        if playbook is not None:
+            from jmoraIs.application.authorization_playbook import match_insurer
+            match = match_insurer(playbook.load(), text)
+            insurer = match.name if match else ""
+        if not insurer:
+            known = re.search(r"(?i)\b(bradesco|amil|sul ?am[eé]rica|care ?plus|mediservice|unimed|porto seguro|notre ?dame|hapvida|"
+                              r"prevent senior|golden cross|allianz|omint|cassi|sompo|seguros unimed)\b", text or "")
+            insurer = known.group(1).title() if known else ""
+        return {"identifiers": found, "insurer": insurer}
 
     @app.post("/api/case/{case_id}/document")
     def case_document(case_id: str, body: CaseDocumentIn, request: Request):

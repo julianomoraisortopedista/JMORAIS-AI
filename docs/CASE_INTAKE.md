@@ -108,3 +108,15 @@ physician header from the profile, patient identification, report sections, requ
 (procedure and side, ICD-10, character, regime and stay, hospital and date, anesthesia),
 TUSS codes, OPME kit, suppliers per CFM 2.318/2022, SBOT reference, deadline, signature.
 The report model limit is 14,000 characters.
+
+## Insurance card photo and the request protocol
+
+`POST /api/case/scan` also reads insurance-card photos (local OCR): when the card has no
+labels, `detect_card_fields` takes a 15–20 digit number as the card number and the first
+all-capitals line without insurer/plan words as the name, and the insurer is recognised from
+the playbook aliases or a list of known insurers. All of this only pre-fills the
+identification for the physician to confirm. Pedido rápido opens with a six-step protocol:
+request, card photo, reports and history (diagnosis date, months and kinds of treatment,
+exam, why not surgery now), de-identified extraction and drafting with the surgery's approved
+articles, the readiness panel with the insurer's tactics, then printing the request and the
+OPME prescription and recording the outcome in Convênios.
