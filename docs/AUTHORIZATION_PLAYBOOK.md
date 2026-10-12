@@ -45,3 +45,14 @@ procedure and TUSS codes, the OPME items, the material specification and imaging
 the justification, the equivalent brands and a table of the three suppliers (company,
 product/brand, ANVISA, contact), with RN 424/2017 art. 7º I–II and CFM 2.318/2022 arts. 2º,
 4º and 8º. It refuses a template without three suppliers with 11-digit ANVISA numbers.
+
+## Contestation from the denial and the request sent
+
+Contestações takes two inputs: the insurer's answer (files read one by one into the denial
+text) and the request the physician sent (relatório e solicitação, also read and
+de-identified). The request becomes R ids, clinical statements the writer may cite like
+confirmed facts; when a surgery template is chosen, its scientific library is re-verified and
+passed as E ids (verbatim quotes, "[n]" markers, Vancouver list printed at the end). The
+writer is told to put the patient's quality of life (pain, function, safety, return to
+activities) at the centre, always with F, R or E behind each sentence, together with the
+playbook strategy, the granted examples of the same insurer and the physician's guidance.

@@ -72,7 +72,10 @@ INSTRUCTIONS = (
     "(CTX), o Manual de Codificação da SBOT (SBOT) e os textos normativos fornecidos (L-...). Cada frase deve citar "
     "os ids que a sustentam. Não invente fatos, números, escalas, datas, artigos, leis, resoluções ou "
     "jurisprudência: cite só o que foi fornecido, pelo id. Se faltar dado para rebater um argumento, diga isso em "
-    "'gaps'. ORIENTACAO (quando houver) é a ordem do médico assistente sobre como fazer esta contestação: siga-a "
+    "'gaps'. R1, R2... são frases do pedido que o médico enviou à operadora: são fatos clínicos declarados pelo médico "
+    "e podem ser citados como os F. E1, E2... são artigos verificados e aprovados pelo médico, com o trecho literal: "
+    "cite-os só no que o trecho diz e mencione com honestidade os contrários. Coloque no centro a qualidade de vida do "
+    "paciente (dor, função, segurança, retorno às atividades), sempre com F, R ou E que sustentem. ORIENTACAO (quando houver) é a ordem do médico assistente sobre como fazer esta contestação: siga-a "
     "na estrutura, no tom e na ênfase, mas não a cite como fonte e não afirme nada que os ids citados não sustentem. "
     "ESTRATEGIA (quando houver) resume o que já funcionou contra este convênio e estes motivos: use como "
     "linha de argumentação, nunca como fonte, e só afirme o que os ids citados sustentam. Os EXEMPLOS são contestações anteriores do próprio médico que deram certo: use como modelo de "
@@ -141,7 +144,10 @@ class AppealDraftingService:
         self._gateway, self._prompt, self._model, self._clock = gateway, prompt_version_id, model, clock
 
     def draft(self, *, kind: str, denial_text: str, facts: list[dict], context: str, sbot: str,
-              examples: list[str], strategy: str = "", guidance: str = "") -> AppealDraft:
+              examples: list[str], strategy: str = "", guidance: str = "", request_text: str = "",
+              evidence: tuple = ()) -> AppealDraft:
+        """`request_text`: the de-identified request the physician sent (R ids, citable clinical statements);
+        `evidence`: the surgery library re-verified now (E ids = reference numbers, verbatim quotes)."""
         denial = denial_sentences(denial_text)
         if not denial:
             raise AppealDraftRejected("Cole ou anexe o texto da negativa da operadora.")
@@ -157,6 +163,15 @@ class AppealDraftingService:
             labels[f"F{n}"] = f"{fact['statement']} ({fact.get('source', 'fato confirmado')})"
             fields.append(StructuredField(f"F{n}", f"[{fact['category_label']}] {fact['statement']} (fonte: “{fact['quote']}”)",
                                           "confirmed-fact"))
+        for n, sentence in enumerate(denial_sentences(request_text), 1):
+            support[f"R{n}"], labels[f"R{n}"] = sentence, "Pedido enviado: " + sentence[:120]
+            fields.append(StructuredField(f"R{n}", sentence, "physician-request-document"))
+        articles = {f"E{int(e['number'])}": e for e in evidence if str(e.get("quote") or "").strip()}
+        for eid, e in articles.items():
+            support[eid], labels[eid] = e["quote"], e.get("vancouver") or eid
+            kind = "; ".join(x for x in (e.get("study") or "Artigo", {"SUPPORTING": "a favor", "OPPOSING": "contra",
+                                                                         "NEUTRAL": "neutro"}.get(e.get("direction"), "")) if x)
+            fields.append(StructuredField(eid, f"[{kind}] “{e['quote']}”", "verified-evidence"))
         if context.strip():
             support["CTX"], labels["CTX"] = context, "Procedimento solicitado"
             fields.append(StructuredField("CTX", context, "physician-request"))
@@ -197,6 +212,9 @@ class AppealDraftingService:
                 if not valid or not _numbers(text) <= allowed:
                     dropped += 1
                     continue
+                cites = [i for i in cited if i in articles]
+                if cites:  # reference markers follow the numbering of the printed bibliography
+                    text = text.rstrip() + " [" + ",".join(i[1:] for i in cites) + "]"
                 by_key[key].append(AppealSentence(text, cited))
         used = {i for ss in by_key.values() for s in ss for i in s.source_ids}
         gaps = tuple(" ".join(str(g).split())[:300] for g in data.get("gaps") or [] if str(g).strip())[:12]

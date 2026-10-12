@@ -239,6 +239,7 @@ class AppealDraftIn(BaseModel):
     kind: str = Field(pattern="^(NEGATIVA|GLOSA|JUNTA_MEDICA)$")
     denial_text: str = Field("", max_length=40000)
     guidance: str = Field("", max_length=3000)
+    request_text: str = Field("", max_length=40000)
     denial_file: Optional["ScanIn"] = None
     identifiers: IdentifiersIn
     case_id: Optional[str] = Field(None, max_length=40)
@@ -818,6 +819,7 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
         try:
             denial = deidentify(text[:MAX_DOCUMENT_CHARS], identifiers(body.identifiers)).text
             guidance = deidentify(body.guidance, identifiers(body.identifiers)).text if body.guidance.strip() else ""
+            sent = deidentify(body.request_text[:MAX_DOCUMENT_CHARS], identifiers(body.identifiers)).text if body.request_text.strip() else ""
         except DeidentificationRejected as exc:
             bad(str(exc))
         facts = []
@@ -848,9 +850,16 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
 
         def run():
             try:
+                try:  # the surgery's approved articles, re-verified now, with the printed numbering
+                    science = library_draft(body.template_id) if body.template_id else None
+                except (JustificationRejected, ValueError):
+                    science = None
+                evidence = tuple(dict(number=r.number, quote=r.quote, direction=r.direction.value, study=r.study_label,
+                                      vancouver=r.vancouver) for r in (science.references if science else ()))
                 with TenantContextBinder().bind_tenant(tenant(principal)):
                     draft = factory().draft(kind=body.kind, denial_text=denial, facts=facts, context=context, sbot=sbot,
-                                            examples=examples, strategy=strategy, guidance=guidance)
+                                            examples=examples, strategy=strategy, guidance=guidance, request_text=sent,
+                                            evidence=evidence)
                 jobs[job_id] = {"status": "READY", "dropped": draft.dropped, "gaps": list(draft.gaps), "sources": draft.sources,
                                 "examples": len(examples), "model": draft.model_id, "analysis": analysis,
                                 "sections": [dict(key=k, title=t, sentences=[dict(text=x.text, source_ids=list(x.source_ids)) for x in ss])

@@ -36,13 +36,16 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
   const guidance=textarea('Sua orientação ao Claude: o que enfatizar, o que aceitar, o tom. Ex.: "Aceite 1 bloqueio por joelho, mas mantenha o kit; cobre a doutrina do auditor; tom firme e cordial."');guidance.rows=4;
   const file=document.createElement('input');file.type='file';file.multiple=true;file.accept='.pdf,.docx,.txt,.jpg,.jpeg,.png,.heic,image/*';
   const found=box('div','');
+  const sent=textarea('O pedido que você enviou à operadora (relatório e solicitação). Anexe abaixo ou cole aqui.');sent.rows=5;
+  const sentFile=document.createElement('input');sentFile.type='file';sentFile.multiple=true;sentFile.accept='.pdf,.docx,.txt,.jpg,.jpeg,.png,.heic,image/*';const sentStatus=box('div','');
   const ctx=caseContext();const useCase=document.createElement('input');useCase.type='checkbox';useCase.checked=ctx.hasFacts;useCase.disabled=!ctx.hasFacts;
   const caseLabel=box('label','chip');caseLabel.append(useCase,el('span',ctx.hasFacts?'Usar os fatos confirmados do caso aberto em Pedido médico':'Nenhum caso com fatos confirmados (opcional: abra em Pedido médico)'));
   const grid=box('div','form-grid');grid.append(field('Tipo',kind),field('Procedimento',procedure));
   const go=button(session.model?'Redigir contestação com o Claude':'IA não configurada');go.disabled=!session.model;
   const status=box('div','status-area');const result=box('div','');const rxb=button('Receituário de OPME','ghost');const a=box('div','actions');a.append(go,rxb);
   rxb.onclick=()=>busy(rxb,async()=>{try{await openOpmeRx(client,templateId,caseContext().patient.name||'');}catch(e){say(status,e instanceof Error?e.message:'Falha.');}});
-  card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Anexe os e-mails e documentos da negativa (vários arquivos: PDF, Word, texto ou foto)',file),found,field('Como você quer a contestação (sua ordem e opinião)',guidance),dictation(guidance),caseLabel,a,status,result);
+  card.append(grid,picker,field('Texto da operadora',denial),dictation(denial),field('Anexe os e-mails e documentos da negativa (vários arquivos: PDF, Word, texto ou foto)',file),found,field('Pedido enviado à operadora',sent),field('Anexe o pedido enviado (relatório, solicitação, laudos)',sentFile),sentStatus,field('Como você quer a contestação (sua ordem e opinião)',guidance),dictation(guidance),caseLabel,a,status,result);
+  sentFile.onchange=()=>readInto(client,sentFile,sent,sentStatus,caseContext);
   file.onchange=()=>readFiles(client,file,denial,found,caseContext).then(a=>{if(a){analysis=a;if(!guidance.value.trim()&&(a.preferences||[]).length)guidance.value=a.preferences[0];}});
   go.onclick=()=>busy(go,async()=>{
     result.replaceChildren();
@@ -50,7 +53,7 @@ function draftCard(client,caseContext,dictation,reloadLibrary){
       if(denial.value.trim().length<20)throw new Error('Cole ou anexe o texto da operadora.');
       const c=caseContext();
       say(status,'O Claude está redigindo a contestação…','info');
-      let job=await client.appealDraft({kind:kind.value,denial_text:denial.value,denial_file:null,guidance:guidance.value,
+      let job=await client.appealDraft({kind:kind.value,denial_text:denial.value,denial_file:null,guidance:guidance.value,request_text:sent.value,
         identifiers:c.identifiers,case_id:useCase.checked?c.caseId:null,template_id:templateId,procedure:procedure.value});
       for(let i=0;i<90&&job.status==='RUNNING';i++){await new Promise(r=>setTimeout(r,2000));job=await client.appealDraftGet(job.job_id);}
       if(job.status!=='READY')throw new Error(job.error||'Falha ao redigir.');
@@ -76,6 +79,18 @@ async function readFiles(client,file,denial,found,caseContext){
   denial.value=[denial.value.trim(),...parts].filter(Boolean).join('\n\n');file.value='';
   try{const a=await client.appealAnalyze(denial.value);showAnalysis(found,a);return a;}catch{say(found,'Arquivos lidos. Não consegui identificar o convênio automaticamente.','info');}
   return null;
+}
+
+/** The request sent to the insurer: read and de-identified file by file, appended for review.
+ * @param {import('./evidence.js').EvidenceClient} client @param {HTMLInputElement} file @param {HTMLTextAreaElement} target @param {HTMLElement} status @param {()=>CaseContext} caseContext */
+async function readInto(client,file,target,status,caseContext){
+  const list=Array.from(file.files||[]).slice(0,8);if(!list.length)return;
+  const c=caseContext();const parts=[];
+  for(const [n,f] of list.entries()){say(status,`Lendo o pedido: arquivo ${n+1} de ${list.length}…`,'info');
+    try{const r=await client.appealExtract({file:await prepared(f),identifiers:c.identifiers});parts.push(`--- ${r.name} ---\n${r.text}`);}
+    catch(e){parts.push(`--- ${f.name}: não foi possível ler (${e instanceof Error?e.message:'erro'}) ---`);}}
+  target.value=[target.value.trim(),...parts].filter(Boolean).join('\n\n');file.value='';
+  say(status,'Pedido lido e sem identificação. O Claude usará os fatos dele na contestação.','ok');
 }
 
 /** @param {HTMLElement} target @param {any} a */
@@ -112,6 +127,8 @@ function renderDraft(client,target,job,kind,procedure,caseContext,reloadLibrary,
     add('h1',`CONTESTAÇÃO DE ${kindLabel(kind).toUpperCase()}`);
     const tb=doc.createElement('table');for(const [k,v] of [['Paciente',p.name],['Carteirinha',p.card_number],['Procedimento',procedure]]){if(!v)continue;const tr=doc.createElement('tr');add('td',k+':',tr);add('td',v,tr);tb.append(tr);}doc.body.append(tb);
     for(const [title,t] of areas){if(!t.value.trim())continue;add('h2',title);for(const para of t.value.split(/\n+/))if(para.trim())add('p',para.trim());}
+    const refs=Object.entries(job.sources||{}).filter(([k])=>/^E\d+$/.test(k)).sort((a,b)=>Number(a[0].slice(1))-Number(b[0].slice(1)));
+    if(refs.length){add('h2','Referências bibliográficas');for(const [k,v] of refs)add('p',`[${k.slice(1)}] ${v}`);}
     add('p',`${profile.city?profile.city+', ':''}${new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}.`);
     const sign=add('div','');sign.className='sign';sign.append(doc.createTextNode('_______________________________________'),doc.createElement('br'),doc.createTextNode(profile.name||'Médico assistente'),doc.createElement('br'),
       doc.createTextNode([profile.crm?`CRM-${profile.uf||''} ${profile.crm}`:'CRM',profile.rqe?`RQE ${profile.rqe}`:''].filter(Boolean).join(' · ')));
