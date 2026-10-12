@@ -1,7 +1,7 @@
 import {BrowserAuth,validateConfig} from './auth.js';
 import {WorkspaceClient,launchReference,ApiError} from './client.js';
 import {el,labels,navigation,renderView} from './view.js';
-import {EvidenceClient,EvidenceError,box,button,documentPage,evidencePage,pill,session} from './evidence.js';
+import {EvidenceClient,EvidenceError,box,button,busy,documentPage,evidencePage,pill,session} from './evidence.js';
 import {icon} from './icons.js';
 import {caseContext,casePage,clearCase,prescription,quickPage} from './case.js';
 import {appealsPage} from './appeals.js';
@@ -63,7 +63,8 @@ async function shell(){
  const exit=button('Sair','ghost');exit.onclick=()=>{reset();login();};
  const password=button('Alterar senha','ghost');
  password.onclick=async()=>{password.setAttribute('disabled','');try{const url=await current.begin('UPDATE_PASSWORD');reset();location.assign(url);}catch{password.removeAttribute('disabled');}};
- const tools=box('div','top-tools');tools.append(ai,password,exit);top.append(title,tools);
+ const fresh=button('Novo caso','ghost');fresh.setAttribute('aria-label','Começar um novo caso e apagar o caso atual');
+ const tools=box('div','top-tools');tools.append(ai,fresh,password,exit);top.append(title,tools);
  const content=box('section','content');content.setAttribute('aria-live','polite');
  main.append(top,content);
  const layout=box('div','layout');layout.append(side,main);root.replaceChildren(layout);
@@ -71,8 +72,10 @@ async function shell(){
  const counts={decisions:0};
  /** Pages kept alive while signed in, so switching sections never loses what was typed. @type {Record<string,HTMLElement>} */
  const views={};
+ let currentKey='overview';
  /** @param {string} key */
  const go=(key)=>{
+   currentKey=key;
    for(const [k,b] of Object.entries(items))b.setAttribute('aria-current',k===key?'page':'false');
    title.textContent=(pages.find(p=>p[0]===key)||pages[0])[1];
    if(key==='overview')content.replaceChildren(overview(context,counts.decisions,go));
@@ -88,6 +91,14 @@ async function shell(){
    else content.replaceChildren(documentPage(evidence));
  };
  for(const [k,b] of Object.entries(items))b.onclick=()=>go(k);
+ /** New case: forgets the patient, documents, report and contestation in progress (server case deleted too);
+  * templates, scientific library, contestation library and playbook stay. */
+ fresh.onclick=()=>busy(fresh,async()=>{
+   if(!window.confirm('Começar um novo caso?\n\nApaga o paciente, os documentos, o relatório e a contestação em andamento.\nModelos de cirurgia, artigos aprovados, biblioteca de contestações e banco de convênios continuam.'))return;
+   const id=caseContext().caseId;if(id)await evidence.caseDelete(id).catch(()=>{});
+   clearCase();for(const k of Object.keys(views))delete views[k];
+   go(currentKey);content.prepend(box('div','alert alert-ok','Novo caso iniciado. O caso anterior foi apagado.'));
+ });
  go('overview');
 }
 
