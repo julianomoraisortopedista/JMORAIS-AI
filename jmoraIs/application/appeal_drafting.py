@@ -26,12 +26,21 @@ from jmoraIs.llm_gateway.domain import (
 POLICY = "MIP-10.1"
 PROMPT_ID = "insurer-contestation-v1"
 SECTIONS = (
+    ("abertura", "Abertura"),
     ("sintese", "Síntese da negativa"),
     ("clinico", "Fundamentos clínicos"),
     ("tecnico", "Fundamentos técnicos e de codificação"),
     ("normativo", "Fundamentos normativos"),
+    ("proposta", "Proposta de consenso"),
     ("pedido", "Pedido"),
 )
+# Courtesy and transition sentences may stand without a source, as long as they assert nothing checkable:
+# no digits, no norms, studies, codes, scores or durations. Everything factual still needs an id.
+_CONNECTIVE_BLOCK = re.compile(
+    r"(?i)(\d|%|\blei\b|\brn\b|resolu|\bart\.|artigo|cfm|\bans\b|anvisa|estudo|ensaio|meta-?an|revis[aã]o sistem|"
+    r"diretriz|guideline|evid[eê]ncia|comprova|tuss|\bcid\b|\beva\b|\bmes(es)?\b|\banos?\b|semana|"
+    r"superior|eficaz|eficácia|reduz|aument|risco|complica|sempre|nunca|garant)")
+MAX_CONNECTIVES_PER_SECTION = 2
 KIND_PT = {"NEGATIVA": "negativa de autorização", "GLOSA": "glosa", "JUNTA_MEDICA": "parecer de junta médica"}
 GUIDE = "transcrição do Guia Prático SBOT para Médicos Ortopedistas (2025); conferir texto oficial"
 SECONDARY_SOURCES = {  # norms not fetched from the official site: citation carries the provenance
@@ -67,7 +76,15 @@ SECONDARY_SOURCES.update({  # wording as published by the ANS in its OPME techni
 })
 INSTRUCTIONS = (
     "Você é um ortopedista sênior redigindo a contestação de uma {kind} enviada por uma operadora de plano de "
-    "saúde. Escreva em português formal, técnico e respeitoso, em primeira pessoa do médico assistente. Responda "
+    "saúde. Escreva como uma carta de médico para médico auditor: em primeira pessoa, cordial, clara, explicativa e "
+    "humana, com parágrafos que fluem e frases completas, sem tom de formulário nem jargão desnecessário. Estrutura: "
+    "'abertura' agradece a análise e reconhece o que já foi autorizado; 'sintese' resume com justiça o que a operadora "
+    "alegou; 'clinico' conta o caso como uma história breve centrada no paciente (o que ele sente, o que já tentou, "
+    "por quanto tempo, o que perdeu no dia a dia) e responde ao 'por quê'; 'tecnico' explica o 'para quê' de cada alvo, "
+    "quantidade e material; 'normativo' traz as normas fornecidas; 'proposta' oferece caminhos de consenso viáveis "
+    "(materiais equivalentes das três empresas do CTX com registro ANVISA, ajuste de quantidade quando cabível, junta "
+    "médica se persistir a divergência); 'pedido' pede a reconsideração com objetividade. Frases de cortesia e de "
+    "transição podem vir sem id, desde que não afirmem fatos, números, normas, estudos, riscos ou resultados. Responda "
     "a cada argumento da operadora (N1, N2...) com fatos clínicos confirmados (F...), o contexto do procedimento "
     "(CTX), o Manual de Codificação da SBOT (SBOT) e os textos normativos fornecidos (L-...). Cada frase deve citar "
     "os ids que a sustentam. Não invente fatos, números, escalas, datas, artigos, leis, resoluções ou "
@@ -200,6 +217,7 @@ class AppealDraftingService:
             raise AppealDraftRejected("Resposta do modelo fora do formato. Tente de novo.") from None
         by_key: dict[str, list[AppealSentence]] = {k: [] for k, _ in SECTIONS}
         dropped = 0
+        connectives: dict[str, int] = {}
         for section in data.get("sections") or []:
             key = section.get("section")
             if key not in by_key:
@@ -207,6 +225,11 @@ class AppealDraftingService:
             for sentence in section.get("sentences") or []:
                 text = " ".join(str(sentence.get("text", "")).split())[:900]
                 cited = tuple(dict.fromkeys(str(i).strip().upper() for i in sentence.get("source_ids") or []))
+                if not cited and text and len(text) <= 240 and not _CONNECTIVE_BLOCK.search(text) \
+                        and connectives.get(key, 0) < MAX_CONNECTIVES_PER_SECTION:
+                    connectives[key] = connectives.get(key, 0) + 1
+                    by_key[key].append(AppealSentence(text, ()))
+                    continue
                 valid = bool(text and cited and all(i in support for i in cited))
                 allowed = set().union(*(_numbers(support[i]) for i in cited)) if valid else set()
                 if not valid or not _numbers(text) <= allowed:

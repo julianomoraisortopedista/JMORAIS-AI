@@ -126,7 +126,7 @@ function renderDraft(client,target,job,kind,procedure,caseContext,reloadLibrary,
     if(p.operadora)add('p',`À ${p.operadora} — Setor de Auditoria / Recursos`);
     add('h1',`CONTESTAÇÃO DE ${kindLabel(kind).toUpperCase()}`);
     const tb=doc.createElement('table');for(const [k,v] of [['Paciente',p.name],['Carteirinha',p.card_number],['Procedimento',procedure]]){if(!v)continue;const tr=doc.createElement('tr');add('td',k+':',tr);add('td',v,tr);tb.append(tr);}doc.body.append(tb);
-    for(const [title,t] of areas){if(!t.value.trim())continue;add('h2',title);for(const para of t.value.split(/\n+/))if(para.trim())add('p',para.trim());}
+    for(const [title,t] of areas){if(!t.value.trim())continue;if(title!=='Abertura')add('h2',title);for(const para of t.value.split(/\n+/))if(para.trim())add('p',para.trim());}
     const refs=Object.entries(job.sources||{}).filter(([k])=>/^E\d+$/.test(k)).sort((a,b)=>Number(a[0].slice(1))-Number(b[0].slice(1)));
     if(refs.length){add('h2','Referências bibliográficas');for(const [k,v] of refs)add('p',`[${k.slice(1)}] ${v}`);}
     add('p',`${profile.city?profile.city+', ':''}${new Date().toLocaleDateString('pt-BR',{day:'numeric',month:'long',year:'numeric'})}.`);

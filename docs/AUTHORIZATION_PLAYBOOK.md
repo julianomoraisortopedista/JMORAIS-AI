@@ -56,3 +56,16 @@ passed as E ids (verbatim quotes, "[n]" markers, Vancouver list printed at the e
 writer is told to put the patient's quality of life (pain, function, safety, return to
 activities) at the centre, always with F, R or E behind each sentence, together with the
 playbook strategy, the granted examples of the same insurer and the physician's guidance.
+
+## Human tone with the same grounding
+
+Contestations are written as a letter from the assistant physician to the auditing colleague:
+abertura (thanks, what was already authorized), síntese, the case told as the patient's story,
+the technical "why" of each target, quantity and material, the verified norms, a proposta de
+consenso (equivalent materials from the three suppliers with ANVISA in CTX, quantity
+adjustment when reasonable, medical board if it persists) and the request. The surgery
+template now adds the material specification, imaging guidance and the three suppliers to
+CTX. Courtesy and transition sentences (at most two per section, up to 240 characters) may
+stand without a source when they assert nothing checkable: no digits, norms, studies, codes,
+scores, durations, risks, outcomes or absolutes (`_CONNECTIVE_BLOCK`). The medical report uses
+the same guard and tone. Every factual sentence still cites its source.

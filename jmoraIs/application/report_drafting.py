@@ -43,6 +43,7 @@ STYLE_INSTRUCTIONS = (
 )
 CONTEXT_ID = "CTX"
 EVIDENCE_SECTION = "evidencias"
+from jmoraIs.application.appeal_drafting import _CONNECTIVE_BLOCK  # noqa: E402  same guard as contestations
 DIRECTION_PT = {"SUPPORTING": "a favor", "OPPOSING": "contra", "NEUTRAL": "neutro", "INCONCLUSIVE": "inconclusivo"}
 EVIDENCE_INSTRUCTIONS = (
     " Os campos E1, E2... são artigos científicos verificados e aprovados pelo médico, com o trecho literal do resumo "
@@ -58,7 +59,10 @@ EVIDENCE_INSTRUCTIONS = (
 )
 INSTRUCTIONS = (
     "Você é um ortopedista sênior redigindo o relatório médico de um pedido de cirurgia ao convênio. Escreva em "
-    "português formal, técnico e objetivo, em terceira pessoa ('Paciente apresenta...'). Use SOMENTE os fatos "
+    "português formal e técnico, mas humano e explicativo, em terceira pessoa ('Paciente apresenta...'), com parágrafos "
+    "que fluem: conte o caso como a história do paciente (o que sente, o que já tentou, por quanto tempo, o que perdeu "
+    "no dia a dia) e explique o porquê de cada indicação. Frases de transição podem vir sem id, desde que não afirmem "
+    "fatos, números, normas, estudos, riscos ou resultados. Use SOMENTE os fatos "
     "fornecidos (F1, F2...) e o contexto do procedimento (CTX). Cada frase deve citar os ids que a sustentam. Não "
     "invente dados, números, graus, escalas, datas, lateralidade ou achados que não estejam nos fatos. Se uma "
     "seção não tiver fatos suficientes, deixe-a vazia e descreva a lacuna em 'gaps' (ex.: 'Exame físico não "
@@ -156,6 +160,7 @@ class ReportDraftingService:
         by_key: dict[str, list[DraftSentence]] = {k: [] for k, _ in SECTIONS}
         titles = dict(SECTIONS)
         order: list[str] = []
+        connectives: dict[str, int] = {}
         dropped = 0
         for section in data.get("sections") or []:
             key = section.get("section")
@@ -169,6 +174,11 @@ class ReportDraftingService:
             for sentence in section.get("sentences") or []:
                 text = " ".join(str(sentence.get("text", "")).split())[:600]
                 cited = tuple(dict.fromkeys(str(i).strip().upper() for i in sentence.get("fact_ids") or []))
+                if not cited and text and len(text) <= 240 and key != EVIDENCE_SECTION \
+                        and not _CONNECTIVE_BLOCK.search(text) and connectives.get(key, 0) < 2:
+                    connectives[key] = connectives.get(key, 0) + 1   # transition/courtesy: asserts nothing checkable
+                    by_key[key].append(DraftSentence(text, ()))
+                    continue
                 valid = text and cited and all(i in support for i in cited)
                 allowed = set().union(*(_numbers(support[i]) for i in cited)) if valid else set()
                 cites = [i for i in cited if i in articles]

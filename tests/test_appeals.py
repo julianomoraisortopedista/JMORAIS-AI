@@ -106,7 +106,7 @@ def test_appeal_endpoints(tmp_path):
         if job["status"] != "RUNNING":
             break
         time.sleep(0.05)
-    assert job["status"] == "READY" and job["sections"][0]["sentences"]
+    assert job["status"] == "READY" and next(x for x in job["sections"] if x["key"] == "sintese")["sentences"]
     assert c.post("/api/appeal/draft", json={"kind": "NEGATIVA", "identifiers": {}}).status_code in (401, 403)
     no_ai = TestClient(create_app(pubmed=SearchablePubMed(), crossref=Crossref(), token=TOKEN), base_url="http://127.0.0.1:8770")
     assert no_ai.post("/api/appeal/draft", headers=H, json={"kind": "NEGATIVA", "denial_text": DENIAL, "identifiers": {}}).status_code == 503

@@ -832,7 +832,11 @@ def create_app(*, pubmed, crossref, classifier_factory: Optional[Callable] = Non
                 bad("Modelo não encontrado.", 404)
             procedure = procedure or template.name
             context = (f"Procedimento: {procedure}. TUSS: " + "; ".join(f"{c} {template.tuss_terms.get(c, '')}" for c in template.tuss_codes)
-                       + (". OPME: " + ", ".join(f"{i.quantity} {i.description}" for i in template.opme) if template.opme else ""))
+                       + (". OPME: " + ", ".join(f"{i.quantity} {i.description}" for i in template.opme) if template.opme else "")
+                       + (". Especificação do material: " + "; ".join(template.material_specs) if template.material_specs else "")
+                       + (". Guia de imagem: " + ", ".join(template.imaging_guidance) if template.imaging_guidance else "")
+                       + (". Três empresas: " + "; ".join(f"{s.label}" + (f" ({s.product}, ANVISA {s.anvisa})" if s.anvisa else "")
+                                                       for s in template.suppliers if s.label) if template.suppliers else ""))
             entry = sbot_index.get(template.sbot_entry) if (sbot_index is not None and template.sbot_entry) else None
             sbot = sbot_summary(entry) if entry is not None else ""
         elif procedure:

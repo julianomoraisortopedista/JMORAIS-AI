@@ -41,7 +41,7 @@ def test_only_grounded_sentences_survive_and_gaps_are_kept():
             {"text": "Paciente refere dor EVA 9/10.", "fact_ids": ["F1"]},              # invented number
             {"text": "Paciente tem 72 anos.", "fact_ids": ["F1"]},                     # invented age
             {"text": "Realizou fisioterapia por 6 meses.", "fact_ids": ["F9"]},       # nonexistent id
-            {"text": "Sem citação.", "fact_ids": []}]},
+            {"text": "Resultado garantido.", "fact_ids": []}]},  # uncited claim, not a transition
         {"section": "opme", "sentences": [{"text": "Solicita-se 1 componente femoral.", "fact_ids": ["CTX"]}]},
         {"section": "inexistente", "sentences": [{"text": "x", "fact_ids": ["F1"]}]}],
         "gaps": ["Exame físico não documentado."]}
